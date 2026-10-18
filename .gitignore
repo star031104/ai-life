@@ -1,0 +1,15 @@
+*.session
+*.tmp
+*.zip
+.env
+.venv/
+__pycache__/
+config.yaml
+data/
+.pytest_cache/
+*.pyc
+*.db
+*.db-shm
+*.db-wal
+# 私人人设：只留在自己电脑上，不进仓库
+persona/yuki.md

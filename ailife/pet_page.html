@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>桌面上的她</title>
+<style>
+:root{--ink:#1b1a18;--ink-2:#52514e;--bubble:#ffffff;--line:rgba(20,18,14,.12);--accent:#6a43c4;--shadow:0 6px 24px rgba(20,18,14,.18)}
+@media (prefers-color-scheme:dark){:root{--ink:#f0efec;--ink-2:#c3c2b7;--bubble:#222220;--line:rgba(255,255,255,.12);--shadow:0 6px 24px rgba(0,0,0,.5)}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;font:13.5px/1.55 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei UI",sans-serif;color:var(--ink);user-select:none}
+body.solid{background:linear-gradient(180deg,#f3eefc,#fbe9f1)}
+@media (prefers-color-scheme:dark){body.solid{background:linear-gradient(180deg,#1d1828,#261a22)}}
+#stage{position:absolute;inset:0}
+canvas{display:block}
+.bubble{position:absolute;left:12px;right:12px;top:46px;z-index:3;background:var(--bubble);border:1px solid var(--line);border-radius:14px;
+  padding:9px 12px;box-shadow:var(--shadow);opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s;pointer-events:none;max-height:45%;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+.bubble.on{opacity:1;transform:none;pointer-events:auto}
+.bubble::after{content:"";position:absolute;left:50%;bottom:-7px;width:12px;height:12px;background:var(--bubble);border-right:1px solid var(--line);border-bottom:1px solid var(--line);transform:translateX(-50%) rotate(45deg)}
+.bubble a{color:var(--accent)}
+.bar{position:absolute;left:10px;right:10px;bottom:10px;z-index:4;display:flex;gap:6px;opacity:0;transform:translateY(6px);transition:all .18s}
+body:hover .bar,.bar:focus-within{opacity:1;transform:none}
+.bar input{flex:1;min-width:0;height:34px;border-radius:17px;border:1px solid var(--line);background:var(--bubble);color:var(--ink);padding:0 14px;outline:none;font:inherit;box-shadow:var(--shadow)}
+.bar input:focus{border-color:var(--accent)}
+.ctl{position:absolute;top:8px;right:8px;z-index:5;display:flex;gap:4px;opacity:0;transition:opacity .15s}
+body:hover .ctl{opacity:1}
+.ctl button,.bar button{width:30px;height:30px;border-radius:15px;border:1px solid var(--line);background:var(--bubble);color:var(--ink-2);cursor:pointer;display:grid;place-items:center;box-shadow:var(--shadow);padding:0}
+.bar button{width:34px;height:34px;border-radius:17px;background:var(--accent);color:#fff;border-color:var(--accent)}
+.ctl svg,.bar svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.status{position:absolute;left:0;right:0;bottom:52px;text-align:center;font-size:12px;color:var(--ink-2);z-index:2}
+.dots::after{content:"…";animation:d 1s steps(3) infinite}
+@keyframes d{0%{content:"·"}33%{content:"··"}66%{content:"···"}}
+</style>
+</head>
+<body>
+<div id="stage" class="pywebview-drag-region"></div>
+<div class="bubble" id="bubble" role="status" aria-live="polite"></div>
+<div class="status" id="status">正在叫醒她…</div>
+<div class="ctl">
+  <button id="mute" title="静音 / 取消静音" aria-label="静音"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path id="wave" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+  <button id="home" title="打开小屋" aria-label="打开小屋"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/></svg></button>
+  <button id="close" title="收起" aria-label="收起"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+<form class="bar" id="form" autocomplete="off">
+  <input id="say" placeholder="和她说点什么…" aria-label="和她说话">
+  <button type="submit" aria-label="发送"><svg viewBox="0 0 24 24"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4 18-7Z"/></svg></button>
+</form>
+
+<script src="/pet/lib/pixi.min.js"></script>
+<script src="/pet/lib/live2d.min.js"></script>
+<script src="/pet/lib/live2dcubismcore.min.js"></script>
+<script src="/pet/lib/index.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const Q=new URLSearchParams(location.search);
+if(Q.get("solid")==="1")document.body.classList.add("solid");
+let model=null, lastId=0, lastQ=0, muted=false, mouth=0, busy=false, cfg={}, curExpr=null;
+let audioCtx=null, analyser=null, data=null;
+
+function showBubble(html,ms=9000){const b=$("bubble");b.innerHTML=html;b.classList.add("on");clearTimeout(b._t);b._t=setTimeout(()=>b.classList.remove("on"),ms)}
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const linkify=s=>esc(s).replace(/(https?:\/\/[^\s]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+
+async function init(){
+  try{cfg=await (await fetch("/api/pet/config")).json()}catch(e){}
+  muted=!!cfg.muted; $("wave").style.display=muted?"none":"";
+  if(cfg.ta&&cfg.ta!=="她"){ const t=cfg.ta; $("say").placeholder=$("say").placeholder.replaceAll("她",t);
+    $("say").setAttribute("aria-label",$("say").getAttribute("aria-label").replaceAll("她",t)); document.title=document.title.replaceAll("她",t) }
+  try{
+    try{ PIXI.live2d.config.sound=false }catch(e){}        // 模型自带的动作音效不放（她说话用自己的声音），也免得去找不存在的文件
+    const app=new PIXI.Application({resizeTo:window,backgroundAlpha:0,antialias:true,autoDensity:true,resolution:window.devicePixelRatio||1});
+    $("stage").appendChild(app.view);
+    model=await PIXI.live2d.Live2DModel.from(cfg.model||"/pet/model/haru_greeter_t03.model3.json",{autoInteract:true});
+    app.stage.addChild(model);
+    const fit=()=>{const s=Math.min(window.innerWidth/model.internalModel.width,(window.innerHeight*0.98)/model.internalModel.height)*(cfg.scale||1);
+      model.scale.set(s); model.x=(window.innerWidth-model.width)/2; model.y=window.innerHeight-model.height+(cfg.offset_y||0)};
+    fit(); window.addEventListener("resize",fit);
+    model.on("hit",areas=>{ if(areas.includes("body")||areas.includes("Body"))motion(); else motion(); });
+    const im=model.internalModel;
+    im.on("beforeModelUpdate",()=>{ if(mouth<=0.01)return; const c=im.coreModel;
+      try{ c.setParameterValueById?c.setParameterValueById("ParamMouthOpenY",mouth):c.setParamFloat("PARAM_MOUTH_OPEN_Y",mouth) }catch(e){} });
+    $("status").textContent="";
+    expression(cfg.expr);
+  }catch(e){ console.error(e); $("status").textContent="她的样子没加载出来（网络？）。还是可以打字聊天。"; }
+  poll(); setInterval(poll,5000);
+}
+function motion(group){
+  if(!model)return;
+  try{
+    const defs=model.internalModel.motionManager.definitions||{};
+    const groups=Object.keys(defs).filter(g=>g!=="Idle"&&g!==""&&defs[g]&&defs[g].length);
+    const g=groups.includes(group)?group:groups[Math.floor(Math.random()*groups.length)];
+    if(g)model.motion(g);
+  }catch(e){}
+}
+function expression(name){
+  if(!model||!name||name===curExpr)return;
+  try{ model.expression(name); curExpr=name }catch(e){}
+}
+
+/* 一个 Audio + 一个分析器反复用；一次只说一句（排队），出错或超时也会继续 */
+const player=new Audio(); player.crossOrigin="anonymous";
+let speakChain=Promise.resolve();
+function setupAudio(){
+  if(analyser)return;
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  const src=audioCtx.createMediaElementSource(player); analyser=audioCtx.createAnalyser(); analyser.fftSize=512;
+  src.connect(analyser); analyser.connect(audioCtx.destination); data=new Uint8Array(analyser.fftSize);
+}
+function lipSync(){
+  if(player.paused||player.ended){mouth=0;return}
+  analyser.getByteTimeDomainData(data);
+  let sum=0; for(const v of data){const x=(v-128)/128; sum+=x*x}
+  mouth=Math.min(1,Math.max(0,(Math.sqrt(sum/data.length)-0.02)*6)); requestAnimationFrame(lipSync);
+}
+function speak(text,style){
+  speakChain=speakChain.then(()=>speakOne(text,style)).catch(()=>{});
+  return speakChain;
+}
+async function speakOne(text,style){
+  if(muted||!text)return;
+  try{
+    setupAudio(); await audioCtx.resume();
+    player.src=`/api/pet/tts?style=${encodeURIComponent(style||"")}&text=${encodeURIComponent(text.slice(0,200))}`;
+    await new Promise((resolve)=>{
+      let t=setTimeout(resolve,30000);
+      const done=()=>{clearTimeout(t);resolve()};
+      player.onended=done; player.onerror=done; player.onabort=done;
+      player.onloadedmetadata=()=>{clearTimeout(t);t=setTimeout(done,(player.duration||10)*1000+3000)};
+      player.play().then(lipSync).catch(done);
+    });
+  }catch(e){ console.warn("speak",e) }
+  mouth=0;
+}
+function stopSpeaking(){try{player.pause()}catch(e){} mouth=0}
+
+async function playReply(r){
+  expression(r.expr);
+  for(const b of r.bubbles||[]){
+    if(b.text){ showBubble(linkify(b.text), Math.max(4000,b.text.length*350)); motion(); await speak(b.text,r.style); await new Promise(x=>setTimeout(x,600)); }
+  }
+}
+
+$("form").addEventListener("submit",async e=>{
+  e.preventDefault(); const t=$("say").value.trim(); if(!t||busy)return;
+  busy=true; $("say").value=""; showBubble('<span class="dots">在想</span>',30000);
+  try{ const r=await (await fetch("/api/pet/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t})})).json();
+    if(r.last_id)lastId=Math.max(lastId,r.last_id);
+    if(r.error)showBubble(esc(r.error)); else await playReply(r);
+  }catch(err){ showBubble("连不上程序了，确认 start.bat 还开着") }
+  finally{ busy=false }
+});
+
+async function poll(){
+  try{ const r=await (await fetch(`/api/pet/poll?since=${lastId}&q=${lastQ}`)).json();
+    if(!lastId){ lastId=r.last_id||0; lastQ=r.qid||0; expression(r.expr); return }
+    lastId=Math.max(lastId,r.last_id||0);
+    if(!busy)expression(r.expr);
+    const desk=(r.desk||[]).filter(x=>x.qid>lastQ); if(r.qid)lastQ=Math.max(lastQ,r.qid);
+    if(desk.length&&!busy){ const t=desk[desk.length-1].text; showBubble(linkify(t),10000); motion(); await speak(t,r.style); }
+    else if(r.messages&&r.messages.length&&!busy){ const txt=r.messages.map(m=>m.text).join("\n");
+      showBubble(linkify(txt),12000); motion(); if(cfg.speak_proactive)await speak(r.messages[0].text,r.style); }
+  }catch(e){}
+}
+
+$("mute").addEventListener("click",()=>{muted=!muted;$("wave").style.display=muted?"none":""; if(muted)stopSpeaking();fetch("/api/pet/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({muted})})});
+// 透明小窗口（PySide6）里：按住人物拖动就移动窗口（轻点不算，留给点人物的互动）
+(function(){let down=null;
+  $("stage").addEventListener("mousedown",e=>{ if(e.button===0)down={x:e.screenX,y:e.screenY}; });
+  window.addEventListener("mouseup",()=>{down=null});
+  window.addEventListener("mousemove",e=>{
+    if(!down||!window.__qtpet||!(window.pywebview&&pywebview.api&&pywebview.api.start_drag))return;
+    if(Math.abs(e.screenX-down.x)+Math.abs(e.screenY-down.y)>4){down=null;pywebview.api.start_drag();}
+  });
+})();
+$("home").addEventListener("click",()=>{ if(window.pywebview&&pywebview.api)pywebview.api.open_home(); else window.open("/","_blank") });
+$("close").addEventListener("click",()=>{ if(window.pywebview&&pywebview.api)pywebview.api.hide(); else window.close() });
+init();
+</script>
+</body>
+</html>

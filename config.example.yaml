@@ -1,0 +1,298 @@
+# ============================================================
+#  ai-life 配置文件
+#  复制一份改名为 config.yaml 再填写。带 ★ 的是必填项。
+# ============================================================
+
+# 她运行时不让电脑自动睡眠（Windows；屏幕照常熄灭，合盖 / 手动睡眠 / 关机不受影响）。电脑睡着了她就收不到消息
+keep_awake: true
+
+# 时区（决定早安晚安、免打扰的时间）
+timezone: Asia/Shanghai
+
+# 访问 Telegram 用的代理（国内一般需要）。不需要就留空 ""
+# 例：http://127.0.0.1:7890  或  socks5://127.0.0.1:7890
+proxy: "http://127.0.0.1:7890"
+
+# 人设文件（可以写好几个角色，换这里就行）
+persona_file: persona/linxi.md       # 自带的人设：linxi.md（林汐，温柔的插画编辑）、shenyan.md（沈言，男友向）
+                                     # 自己写：复制 persona/template.md；或者 python run.py persona new / persona import 角色卡.png
+
+# ---------------- API Key（只填一次，下面各处按名字引用） ----------------
+# 直接填就行：第一次启动时程序会把所有密钥（包括下面的 bot_token）自动挪进同目录的 .env 文件，
+# 这里改成 "${ZHIPU_KEY}" 这样的引用。以后要改 key，改 .env 里那一行即可。
+keys:
+  zhipu: ""          # 智谱 open.bigmodel.cn → API Keys
+  siliconflow: ""    # 硅基流动 cloud.siliconflow.cn → API 密钥（语音识别也用它）
+  groq: ""           # console.groq.com → API Keys（国内需要代理）
+  modelscope: ""     # modelscope.cn → 访问令牌（需绑定阿里云账号）
+
+# ---------------- 大模型 ----------------
+# profiles：每个可用的接口；routes：每种用途按顺序尝试，前一个限流/出错自动换下一个
+# 换了模型后可以跑  python run.py bench  测一下每个接口的速度
+llm:
+  temperature: 0.9
+  max_tokens: 800
+  background_yield_seconds: 25   # 聊天优先：你刚聊完的这么多秒内，后台的整理记忆、写日记先等一等，免得抢免费额度被限流
+  profiles:
+    glm_flash:                     # 智谱 GLM-4.7-Flash：免费，中文角色扮演好，主力
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      key: zhipu
+      model: glm-4.7-flash
+      extra_body: {thinking: {type: disabled}}
+    glm45_flash:                   # 智谱 GLM-4.5-Flash：免费，4.7 挤不进去时的第二选择（比 8B 小模型靠谱）
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      key: zhipu
+      model: glm-4.5-flash
+      extra_body: {thinking: {type: disabled}}
+    groq_qwen:                     # Groq Qwen3.8-27B：极快，但每分钟 8K token，适合兜底
+      base_url: https://api.groq.com/openai/v1
+      key: groq
+      model: qwen/qwen3.8-27b
+      extra_body: {reasoning_effort: none}
+      use_proxy: true
+    sf_qwen3_8b:                   # 硅基流动 Qwen3-8B：免费、限额宽，兜底
+      base_url: https://api.siliconflow.cn/v1
+      key: siliconflow
+      model: Qwen/Qwen3-8B
+      extra_body: {enable_thinking: false}
+    sf_glm4_9b:                    # 硅基流动 GLM-4-9B：免费，用来做记忆整理兜底
+      base_url: https://api.siliconflow.cn/v1
+      key: siliconflow
+      model: THUDM/GLM-4-9B-0414
+    ms_big:                        # 魔搭大模型：每天 250 魔力，只用在“整理记忆/写日记”这种少量高质量的活
+      base_url: https://api-inference.modelscope.cn/v1
+      key: modelscope
+      model: deepseek-ai/DeepSeek-V4-Pro      # 以魔搭页面上实际可用的模型 ID 为准
+    zhipu_vision:                  # 智谱 GLM-4.6V-Flash：免费看图
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      key: zhipu
+      model: glm-4.6v-flash
+      extra_body: {thinking: {type: disabled}}
+    # local_qwen:                  # 本地 Ollama（4060 8G 建议 qwen3:4b / qwen3:8b 的 4bit）
+    #   base_url: http://127.0.0.1:11434/v1
+    #   api_key: ollama
+    #   model: qwen3:8b
+    #   extra_body: {think: false}
+  routes:
+    chat:   [glm_flash, glm45_flash, groq_qwen, sf_qwen3_8b]     # 聊天、主动消息
+    call:   [glm_flash, glm45_flash, sf_qwen3_8b, groq_qwen]     # 打电话（要快）
+    helper: [ms_big, sf_glm4_9b, glm_flash]         # 其它小活（兜底）
+    # memory: [glm_flash, glm45_flash, sf_glm4_9b]   # 整理记忆（要准，用强一点的；不写就用 helper）
+    # night:  [glm_flash, glm45_flash, sf_glm4_9b]   # 每晚写日记、排她的日程、周日写信（不写就用 helper）
+    vision: [zhipu_vision]                          # 看你发的图（留空 [] 就不看图）
+
+# ---------------- 记忆检索 ----------------
+# 关键词 + 语义向量混合检索。向量用硅基流动的 BAAI/bge-m3（目前免费，以官网为准）；
+# 接口不可用时自动只用关键词，不影响聊天。
+memory:
+  embed:
+    enabled: true
+    key: siliconflow
+    base_url: https://api.siliconflow.cn/v1
+    model: BAAI/bge-m3
+
+# ---------------- Telegram 聊天 Bot ----------------
+telegram:
+  bot_token: "123456:ABC..."      # ★ 找 @BotFather 创建 bot 拿到
+  # 你的 TG 数字 ID。留空：第一个给 bot 发 /start 的人自动成为主人
+  owner_id: 0
+  # 你在她的世界里是谁（一般写在人设的 user_name / call_name 里；这里是没写时的备用）
+  owner_name: ""
+  # 用来挑表情包的贴纸包名（t.me/addstickers/后面那段），可以写多个
+  sticker_sets: []
+
+# ---------------- 拟人化 ----------------
+style:
+  context_messages: 40        # 每次带给模型的最近消息条数
+  typing_chars_per_sec: 6     # 打字速度（字/秒），决定每条气泡之间的停顿
+  max_typing_delay: 6         # 单条最多“打字”几秒
+  voice_probability: 0.12     # 她自己决定之外，额外随机把一条消息发成语音的概率（0 关闭）
+  merge_wait_seconds: 4       # 你连发几条时，等你说完再一起回（秒）
+  sticker_rate: 0.4           # 她想发表情包时，实际发出去的概率（1=每次都发）
+  typo_rate: 0.03             # 偶尔打错一个字、过两秒再改过来（0 关闭）
+
+# ---------------- 主动消息 ----------------
+proactive:
+  enabled: true
+  check_every_minutes: 10     # 多久“想一下要不要找你”
+  quiet_hours: "00:30-08:00"  # 免打扰时段（这段时间她不会主动找你）
+  min_gap_minutes: 90         # 两次主动消息的最短间隔
+  active_window_minutes: 30   # 你最近这么久内说过话，就不插嘴
+  base_per_day: 2.0           # 平均每天随机主动几次（不含早安晚安）
+  longing_per_hour: 0.03      # 你越久不说话，她越想你：每小时增加的触发概率
+  max_unanswered: 3           # 连续几次没回就不再主动（直到你回来）
+  max_per_day: 8              # 一天最多主动找你几次（含早安晚安；到点提醒、纪念日不受限）
+  morning: "08:00-09:30"      # 早安时间窗口（留空关闭）
+  night: "23:00-23:50"        # 晚安时间窗口（留空关闭）
+
+# ---------------- 电脑关机 / 睡眠期间 ----------------
+away:
+  enabled: true
+  catch_up_minutes: 120       # 电脑关着（或睡眠）超过这么久，回来后她会说说这段时间在干嘛，并补上错过的提醒、纪念日、来信
+  wait_seconds: 90            # 开机后先等这么久：你这段时间给她发过消息的话，就在回你时顺便说，不再单独发
+  goodbye: true               # 关掉程序（Ctrl+C、关窗口、关机）时，她说一句“我先去忙/睡了”
+  goodbye_min_gap_hours: 3    # 两次道别至少隔这么久（来回重启时不刷屏）
+
+# ---------------- 语音（语音条 + 通话共用） ----------------
+tts:
+  engine: local               # local（本机免费，推荐）| edge（微软免费，常失效）| gpt_sovits（克隆声音）| openai（OpenAI 兼容 /audio/speech）
+  local_sid: 23               # 本地声音编号（在 TG 里 /voices 试听后用 /voice 切换更方便）
+  local_speed: 1.05
+  edge_voice: zh-CN-XiaoyiNeural   # 活泼少女音；也可试 zh-CN-XiaoxiaoNeural、台湾腔 zh-TW-HsiaoChenNeural
+  edge_rate: "+0%"
+  edge_pitch: "+0Hz"
+  # GPT-SoVITS api_v2 地址（engine=gpt_sovits 时）
+  gpt_sovits_url: http://127.0.0.1:9880/tts
+  gpt_sovits_ref_audio: "D:/voices/ref.wav"
+  gpt_sovits_ref_text: "参考音频里说的那句话"
+  gpt_sovits_lang: zh
+  # 按语气准备几段参考音频（3~10 秒，每段配上它说的那句话），她会按当时的心情挑：
+  # gpt_sovits_refs:
+  #   默认: {audio: "D:/voices/normal.wav", text: "今天的课好无聊啊"}
+  #   开心: {audio: "D:/voices/happy.wav",  text: "真的吗！太好了吧"}
+  #   撒娇: {audio: "D:/voices/cute.wav",   text: "哥哥陪我嘛，就一会儿"}
+  #   难过: {audio: "D:/voices/sad.wav",    text: "我是不是做错什么了"}
+  #   生气: {audio: "D:/voices/angry.wav",  text: "哼，我才不管你了"}
+  gpt_sovits_refs: {}
+  # OpenAI 兼容 TTS（engine=openai 时），例如硅基流动 CosyVoice
+  openai_base_url: https://api.siliconflow.cn/v1
+  openai_api_key: ""          # 留空则用 keys.siliconflow
+  openai_model: FunAudioLLM/CosyVoice2-0.5B
+  openai_voice: "FunAudioLLM/CosyVoice2-0.5B:anna"
+
+asr:
+  engine: local               # local（本机 SenseVoice，免费，还能听出语气；第一次自动下载约 160MB）| openai | faster_whisper
+  openai_base_url: https://api.siliconflow.cn/v1
+  openai_api_key: ""          # 留空则用 keys.siliconflow（SenseVoice 免费）
+  openai_model: FunAudioLLM/SenseVoiceSmall
+  whisper_model: small        # faster_whisper 用的模型
+  whisper_device: auto        # auto / cpu / cuda
+
+# ---------------- 外面的世界 ----------------
+world:
+  city: ""                    # 你所在的城市（也可以在 TG 里发 /city 上海）；天气用 Open-Meteo/wttr.in，免费
+  schedule: ""                # 你的作息/课表（也可以发 /schedule …）
+
+# ---------------- 她的照片（智谱 cogview-3-flash，免费） ----------------
+photo:
+  enabled: true
+  key: zhipu
+  model: cogview-3-flash
+  size: 768x1344              # 竖屏手机照片
+  max_per_day: 3              # 每天最多发几张
+  look: ""                    # 她的长相描述，留空用默认（黑长发、呆毛、深棕色眼睛、娇小）
+
+# ---------------- 小屋网页（电脑上） ----------------
+web:
+  enabled: true
+  host: 127.0.0.1             # 只在本机能打开
+  port: 8765                  # 浏览器打开 http://127.0.0.1:8765
+
+# ---------------- 手机上的小屋（Telegram Mini App） ----------------
+miniapp:
+  enabled: true
+  url: ""                     # 有自己的固定 https 地址就填（指向本机 public_port）；留空＝自动开免费临时隧道
+  public_port: 8766           # 给手机用的入口（每个请求都校验 Telegram 签名，只有你能看）
+
+# ---------------- 感知你在做什么 ----------------
+sense:
+  pc:
+    enabled: true             # 只在 Windows 上生效：前台程序 → 打游戏/写代码/看视频/听歌…；多久没碰电脑；正在放的歌
+    # 告诉她多少（都在本机判断，只有这一句描述会发给大模型）：
+    #   app＝只说程序 / 游戏 / 网站名（“在玩《原神》”“在 B站看视频”“在用 VS Code 写代码”）
+    #   content＝再加视频标题、项目名、文档名（“在 B站看《xxx》”“写代码（项目 ai-life）”），聊得更具体
+    #   full＝原始窗口标题（最具体，也最可能带出私人内容）
+    # 无痕 / InPrivate 窗口一律只说“在上网”。/sense 暂停 2 可以临时关两小时
+    detail: app
+    ignore: []                # 这些程序 / 网站永远只说“在用电脑”，比如 [keepass, 网银]
+  phone:
+    enabled: true             # 手机快捷指令向 ntfy 频道发“起床/到家/充电”，她就知道（频道名用 /sense 查看）
+    ntfy_server: https://ntfy.sh
+    ntfy_topic: ""            # 留空自动生成一个私密频道名
+
+# ---------------- 她自己的生活 ----------------
+story:
+  enabled: true               # 她自己的故事线：一周到一个月的连续事件（考试周、社团活动、朋友的事……）
+  max_active: 2               # 同时最多几条
+mind:
+  enabled: true               # 内心独白：清醒时每隔几小时在后台想一想，决定要不要找你
+  think_every_hours: 3
+
+# ---------------- 桌面上的她（Live2D 桌宠） ----------------
+pet:
+  enabled: true
+  autostart: true             # 启动时自动在桌面右下角打开（只在 Windows 上）；关掉后用 python run.py pet 再打开
+  transparent: true           # 透明背景，只看得到人物（需要 PySide6：双击 pet_setup.bat 装）；想要浅色底就改 false
+  on_top: true                # 总在最前
+  width: 320
+  height: 480
+  model: ""                   # 换自己的 Live2D 模型：把整个模型文件夹放进 data/pet/model/ 就会自动用（留空即可）；
+                              # 里面有好几个模型时，这里写要用的那个，比如 角色名/xxx.model3.json
+  scale: 1.0                  # 模型大小
+  offset_y: 0                 # 模型上下位置
+  speak_proactive: false      # 她在 Telegram 主动找你时，桌宠也把话念出来
+  chatter: true               # 你刚回到电脑前、刚打完游戏时，她在桌面上搭一句（不发 Telegram）
+  chatter_gap_minutes: 40     # 桌面搭话最短间隔
+  expressions: {}             # 换了自己的模型时：情绪 → 表情名，如 {开心: f01, 生气: f02, 害羞: f03, 默认: f00}
+
+# ---------------- 说话质量 ----------------
+quality:
+  enabled: true               # 不重复自己：和最近说过的话太像、开头重复、称呼/口头禅用太多 → 自动重写
+  similarity: 0.62            # 多像算重复（0~1，越小越严格）
+  catchphrases: []            # 口头禅（最近用过两次就先别用）；一般写在人设文件的 catchphrases 里
+  weekly_report: true         # 每周一上午在 Telegram 里发一份“这一周她的表现”（只是统计，不是她在说话）
+
+# ---------------- 备份 ----------------
+backup:
+  extra_dir: auto             # 每天再复制一份数据库到别处：auto＝OneDrive 里的 ai-life-backup（没装 OneDrive 就跳过）；
+                              # 也可以写一个文件夹路径（比如 U 盘、网盘同步文件夹）；off＝不要
+
+# ---------------- 每周来信 ----------------
+letter:
+  enabled: true
+  weekday: 6                  # 0=周一 … 6=周日
+  time: "21:00-22:30"
+
+# ---------------- 小游戏 ----------------
+games:
+  mistake_rate: 0.25          # 井字棋里她“失误”的概率（0=永远最优，你最多打平）
+
+# ---------------- 打电话（她自己的 TG 账号） ----------------
+call:
+  enabled: false
+  api_id: 0                   # ★ 在 https://my.telegram.org 用“她的号码”登录 → API development tools
+  api_hash: ""
+  session_name: data/her_account
+  ring_timeout: 45            # 响多久没接算没接
+  max_calls_per_day: 2        # 她一天最多主动打几次
+  max_call_minutes: 20        # 单次通话上限（防止忘挂）
+  silence_ms: 700             # 你停顿多久算说完一句
+  vad_threshold: 2.5          # 说话判定灵敏度（越小越灵敏）
+
+# ---------------- 她的世界（第六批） ----------------
+her_world:
+  enabled: true               # 她身边固定的人（室友、朋友、老师……）+ 她自己的长期目标
+  max_goals: 2                # 同时最多几个长期目标
+  age: 19                     # 第一次运行时她几岁（以后每过一次生日长一岁）
+  birthday: ""                # 她的生日 MM-DD；留空自动挑一个（不会在最近两个月）
+  school:                     # 她的校历（按真实日期推算学期、第几周、考试周、寒暑假、年级）
+    enabled: true
+    fall_start: "09-01"
+    fall_exams: "01-05"       # 上学期期末考试周开始
+    winter_break: "01-17"     # 寒假开始（下学期开学那天结束）
+    spring_start: "02-23"
+    spring_exams: "06-22"
+    summer_break: "07-05~08-31"
+
+# ---------------- 睡前 ----------------
+bedtime:
+  enabled: true
+  window: "21:00-04:00"       # 这个时间段里你说晚安，她会补一条晚安语音（一晚一次）
+  goodnight_voice: true
+  story_voice: true           # 想听睡前故事时用语音讲（关掉就发文字）
+
+# ---------------- 他分享的链接 ----------------
+links:
+  enabled: true               # 你发 B站 / 公众号 / 网页 / YouTube 链接，她会先点开看标题、简介和正文开头再回你
+  max_chars: 700              # 正文最多读多少字给她
+
