@@ -3,6 +3,7 @@
     python run.py            启动（Telegram / QQ 聊天 + 主动消息）
     python run.py console    不连 Telegram，在命令行里和她聊（调人设用）
     python run.py bench      测一遍配置里每个大模型接口的速度和能否连通
+    python run.py llm        自定义大模型：填接口地址和 Key → 测连通 → 列出模型选一个 → 试聊 → 加进路由
     python run.py eval       人设回归评测（--judge 让大模型打分，--quick 只跑基础部分）；改完设置后跑一遍，看她变好还是变差
     python run.py pet        打开桌宠窗口（主程序启动时会自动打开，关掉后可以用它再打开）
     python run.py export     打包她（程序 + 记忆 + 设置 + 密钥），用来备份或者换电脑
@@ -12,7 +13,6 @@
     python run.py qqsetup    QQ 一键配置：没有 NapCat 就自动下载、配好、扫码登录一次，再选你的 QQ、写好 config.yaml
                              （--manual 只读现成的 NapCat 配置）
 
-    第二个角色（群聊角色）：set AILIFE_CONFIG=config.group.yaml 再 python run.py（start_group.bat 就是这么做的）
     python run.py persona    人设管理：list / check / use 文件 / new（问答生成）/ import 角色卡.png
 """
 from __future__ import annotations
@@ -53,12 +53,6 @@ async def main():
         else:
             print("还没有 config.yaml：运行 python run.py setup（或者把 config.example.yaml 复制成 config.yaml 自己填）。")
         sys.exit(EXIT_NO_RESTART)
-    if cfg.get("mode") == "group":               # 独立的群聊角色（config.group.yaml）
-        from ailife.health import setup_file_logging
-        log.info("日志也会写进 %s", setup_file_logging(cfg.root))
-        from ailife.group_runtime import run_group
-        await run_group(cfg)
-        return None
     from ailife import secrets
     moved = secrets.migrate(cfg.root)              # 明文密钥挪进 .env（第一次启动时）
     if moved:
@@ -309,6 +303,10 @@ if __name__ == "__main__":
             print(f"没做成：{e}")
             sys.exit(1)
         sys.exit(0)
+    if mode == "llm":                              # 自定义大模型：填地址和 Key → 测连通 → 选模型
+        logging.getLogger().setLevel(logging.WARNING)
+        from ailife.llm_custom import main as llm_main
+        sys.exit(llm_main(sys.argv[2:]))
     if mode in ("qqsetup", "napcat"):
         logging.getLogger().setLevel(logging.WARNING)
         if "--manual" in sys.argv:                   # 只读现成的 NapCat 配置，不下载、不启动

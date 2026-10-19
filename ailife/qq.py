@@ -1,7 +1,7 @@
 """QQ 接入：通过 OneBot v11（NapCat）收发消息。
 
     NapCat 登录一个 QQ 小号，开一个“正向 WebSocket 服务器”（默认 ws://127.0.0.1:3001），
-    这里连上去：收到的私聊 / 群消息交给 qq_private / qq_group，发消息走 call()。
+    这里连上去：收到的私聊交给 qq_bridge，发消息走 call()。
 
     安全上的几条硬规矩（照搬 Estrella Bot 踩过的坑）：
     - 发出去的消息一律用“消息段数组”，不拼 CQ 码字符串：模型就算写出 [CQ:at,qq=all] 也只是普通文字

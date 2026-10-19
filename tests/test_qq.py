@@ -7,9 +7,8 @@ import time
 from test_flow import FakeLLM, env  # noqa: F401  （env 是 fixture）
 
 from ailife.qq import flatten
-from ailife.qq_group import DEFAULTS, decide, parse_group_reply, to_segments
 
-SELF, OWNER, FRIEND, GROUP = 10001, 55555, 88888, 777777
+SELF, OWNER = 10001, 55555
 
 
 # ---------------- 纯函数 ----------------
@@ -26,33 +25,6 @@ def test_flatten_segments():
     assert "@小王" in f.text and "[图片]" in f.text
     assert "[CQ:at,qq=all]" in f.text            # 只是文字
     assert flatten("纯文字[CQ:face,id=1]", SELF).text == "纯文字[CQ:face,id=1]"
-
-
-def test_decide():
-    g = dict(DEFAULTS)
-    now = time.time()
-    kw = dict(now=now, last_reply_ts=0, prev_msg_ts=now - 30, replies_10min=0, quiet=False, g=g)
-    assert decide(mentioned=True, owner_spoke=False, rand=0.99, **kw)[0]
-    assert decide(mentioned=True, owner_spoke=False, rand=0.99, **{**kw, "quiet": True})[0]   # 半夜叫她也回
-    assert not decide(mentioned=True, owner_spoke=False, rand=0, **{**kw, "replies_10min": 12})[0]
-    assert not decide(mentioned=False, owner_spoke=False, rand=0.5, **kw)[0]
-    assert decide(mentioned=False, owner_spoke=True, rand=0.2, **kw)[0]             # 0.3
-    assert not decide(mentioned=False, owner_spoke=True, rand=0.2, **{**kw, "quiet": True})[0]
-    assert not decide(mentioned=False, owner_spoke=True, rand=0, **{**kw, "last_reply_ts": now - 10})[0]   # 冷却
-    # 话题热：概率翻倍；冷场后第一句：降低
-    assert decide(mentioned=False, owner_spoke=False, rand=0.1, **{**kw, "last_reply_ts": now - 300})[0]
-    assert not decide(mentioned=False, owner_spoke=True, rand=0.2, **{**kw, "prev_msg_ts": now - 3600})[0]
-
-
-def test_parse_and_segments():
-    assert parse_group_reply("[跳过]", "小葵", 2) is None
-    out = parse_group_reply("小葵：[@小王] 哈哈哈[表情:大笑]|||下次叫我[语音]|||第三条", "小葵", 2)
-    assert out[0].startswith("[@小王] 哈哈哈") and "[语音]" not in out[1] and len(out) == 2
-    segs = to_segments("[@小王] 你好 [@不认识] [CQ:at,qq=all]", {"小王": 88888})
-    assert segs[0] == {"type": "at", "data": {"qq": "88888"}}
-    assert all(s["type"] in ("at", "text") for s in segs)
-    assert sum(1 for s in segs if s["type"] == "at") == 1
-    assert "[CQ:at,qq=all]" in "".join(s["data"].get("text", "") for s in segs)
 
 
 # ---------------- 假 NapCat ----------------
@@ -115,21 +87,9 @@ class FakeNapCat:
         return self.sent(action)
 
 
-class GroupLLM(FakeLLM):
-    async def chat(self, messages, helper=False, **kw):
-        last = messages[-1]["content"]
-        if "最近的群聊记录" in last:
-            self.calls.append(messages)
-            return "[@小王] 哈哈哈你也太惨了|||下次叫上我"
-        if "更新你对每个群友的印象" in last:
-            return f"{FRIEND}|爱吐槽的老朋友，最近在赶论文"
-        return await super().chat(messages, helper=helper, **kw)
-
-
 def _setup_qq(cfg, bot, port, groups=()):
     cfg["qq"] = {**cfg.get("qq", {}), "enabled": True, "ws_url": f"ws://127.0.0.1:{port}/", "owner_id": OWNER,
-                 "groups": list(groups),
-                 "group": {**(cfg.get("qq", {}).get("group") or {}), "merge_wait_seconds": 0.05}}
+                 "groups": list(groups)}
     from ailife.qq_bridge import QQ, wait_ready
     q = QQ(cfg, bot)
     bot.qq = q
@@ -140,11 +100,6 @@ def _setup_qq(cfg, bot, port, groups=()):
 def _private(uid, text, mid):
     return {"post_type": "message", "message_type": "private", "user_id": uid, "message_id": mid,
             "sender": {"nickname": "x"}, "message": [{"type": "text", "data": {"text": text}}]}
-
-
-def _group(gid, uid, name, segs, mid):
-    return {"post_type": "message", "message_type": "group", "group_id": gid, "user_id": uid, "message_id": mid,
-            "sender": {"nickname": name, "card": name}, "message": segs}
 
 
 def test_private_qq_shares_brain_and_routes_back(env):  # noqa: F811
@@ -181,57 +136,6 @@ def test_private_qq_shares_brain_and_routes_back(env):  # noqa: F811
         await asyncio.sleep(0.05)
         await bot.deliver(Parsed(bubbles=[Bubble(text="还在吗")]))
         assert fake_tg.sent[-1][1][1] == "还在吗"
-        await nap.runner.cleanup()
-    asyncio.run(go())
-
-
-def test_group_chat(env, monkeypatch):  # noqa: F811
-    cfg, brain, bot, fake_tg = env
-    brain.llm = GroupLLM()
-    brain.memory.llm = brain.llm
-    brain.db.add_memory("他下周三考六级", 5, "user")                  # 关于他的私密记忆：群里不能用
-    import ailife.qq_group as qg
-
-    async def go():
-        nap = FakeNapCat()
-        await nap.start()
-        q, wait_ready = _setup_qq(cfg, bot, nap.port, groups=[GROUP])
-        assert await wait_ready(q)
-        await asyncio.sleep(0.1)
-        q.group.g["impression_every"] = 2
-        # 白名单外的群、自己发的消息：都不理
-        await nap.push(_group(999, FRIEND, "小王", [{"type": "at", "data": {"qq": str(SELF)}}], 1))
-        await nap.push(_group(GROUP, SELF, "她", [{"type": "text", "data": {"text": "我自己"}}], 2))
-        # 小王 @ 她
-        await nap.push(_group(GROUP, FRIEND, "小王",
-                              [{"type": "at", "data": {"qq": str(SELF)}},
-                               {"type": "text", "data": {"text": " 我论文又被打回来了"}}], 3))
-        sent = await nap.wait_sent("send_group_msg", 2)
-        assert {a["params"]["group_id"] for a in sent} == {GROUP}
-        first = sent[0]["params"]["message"]
-        assert first[0] == {"type": "reply", "data": {"id": "3"}}
-        assert first[1] == {"type": "at", "data": {"qq": str(FRIEND)}}
-        sys = brain.llm.calls[-1][0]["content"]
-        assert "摸鱼小分队" in sys and "关系很好的朋友" in sys
-        assert "六级" not in sys and "六级" not in brain.llm.calls[-1][1]["content"]
-        # 群消息不进你们俩的私聊记录
-        assert not [r for r in brain.db.recent_messages(50) if "论文" in r["content"]]
-        rows = brain.db.conn.execute("SELECT role FROM qq_group_messages WHERE group_id=?", (GROUP,)).fetchall()
-        assert [r["role"] for r in rows] == ["user", "assistant", "assistant"]
-        # 没人叫她、插话骰子没中：不说话
-        monkeypatch.setattr(qg.random, "random", lambda: 0.99)
-        n = len(nap.sent("send_group_msg"))
-        await nap.push(_group(GROUP, FRIEND, "小王", [{"type": "text", "data": {"text": "算了不说了"}}], 4))
-        await asyncio.sleep(0.4)
-        assert len(nap.sent("send_group_msg")) == n
-        # 攒够消息后整理了对小王的印象
-        for _ in range(30):
-            note = brain.db.conn.execute("SELECT note FROM qq_people WHERE user_id=?", (FRIEND,)).fetchone()["note"]
-            if note:
-                break
-            await asyncio.sleep(0.05)
-        assert "赶论文" in note
-        await q.stop()
         await nap.runner.cleanup()
     asyncio.run(go())
 
@@ -332,68 +236,6 @@ def test_goodbye_over_qq_http(env, monkeypatch):  # noqa: F811
 
 
 # ---------------- 独立的群聊角色（friend 模式） ----------------
-def test_group_character_friend_mode_and_idle(env, monkeypatch):  # noqa: F811
-    cfg, brain, bot, fake_tg = env
-    brain.llm = GroupLLM()
-    brain.memory.llm = brain.llm
-    cfg["mode"] = "group"
-    from ailife.config import ROOT
-    from ailife.persona import load_persona
-    brain.persona = load_persona(ROOT / "persona" / "xiaoman.md")
-    cfg["qq"] = {**cfg["qq"], "group": {**cfg["qq"]["group"], "owner_note": "把你拉进群的老朋友",
-                                         "active_hours": "00:00-23:59"}}
-    from ailife.qq_group import GroupChat
-
-    class FakeOB:
-        self_id = SELF
-        ready = True
-
-        def __init__(self):
-            self.sent = []
-
-        async def send_group(self, gid, segs):
-            self.sent.append((gid, segs))
-            return len(self.sent)
-
-        async def call(self, action, **kw):
-            return {"group_name": "画画群"}
-    ob = FakeOB()
-    gc = GroupChat(cfg, brain, ob, OWNER, [GROUP], ["满满"])
-    assert gc.partner is False
-    old = time.time() - 5 * 3600
-    for uid, name, text in ((OWNER, "阿杰", "周末去不去看展"), (FRIEND, "小王", "去！")):
-        brain.db.conn.execute("INSERT INTO qq_group_messages(ts, group_id, user_id, name, role, content) "
-                              "VALUES (?,?,?,?,?,?)", (old, GROUP, uid, name, "user", text))
-    brain.db.conn.commit()
-    msgs = asyncio.run(gc.build_messages(GROUP, False, True, ""))
-    sys_txt, user_txt = msgs[0]["content"], msgs[1]["content"]
-    assert "把你拉进群的老朋友" in sys_txt and "哥哥" not in sys_txt and "（哥哥）" not in user_txt
-    # 安静 5 小时 → 冒泡
-    import ailife.qq_group as qg
-    monkeypatch.setattr(qg.random, "random", lambda: 0.0)
-    real_sleep = asyncio.sleep
-    monkeypatch.setattr(qg.asyncio, "sleep", lambda *_: real_sleep(0))
-    asyncio.run(gc.idle_tick(60))
-    assert len(ob.sent) == 2 and "安静了" in brain.llm.calls[-1][1]["content"]
-    # 刚冒过泡、最后一句是她自己：不再冒
-    asyncio.run(gc.idle_tick(60))
-    assert len(ob.sent) == 2
-
-
-def test_config_extends_and_instance(tmp_path, monkeypatch):
-    import ailife.config as C
-    main = tmp_path / "main.yaml"
-    main.write_text("llm:\n  temperature: 0.42\nqq:\n  groups: [1]\n", encoding="utf-8")
-    grp = tmp_path / "grp.yaml"
-    grp.write_text(f"extends: {main}\nmode: group\ninstance_root: {tmp_path / 'inst'}\n"
-                   "persona_file: persona/xiaoman.md\nqq:\n  groups: [2]\n", encoding="utf-8")
-    monkeypatch.setenv("AILIFE_CONFIG", str(grp))
-    c = C.load_config()
-    assert c.llm.temperature == 0.42 and c.qq.groups == [2] and c.mode == "group"
-    assert c.root == tmp_path / "inst" and (tmp_path / "inst" / "data").is_dir()
-    assert c.persona_file == str(C.ROOT / "persona" / "xiaoman.md")      # 角色文件夹里没有：用程序目录的
-
-
 # ---------------- QQ 私聊的细节 ----------------
 def test_flatten_qq_specials():
     f = flatten([{"type": "face", "data": {"id": "14"}},

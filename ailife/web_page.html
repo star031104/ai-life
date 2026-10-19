@@ -594,6 +594,30 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
             <ul class="rows" id="routines"></ul></div>
         </div>
       </div>
+      <div class="card c12" id="llmCard" hidden>
+        <div class="card-h"><h2><span data-i="gear"></span>大模型</h2><span class="hint">任何 OpenAI 兼容的接口：DeepSeek、通义、Kimi、OpenRouter、本机 Ollama……</span></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:14px">
+          <ul class="rows" id="llmList"></ul>
+          <div class="small muted" id="llmRoutes"></div>
+          <div class="field"><label for="llmUrl">加一个接口：地址和 Key</label>
+            <div class="form" style="margin:0;flex-wrap:wrap">
+              <input class="input" id="llmUrl" list="llmPresets" placeholder="https://api.deepseek.com/v1" style="flex:2;min-width:220px">
+              <datalist id="llmPresets"><option value="https://api.deepseek.com/v1">DeepSeek</option><option value="https://dashscope.aliyuncs.com/compatible-mode/v1">通义千问</option><option value="https://api.moonshot.cn/v1">Kimi</option><option value="https://open.bigmodel.cn/api/paas/v4">智谱</option><option value="https://api.siliconflow.cn/v1">硅基流动</option><option value="https://openrouter.ai/api/v1">OpenRouter</option><option value="http://127.0.0.1:11434/v1">本机 Ollama</option><option value="http://127.0.0.1:1234/v1">本机 LM Studio</option></datalist>
+              <input class="input" id="llmKey" type="password" autocomplete="off" placeholder="API Key（本机模型可以不填）" style="flex:2;min-width:180px">
+              <button class="btn" id="llmProbe">测连通、列模型</button></div></div>
+          <div class="field" id="llmStep2" hidden><label for="llmModel">选模型</label>
+            <div class="form" style="margin:0;flex-wrap:wrap">
+              <input class="input" id="llmModel" list="llmModels" placeholder="输入可以筛选" style="flex:2;min-width:220px"><datalist id="llmModels"></datalist>
+              <button class="btn" id="llmTest">试聊一句</button></div>
+            <div class="small" id="llmTestOut"></div></div>
+          <div class="field" id="llmStep3" hidden><label for="llmHow">怎么用它</label>
+            <div class="form" style="margin:0;flex-wrap:wrap">
+              <select class="input" id="llmHow"><option value="first">当主力：聊天优先用它</option><option value="last">当备用：别的都不行时才用</option><option value="background">只干后台的活（整理记忆、写日记）</option></select>
+              <input class="input" id="llmName" placeholder="名字（可以不填）" style="max-width:200px">
+              <button class="btn pri" id="llmSave">加上</button>
+              <button class="btn" id="llmRestart" hidden>重启生效</button></div></div>
+        </div>
+      </div>
       <div class="card c6">
         <div class="card-h"><h2><span data-i="eye"></span>感知</h2></div>
         <div class="card-b"><dl class="kv" id="senseKv"></dl>
@@ -673,6 +697,41 @@ async function auth(){ if(!TG)return;
   const r=await fetch("api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({initData:TG.initData})});
   if(r.ok)TOK=(await r.json()).token; else toast("只有主人能打开哦"); }
 
+/* ============ 自定义大模型（只在本机网页） ============ */
+let LLMP={};
+async function loadLLM(){
+  try{const r=await fetch("api/llm",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("llmCard").hidden=false;
+    $("llmList").innerHTML=d.profiles.map(p=>`<li><div class="grow"><div class="title">${esc(p.name)}${p.custom?' <span class="muted small">自己加的</span>':''}${p.pending?' <span class="muted small">（重启后生效）</span>':''}</div><div class="meta">${esc(p.model||"")} · ${esc(p.base_url||"")}</div></div>${p.custom?`<button class="btn ghost sm" data-llmdel="${esc(p.name)}">删掉</button>`:""}</li>`).join("");
+    $("llmRoutes").textContent="现在的顺序（前一个限流 / 出错自动换下一个）："+Object.entries(d.routes).map(([k,v])=>`${k}：${v.join(" → ")}`).join("；");
+  }catch(e){}
+}
+$("llmProbe")&&$("llmProbe").addEventListener("click",async()=>{
+  const b=$("llmProbe"); b.disabled=true; b.textContent="连接中…";
+  try{const r=await post("api/llm/models",{url:$("llmUrl").value,key:$("llmKey").value});
+    if(!r.ok){toast(r.error||"连不上");$("llmStep2").hidden=false;$("llmTestOut").textContent="读不到模型列表："+(r.error||"")+"。可以直接输入模型名再试聊";return}
+    LLMP={url:r.url,via_proxy:r.via_proxy}; $("llmUrl").value=r.url;
+    $("llmModels").innerHTML=r.models.map(m=>`<option value="${esc(m)}">`).join("");
+    $("llmStep2").hidden=false; $("llmModel").value=r.models.length===1?r.models[0]:""; $("llmModel").focus();
+    toast(`连上了，有 ${r.models.length} 个模型`+(r.via_proxy?"（走代理）":""));
+  }finally{b.disabled=false;b.textContent="测连通、列模型"}
+});
+$("llmTest")&&$("llmTest").addEventListener("click",async()=>{
+  const b=$("llmTest"); b.disabled=true; b.textContent="试聊中…"; $("llmTestOut").textContent="";
+  try{const r=await post("api/llm/test",{url:LLMP.url||$("llmUrl").value,key:$("llmKey").value,model:$("llmModel").value,via_proxy:LLMP.via_proxy});
+    LLMP.extra=r.extra||null;
+    $("llmTestOut").textContent=r.ok?`✅ ${r.secs} 秒：${r.text}`+(r.secs>15?"（有点慢，建议当备用）":""):`❌ ${r.text}`;
+    $("llmStep3").hidden=false;
+  }finally{b.disabled=false;b.textContent="试聊一句"}
+});
+$("llmSave")&&$("llmSave").addEventListener("click",async()=>{
+  const r=await post("api/llm/add",{url:LLMP.url||$("llmUrl").value,key:$("llmKey").value,model:$("llmModel").value,
+    name:$("llmName").value,how:$("llmHow").value,via_proxy:LLMP.via_proxy,extra:LLMP.extra});
+  toast(r.message||r.error||"好了"); if(r.ok){$("llmKey").value="";$("llmRestart").hidden=false;loadLLM()}
+});
+$("llmRestart")&&$("llmRestart").addEventListener("click",async()=>{const r=await post("api/llm/restart",{});toast(r.message||r.error)});
+document.addEventListener("click",async e=>{const t=e.target.closest("[data-llmdel]");if(!t)return;
+  if(!confirm(`删掉 ${t.dataset.llmdel}？`))return; const r=await post("api/llm/remove",{name:t.dataset.llmdel});toast(r.message||r.error);loadLLM()});
+
 async function load(retry=true){
   document.body.classList.add("skel-loading");
   try{const r=await fetch("api/state",{headers:H()});
@@ -680,7 +739,7 @@ async function load(retry=true){
       try{sessionStorage.removeItem("ailife_tok")}catch(e){}
       $("sub").textContent="链接过期了：在 QQ 里给她发 /小屋（Telegram 里点“小屋”或发 /home）拿新链接；在运行她的电脑上直接打开 http://127.0.0.1:8765 就行";return }
     S=await r.json()}catch(e){$("sub").textContent="连不上程序，确认 start.bat 还开着";return}
-  render();
+  render(); loadLLM();
 }
 
 /* ============ 渲染 ============ */

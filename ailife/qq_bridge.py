@@ -2,7 +2,8 @@
 
 - 私聊：只认 qq.owner_id（你自己的 QQ 号）。和 Telegram 共用同一份聊天记录、记忆、心情；
   你最后在哪边说话，她就在哪边回你、主动找你（见 bot_delivery.channel）
-- 群聊：交给 qq_group.GroupChat
+- 群聊不在这里：QQ 群里的角色是单独的程序 ai-life-group（https://github.com/star031104/ai-life-group），
+  用另一个 QQ 小号。这里收到的群消息一律不理
 """
 from __future__ import annotations
 
@@ -29,11 +30,6 @@ class QQ:
         self.private_on = bool(c.get("private", True)) and bool(self.owner_id)
         self.ob = OneBot(str(c.get("ws_url") or "ws://127.0.0.1:3001"), str(c.get("access_token") or ""))
         self.out = QQOut(self.ob)
-        self.group = None
-        groups = [int(g) for g in (c.get("groups") or []) if str(g).strip().isdigit()]
-        if groups:
-            from .qq_group import GroupChat
-            self.group = GroupChat(cfg, self.brain, self.ob, self.owner_id, groups, list(c.get("aliases") or []))
         self.ob.handlers.append(self.on_event)
         self.ob.on_connect.append(self._check_friend)
         self._strangers_warned = False
@@ -46,8 +42,6 @@ class QQ:
     def start(self):
         if not self.owner_id:
             log.warning("config 里 qq.owner_id 没填：QQ 私聊不会理任何人（群聊不受影响）")
-        if not self.group:
-            log.info("qq.groups 是空的：她不会在任何 QQ 群里说话")
         self.ob.start()
         self._sig_task = asyncio.create_task(self._signature_loop())
         from .napcat_launcher import ensure_napcat
@@ -128,8 +122,6 @@ class QQ:
             parts.append(f"私聊认 {self.owner_id}" + (f"，你上次在 QQ 说话是 {int(gap // 60)} 分钟前" if gap else ""))
         else:
             parts.append("私聊没开（qq.owner_id 没填？）")
-        if self.group:
-            parts.append(f"群 {sorted(self.group.groups)}")
         return "，".join(parts)
 
     async def on_event(self, ev: dict):
@@ -143,9 +135,7 @@ class QQ:
         if pt != "message":
             return
         if ev.get("message_type") == "group":
-            if self.group:
-                await self.group.on_event(ev)
-            return
+            return                                   # 群聊交给 ai-life-group
         if ev.get("message_type") == "private":
             await self.on_private(ev)
 

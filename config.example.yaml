@@ -22,7 +22,7 @@ persona_file: persona/linxi.md       # 自带的人设：linxi.md（林汐，温
 # 这里改成 "${ZHIPU_KEY}" 这样的引用。以后要改 key，改 .env 里那一行即可。
 keys:
   zhipu: ""          # 智谱 open.bigmodel.cn → API Keys
-  siliconflow: ""    # 硅基流动 cloud.siliconflow.cn → API 密钥（语音识别也用它）
+  siliconflow: ""    # 硅基流动 cloud.siliconflow.cn → API 密钥（备用聊天、记忆检索）
   groq: ""           # console.groq.com → API Keys（国内需要代理）
   modelscope: ""     # modelscope.cn → 访问令牌（需绑定阿里云账号）
 
@@ -75,7 +75,6 @@ llm:
     #   extra_body: {think: false}
   routes:
     chat:   [glm_flash, glm45_flash, groq_qwen, sf_qwen3_8b]     # 聊天、主动消息
-    call:   [glm_flash, glm45_flash, sf_qwen3_8b, groq_qwen]     # 打电话（要快）
     helper: [ms_big, sf_glm4_9b, glm_flash]         # 其它小活（兜底）
     # memory: [glm_flash, glm45_flash, sf_glm4_9b]   # 整理记忆（要准，用强一点的；不写就用 helper）
     # night:  [glm_flash, glm45_flash, sf_glm4_9b]   # 每晚写日记、排她的日程、周日写信（不写就用 helper）
@@ -101,12 +100,27 @@ telegram:
   # 用来挑表情包的贴纸包名（t.me/addstickers/后面那段），可以写多个
   sticker_sets: []
 
+# ---------------- QQ（可选，需要 NapCat，见 docs/QQ.md） ----------------
+qq:
+  enabled: false
+  ws_url: "ws://127.0.0.1:3001"   # NapCat 里开的“WebSocket 服务器”地址
+  access_token: ""               # NapCat 里设的 token（没设就留空）
+  napcat_autostart: true         # 开 start.bat 时 NapCat 没在运行，就顺便启动它（Windows）
+  napcat_dir: ""                 # NapCat 文件夹，比如 D:\NapCat.Shell.Windows.Node（qq_setup 会写；空着就自动找）
+  napcat_qq: 0                   # 她小号的 QQ 号：启动 NapCat 时用来快速登录，不用每次扫码（qq_setup 会写）
+  http_url: ""                   # 可选：NapCat 的 HTTP 服务器（比如 http://127.0.0.1:3000），关程序道别时的备用通道
+  owner_id: 0                    # ★ 你自己的 QQ 号（不是她的小号）：私聊只认这个号
+  private: true                  # 私聊：和 Telegram 共用聊天记录，你在哪边说话她就在哪边回
+                                 # 只想用 QQ：把 telegram.bot_token 清空就行（命令、信、纪念册、道别都走 QQ）
+  poke_back: 0.4                 # 你戳她时，她戳回去的概率
+  signature: true                # 她的 QQ 个性签名每天跟着她的安排和心情变（每天一次，心情大变时最多 4 小时一次）
+                                 # QQ 群：用单独的程序 ai-life-group（另一个小号），这里只管私聊
+
 # ---------------- 拟人化 ----------------
 style:
   context_messages: 40        # 每次带给模型的最近消息条数
   typing_chars_per_sec: 6     # 打字速度（字/秒），决定每条气泡之间的停顿
   max_typing_delay: 6         # 单条最多“打字”几秒
-  voice_probability: 0.12     # 她自己决定之外，额外随机把一条消息发成语音的概率（0 关闭）
   merge_wait_seconds: 4       # 你连发几条时，等你说完再一起回（秒）
   sticker_rate: 0.4           # 她想发表情包时，实际发出去的概率（1=每次都发）
   typo_rate: 0.03             # 偶尔打错一个字、过两秒再改过来（0 关闭）
@@ -132,41 +146,6 @@ away:
   wait_seconds: 90            # 开机后先等这么久：你这段时间给她发过消息的话，就在回你时顺便说，不再单独发
   goodbye: true               # 关掉程序（Ctrl+C、关窗口、关机）时，她说一句“我先去忙/睡了”
   goodbye_min_gap_hours: 3    # 两次道别至少隔这么久（来回重启时不刷屏）
-
-# ---------------- 语音（语音条 + 通话共用） ----------------
-tts:
-  engine: local               # local（本机免费，推荐）| edge（微软免费，常失效）| gpt_sovits（克隆声音）| openai（OpenAI 兼容 /audio/speech）
-  local_sid: 23               # 本地声音编号（在 TG 里 /voices 试听后用 /voice 切换更方便）
-  local_speed: 1.05
-  edge_voice: zh-CN-XiaoyiNeural   # 活泼少女音；也可试 zh-CN-XiaoxiaoNeural、台湾腔 zh-TW-HsiaoChenNeural
-  edge_rate: "+0%"
-  edge_pitch: "+0Hz"
-  # GPT-SoVITS api_v2 地址（engine=gpt_sovits 时）
-  gpt_sovits_url: http://127.0.0.1:9880/tts
-  gpt_sovits_ref_audio: "D:/voices/ref.wav"
-  gpt_sovits_ref_text: "参考音频里说的那句话"
-  gpt_sovits_lang: zh
-  # 按语气准备几段参考音频（3~10 秒，每段配上它说的那句话），她会按当时的心情挑：
-  # gpt_sovits_refs:
-  #   默认: {audio: "D:/voices/normal.wav", text: "今天的课好无聊啊"}
-  #   开心: {audio: "D:/voices/happy.wav",  text: "真的吗！太好了吧"}
-  #   撒娇: {audio: "D:/voices/cute.wav",   text: "哥哥陪我嘛，就一会儿"}
-  #   难过: {audio: "D:/voices/sad.wav",    text: "我是不是做错什么了"}
-  #   生气: {audio: "D:/voices/angry.wav",  text: "哼，我才不管你了"}
-  gpt_sovits_refs: {}
-  # OpenAI 兼容 TTS（engine=openai 时），例如硅基流动 CosyVoice
-  openai_base_url: https://api.siliconflow.cn/v1
-  openai_api_key: ""          # 留空则用 keys.siliconflow
-  openai_model: FunAudioLLM/CosyVoice2-0.5B
-  openai_voice: "FunAudioLLM/CosyVoice2-0.5B:anna"
-
-asr:
-  engine: local               # local（本机 SenseVoice，免费，还能听出语气；第一次自动下载约 160MB）| openai | faster_whisper
-  openai_base_url: https://api.siliconflow.cn/v1
-  openai_api_key: ""          # 留空则用 keys.siliconflow（SenseVoice 免费）
-  openai_model: FunAudioLLM/SenseVoiceSmall
-  whisper_model: small        # faster_whisper 用的模型
-  whisper_device: auto        # auto / cpu / cuda
 
 # ---------------- 外面的世界 ----------------
 world:
@@ -230,7 +209,6 @@ pet:
                               # 里面有好几个模型时，这里写要用的那个，比如 角色名/xxx.model3.json
   scale: 1.0                  # 模型大小
   offset_y: 0                 # 模型上下位置
-  speak_proactive: false      # 她在 Telegram 主动找你时，桌宠也把话念出来
   chatter: true               # 你刚回到电脑前、刚打完游戏时，她在桌面上搭一句（不发 Telegram）
   chatter_gap_minutes: 40     # 桌面搭话最短间隔
   expressions: {}             # 换了自己的模型时：情绪 → 表情名，如 {开心: f01, 生气: f02, 害羞: f03, 默认: f00}
@@ -257,18 +235,6 @@ letter:
 games:
   mistake_rate: 0.25          # 井字棋里她“失误”的概率（0=永远最优，你最多打平）
 
-# ---------------- 打电话（她自己的 TG 账号） ----------------
-call:
-  enabled: false
-  api_id: 0                   # ★ 在 https://my.telegram.org 用“她的号码”登录 → API development tools
-  api_hash: ""
-  session_name: data/her_account
-  ring_timeout: 45            # 响多久没接算没接
-  max_calls_per_day: 2        # 她一天最多主动打几次
-  max_call_minutes: 20        # 单次通话上限（防止忘挂）
-  silence_ms: 700             # 你停顿多久算说完一句
-  vad_threshold: 2.5          # 说话判定灵敏度（越小越灵敏）
-
 # ---------------- 她的世界（第六批） ----------------
 her_world:
   enabled: true               # 她身边固定的人（室友、朋友、老师……）+ 她自己的长期目标
@@ -287,9 +253,7 @@ her_world:
 # ---------------- 睡前 ----------------
 bedtime:
   enabled: true
-  window: "21:00-04:00"       # 这个时间段里你说晚安，她会补一条晚安语音（一晚一次）
-  goodnight_voice: true
-  story_voice: true           # 想听睡前故事时用语音讲（关掉就发文字）
+  window: "21:00-04:00"       # 睡前时段（你说想听睡前故事时，她会单独讲一个，用文字发）
 
 # ---------------- 他分享的链接 ----------------
 links:

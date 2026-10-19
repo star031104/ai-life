@@ -91,6 +91,13 @@ class Dashboard(LifeWebMixin, PersonaWebMixin):
         a.router.add_post("/api/habits/delete", self.habit_delete)
         a.router.add_post("/api/habits/checkin", self.habit_checkin)
         self.life_routes(a)
+        if not public:                              # 大模型的 Key：只在本机网页里管理，手机小屋里没有
+            a.router.add_get("/api/llm", self.llm_list)
+            a.router.add_post("/api/llm/models", self.llm_models)
+            a.router.add_post("/api/llm/test", self.llm_test)
+            a.router.add_post("/api/llm/add", self.llm_add)
+            a.router.add_post("/api/llm/remove", self.llm_remove)
+            a.router.add_post("/api/llm/restart", self.llm_restart)
         if not public and getattr(self, "pet", None) and self.pet.enabled:
             self.pet.routes(a)                      # 桌宠只在本机入口
         a.router.add_get("/", self.page)
@@ -344,6 +351,61 @@ class Dashboard(LifeWebMixin, PersonaWebMixin):
             self.db.set("schedule", str(d["schedule"]).strip())
             msg.append("作息已保存")
         return web.json_response({"ok": True, "message": "；".join(msg)})
+
+    # ---------------- 自定义大模型（只在本机网页） ----------------
+    async def llm_list(self, req):
+        from .llm_custom import load_custom
+        custom = ((load_custom(self.cfg.root).get("llm") or {}).get("profiles") or {})
+        llm = self.cfg.get("llm") or {}
+        profs = [{"name": n, "model": p.get("model"), "base_url": p.get("base_url"), "custom": n in custom}
+                 for n, p in (llm.get("profiles") or {}).items()]
+        for n, p in custom.items():                 # 刚加的（还没重启）
+            if not any(x["name"] == n for x in profs):
+                profs.append({"name": n, "model": p.get("model"), "base_url": p.get("base_url"), "custom": True,
+                              "pending": True})
+        return web.json_response({"profiles": profs, "routes": dict(llm.get("routes") or {}),
+                                  "stats": self.brain.llm.stats() if hasattr(self.brain.llm, "stats") else {}})
+
+    async def llm_models(self, req):
+        from .llm_custom import chat_models, list_models
+        d = await self._json(req)
+        models, url, via_proxy, err = await list_models(str(d.get("url") or ""), str(d.get("key") or ""),
+                                                        str(self.cfg.get("proxy") or ""))
+        return web.json_response({"ok": bool(models), "url": url, "via_proxy": via_proxy, "error": err,
+                                  "models": chat_models(models) or models})
+
+    async def llm_test(self, req):
+        from .llm_custom import probe_model
+        d = await self._json(req)
+        ok, secs, text, extra = await probe_model(str(d.get("url") or ""), str(d.get("key") or ""),
+                                                  str(d.get("model") or ""), str(self.cfg.get("proxy") or ""),
+                                                  bool(d.get("via_proxy")))
+        return web.json_response({"ok": ok, "secs": round(secs, 1), "text": text, "extra": extra})
+
+    async def llm_add(self, req):
+        from .llm_custom import save_profile
+        d = await self._json(req)
+        if not d.get("url") or not d.get("model"):
+            return web.json_response({"ok": False, "error": "地址和模型都要有"})
+        name, routes = save_profile(self.cfg, url=str(d["url"]), key=str(d.get("key") or ""), model=str(d["model"]),
+                                    name=str(d.get("name") or ""), how=str(d.get("how") or "first"),
+                                    roles_bg=("helper", "memory", "night"), via_proxy=bool(d.get("via_proxy")),
+                                    extra=d.get("extra") or None, root=self.cfg.root)
+        return web.json_response({"ok": True, "name": name, "routes": routes,
+                                  "message": f"加好了：{name}。点“重启生效”或者下次启动时生效"})
+
+    async def llm_remove(self, req):
+        from .llm_custom import remove_profile
+        d = await self._json(req)
+        ok = remove_profile(str(d.get("name") or ""), self.cfg.root)
+        return web.json_response({"ok": ok, "message": "删掉了，重启后生效" if ok else "只能删自己加的接口"})
+
+    async def llm_restart(self, req):
+        if self.bot and hasattr(self.bot, "restart_event"):
+            import asyncio
+            asyncio.get_running_loop().call_later(1.0, self.bot.restart_event.set)
+            return web.json_response({"ok": True, "message": "程序正在重启，十几秒后刷新页面"})
+        return web.json_response({"ok": False, "error": "重启不了：手动关掉 start.bat 再开"})
 
     # ---------------- 新增：话题 / 说话方式 / 留言板 ----------------
     async def thread_close(self, req):

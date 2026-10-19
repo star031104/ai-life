@@ -108,8 +108,10 @@ def setup(root: Path = ROOT):
     z = ask("智谱 API Key（没有就回车跳过）", secret=True)
     print("  硅基流动 cloud.siliconflow.cn → API 密钥（备用聊天 + 记忆检索，免费）")
     sf = ask("硅基流动 API Key（没有就回车跳过）", secret=True)
-    if not z and not sf:
-        print("  ⚠️ 两个都没填：她没法说话。之后在 .env 里补上 ZHIPU_KEY 或 SILICONFLOW_KEY。")
+    print("  也可以用别的接口（DeepSeek、通义、Kimi、OpenRouter、本机 Ollama……任何 OpenAI 兼容的）")
+    own_llm = yes("  要加一个自己的大模型接口吗（填地址和 Key，自动测连通、列出模型让你选）", False)
+    if not z and not sf and not own_llm:
+        print("  ⚠️ 一个都没填：她没法说话。之后在 .env 里补上 ZHIPU_KEY 或 SILICONFLOW_KEY，或者双击 llm.bat 加接口。")
     if z:
         env["ZHIPU_KEY"] = z
         text = _set_line(text, r'^(\s*zhipu:\s*)"".*$', r'\1"${ZHIPU_KEY}"')
@@ -144,6 +146,13 @@ def setup(root: Path = ROOT):
     from .personas import set_persona_file
     set_persona_file(root, persona_file)
     print(f"\n配置好了：config.yaml + .env，人设 {persona_file}")
+    if own_llm:
+        from .config import load_config
+        from .llm_custom import add_interactive
+        try:
+            run_coro(add_interactive(load_config(), ("helper", "memory", "night"), root))
+        except Exception as e:  # noqa: BLE001
+            print(f"  自定义接口没加上：{e}（之后双击 llm.bat 再加）")
     if use_qq:
         print("\n⑥ QQ：自动准备 NapCat（QQ 的协议端）……")
         from .napcat_install import main as napcat_main

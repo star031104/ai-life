@@ -42,7 +42,7 @@ ai-life 不是一个“问一句答一句”的聊天机器人。TA 有自己的
 | 🎧 | **一起做的事** | 打卡、追番、听歌、愿望清单、时间胶囊、每月纪念册、睡前故事、小游戏 |
 | 🔗 | **看得懂你发的东西** | 图片、动图、视频、文件、位置，B 站 / YouTube / 公众号 / 网页链接（先点开读完再回你） |
 | 🐧 | **QQ** | 一键自动下载配置 NapCat，扫一次码以后自动登录；私聊和 Telegram 共用记忆、你在哪边说话就在哪边回，也可以只用 QQ |
-| 👥 | **群聊角色**（可选） | 再跑一个独立的角色（自己的人设和记忆）待在 QQ 群里：被叫到就回、偶尔插嘴、群冷了自己冒泡、慢慢记住每个群友 |
+| 👥 | **群聊角色**（另一个仓库） | 想要一个待在 QQ 群里的角色：用 **[ai-life-group](https://github.com/star031104/ai-life-group)**（另一个小号、另一个人设，一键部署，可以和这里同时开） |
 
 每个功能的详细说明见 **[docs/FEATURES.md](docs/FEATURES.md)**。
 
@@ -174,7 +174,8 @@ python run.py setup                       # 配置向导；或者把 config.exam
 - **桌宠**：Windows 上启动时自动出现在桌面右下角。背景不透明的话，双击 `pet_setup.bat` 安装 PySide6 后重启。想换成自己的 Live2D 模型，把模型文件夹放进 `data/pet/model/` 就会自动识别（请使用你有权使用的模型）。
 - **小屋**：手机上在 Telegram bot 聊天框左边点“小屋”按钮，QQ 里给 TA 发 `/小屋`；电脑上浏览器打开 `http://127.0.0.1:8765`。手机小屋通过免费的 Cloudflare 临时隧道访问，程序会自动下载 `cloudflared`。
 - **开机自启**：双击 `autostart_on.bat`，或者发 `/autostart 开`。关闭用 `autostart_off.bat`。
-- **QQ 的更多说明**（群聊、第二个角色）：见 [docs/QQ.md](docs/QQ.md)。
+- **QQ 群**：ai-life 只管私聊。群里的角色是单独的程序 **[ai-life-group](https://github.com/star031104/ai-life-group)**：另一个 QQ 小号、另一个人设，一行命令部署，它会从这里的 NapCat 克隆一份给自己用，两边可以同时开。
+- **QQ 的更多说明**：见 [docs/QQ.md](docs/QQ.md)。
 
 ### 让 TA 一直在线
 
@@ -217,7 +218,7 @@ python run.py import 包.zip     # 在新电脑装好程序后导入
 | `style` | 打字速度、表情包频率、错字率 |
 | `proactive` | 主动消息：频率、免打扰时段、早安晚安时间、连续未回复上限 |
 | `away` | 关机前道别、开机后补上错过的事 |
-| `qq` | QQ：NapCat 地址、你的 QQ、群、NapCat 文件夹和自动启动（`qq_setup` 会写好） |
+| `qq` | QQ 私聊：NapCat 地址、你的 QQ、NapCat 文件夹和自动启动（`qq_setup` 会写好） |
 | `sense` | 电脑感知：只看程序名，还是连视频标题、文档名一起看 |
 | `web` / `miniapp` | 小屋网页、手机 Mini App |
 | `pet` | 桌宠：大小、位置、模型、是否主动搭话 |
@@ -239,7 +240,13 @@ python run.py persona check persona/xxx.md  # 检查写法
 
 ### 大模型配置
 
-`llm.profiles` 里是各个接口，`llm.routes` 是每种用途按顺序用哪些：
+**最省事：用自己的接口不用写配置。** 双击 **`llm.bat`**，或者在电脑上打开小屋（`http://127.0.0.1:8765`）→ 设置 →“大模型”：
+填接口地址（DeepSeek、通义、Kimi、OpenRouter、本机 Ollama / LM Studio 都列好了，也可以粘贴任何 OpenAI 兼容的地址）和 Key →
+自动测连通、列出这个接口的模型 → 选一个 → 试聊一句看速度 → 选它当主力、当备用，还是只干后台的活（整理记忆、写日记）。
+推理模型回复是空的时候会自动试着关掉“思考”。加的接口写在 `config.llm.yaml`（Key 在 `.env`），不动你的 `config.yaml`；
+小屋里加完点“重启生效”就能用上。配置向导里也可以顺便加一个。
+
+手动写：`llm.profiles` 里是各个接口，`llm.routes` 是每种用途按顺序用哪些：
 
 ```yaml
 llm:
@@ -288,6 +295,7 @@ llm:
 | --- | --- |
 | `python run.py` | 启动 |
 | `python run.py setup` | 配置向导 |
+| `python run.py llm` | 自定义大模型：填地址和 Key → 测连通 → 选模型 → 试聊 → 加进路由（`llm.bat`） |
 | `python run.py qqsetup` | QQ 一键配置（没有 NapCat 就自动下载；`--manual` 只读现成配置） |
 | `python run.py persona …` | 人设管理（list / check / use / new / import） |
 | `python run.py selftest` | 离线自检 |
@@ -397,7 +405,7 @@ ai-life/
 │   └── TESTING.md         实机测试清单
 ├── tests/                 自动测试（python -m pytest tests）
 ├── get.ps1                一行命令部署（下载代码 + 运行 install.bat）
-├── install.bat · start.bat · selftest.bat · setup.bat · qq_setup.bat · pet_setup.bat   Windows 脚本
+├── install.bat · start.bat · selftest.bat · setup.bat · qq_setup.bat · llm.bat · pet_setup.bat   Windows 脚本
 ├── tools/env.bat          Windows 脚本共用：找到 .venv 或 conda 环境
 └── install.sh · start.sh  Linux / macOS 脚本
 ```
