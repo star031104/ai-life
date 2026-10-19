@@ -233,6 +233,64 @@ class HerWorld:
         log.info("她的新目标：%s（%s ~ %s，%d 步）", data["title"], plan[0]["day"], plan[-1]["day"], len(plan))
         return gid
 
+    async def semester_goal(self, today: date) -> int | None:
+        """学生：每学期开一条跟着校历走的主线（11.1）——她这学期想做成的一件事、期中、期末周，最后是放假回家见他。
+        每学期只开一次（学期中途第一次跑到这里时也会补上，从今天排到放假）。"""
+        rh = getattr(self.brain, "rhythm", None)
+        if rh is None or rh.life != "student" or not rh.school.enabled:
+            return None
+        ph = rh.school.phase(today)
+        if ph.get("vacation"):
+            return None
+        key = f"semester_goal_{ph['ay']}_{ph['term']}"
+        if self.db.get(key):
+            return None
+        vac = today + ph["days_to_vacation"]
+        if (vac - today).days < 14:                  # 快放假了：这学期就不开了
+            self.db.set(key, "skip")
+            return None
+        from ailife.mind.rhythm import _md
+        sch = rh.school
+        exam = _md(sch.fall_exams if ph["term"] == "上学期" else sch.spring_exams, vac.year)
+        if not (today < exam < vac):
+            exam = vac - timedelta(days=12)
+        selfs = "\n".join(f"- {m['content']}" for m in self.db.all_memories("self")[-15:]) or "（无）"
+        who = self.persona.call_name or "他"
+        prompt = f"""{self.persona.body}
+
+给{self.persona.name}排一条“这学期的主线”，从今天（{today:%Y-%m-%d}，{ph['term']}第 {ph.get('week', 1)} 周）到放假（{vac:%Y-%m-%d}）。
+她自己说过的事（要一致）：
+{selfs}
+
+要求：
+- 主线是她这学期真心想做成的一件和学校 / 爱好有关的事（比如钢琴考级、一场比赛或演出、一门很难的课拿高分……，符合她的身份和人设）；
+- 7~10 步，每一步是某一天的具体进展或波折（第一人称一句话），日期从今天到放假，按时间排；
+- 中间要有期中前后忙起来的一步、{exam:%Y-%m-%d} 开始的期末考试周（复习、考试，有点焦虑）；
+- 最后一步就是放假那天（{vac:%Y-%m-%d}）：收拾东西回家，终于能见到{who}了（只有这一步提到{who}，不要写{who}做了什么）；
+- 每一步带一个当时的进度 0~100，整体往上走，可以有一两次卡住。
+只输出 JSON：{{"title":"<这学期想做成的事，10 字内>","why":"<为什么想做，20 字内>","plan":[{{"day":"<YYYY-MM-DD>","text":"<那天的进展>","progress":<0-100>}}]}}"""
+        data = await self.llm.json([{"role": "user", "content": prompt}], default=None, role="night")
+        if not isinstance(data, dict) or not data.get("title") or not isinstance(data.get("plan"), list):
+            return None
+        plan = []
+        for s in data["plan"]:
+            try:
+                d = date.fromisoformat(str(s.get("day")))
+                pr = max(0, min(100, int(s.get("progress", 0))))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            text = str(s.get("text") or "").strip()
+            if text and today <= d <= vac:
+                plan.append({"day": d.isoformat(), "text": text[:120], "progress": pr})
+        plan.sort(key=lambda x: x["day"])
+        if len(plan) < 4:
+            return None
+        title = ("这学期：" + str(data["title"]))[:20]
+        gid = self.db.add_goal(title, str(data.get("why") or "")[:40], plan[0]["day"], plan[-1]["day"], plan)
+        self.db.set(key, gid)
+        log.info("这学期的主线：%s（%s ~ %s，%d 步）", title, plan[0]["day"], plan[-1]["day"], len(plan))
+        return gid
+
     def milestone_topics(self, today: date) -> list[tuple[str, str]]:
         """今天有进展、还没跟他说过的目标：[(state key, 话题)]"""
         out = []

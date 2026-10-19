@@ -385,6 +385,7 @@ class Scheduler(EventsMixin):
                 hw = self.brain.herworld
                 if hw.enabled:                          # 先定好她身边的人，故事线才能用上这些名字
                     await hw.ensure_cast()
+                    await hw.semester_goal(now.date())  # 11.1 学生：每学期一条跟着校历走的主线
                     if not self.db.goals(None, 1):
                         await hw.new_goal(now.date())
                 if self.brain.story.enabled and not self.db.arcs(None, 1):

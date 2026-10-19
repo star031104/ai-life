@@ -48,3 +48,27 @@ def test_ip_ranges():
     assert ip_ok("198.18.0.5", fake_ok=True)
     assert ip_ok("1.1.1.1") and ip_ok("2606:4700::1111")
     assert not asyncio.run(__import__("ailife.media.links", fromlist=["x"]).is_public("http://198.18.0.1/"))
+
+
+def test_search_before_reply(env, monkeypatch):
+    import asyncio
+    cfg, brain, bot, fake = env
+    from ailife.media import search as S
+
+    async def fake_search(self, q, n=5):
+        return [{"title": "禁忌岛10月22日上线", "url": "https://x", "snippet": "七日世界全新生存剧本，海岛 PVE"}]
+    monkeypatch.setattr(S.WebSearch, "search", fake_search)
+
+    async def fake_json(messages, default=None, role="helper"):
+        return {"need": True, "query": "七日世界 禁忌岛 上线时间", "topic": "禁忌岛"}
+    monkeypatch.setattr(brain.llm, "json", fake_json)
+    brain.db.add_message("user", "七日世界禁忌岛什么时候上线啊")
+    asyncio.run(bot._maybe_search())
+    ev = brain.db.last_message("event")["content"]
+    assert "你刚在手机上搜了一下" in ev and "海岛 PVE" in ev
+    assert any("禁忌岛" in m["content"] for m in brain.db.all_memories("self"))
+    brain.db.add_message("assistant", "22号吧")
+    brain.db.add_message("user", "晚安")                      # 不像在问东西：不搜
+    n = brain.db.conn.execute("SELECT COUNT(*) FROM messages WHERE role='event'").fetchone()[0]
+    asyncio.run(bot._maybe_search())
+    assert brain.db.conn.execute("SELECT COUNT(*) FROM messages WHERE role='event'").fetchone()[0] == n

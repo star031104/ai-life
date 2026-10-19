@@ -173,6 +173,8 @@ class LinkReader:
         self.enabled = bool(c.get("enabled", True))
         self.max_chars = int(c.get("max_chars", 700))
         self.proxy = cfg.proxy or None
+        # 要登录才能看的网站：用你自己浏览器里的 cookie（config.yaml 的 links.cookies，比如 {"zhihu.com": "z_c0=…"}）
+        self.cookies = {str(k).lower().lstrip("."): str(v) for k, v in (c.get("cookies") or {}).items() if v}
         self.brain = brain
         self._cache: dict[str, tuple[float, dict]] = {}
 
@@ -192,7 +194,9 @@ class LinkReader:
                     for _ in range(5):
                         if not await is_public(cur, self.proxy):
                             raise RuntimeError("不是公网地址")
-                        async with c.stream("GET", cur) as r:
+                        host = (urlparse(cur).hostname or "").lower()
+                        ck = next((v for d, v in self.cookies.items() if host == d or host.endswith("." + d)), "")
+                        async with c.stream("GET", cur, headers={"Cookie": ck} if ck else None) as r:
                             if proxy is None and not _env_proxy(cur):   # 防 DNS 重绑定：真正直连的那个地址也要是公网
                                 try:
                                     peer = r.extensions["network_stream"].get_extra_info("server_addr")

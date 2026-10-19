@@ -129,12 +129,51 @@ class Companion(CommandsMixin, LifeCommandsMixin, DeliveryMixin):
         self._waiting = True
         self._pending = self.spawn(self._reply_after(wait))
 
+    async def _maybe_search(self):
+        """他刚问到她可能不知道的事：先在手机上搜一下（写成一条事件给她看），搜到的要点记成她自己知道的事。"""
+        if not (self.cfg.get("net") or {}).get("search", True):
+            return
+        rows = self.db.conn.execute("SELECT role, content FROM messages WHERE role IN ('user','assistant') "
+                                    "ORDER BY id DESC LIMIT 6").fetchall()
+        texts = []
+        for r in rows:                                   # 只看她上次回复以后他说的
+            if r["role"] != "user":
+                break
+            texts.insert(0, r["content"])
+        joined = "\n".join(texts)[-600:]
+        from ailife.media.search import ASK_RE, DECIDE_PROMPT, WebSearch
+        if not joined or not ASK_RE.search(joined):
+            return
+        hour = int(time.time() // 3600)
+        used = self.db.get("search_hour") or {}
+        if used.get("h") == hour and int(used.get("n", 0)) >= int((self.cfg.get("net") or {}).get("per_hour", 12)):
+            return
+        d = await self.brain.llm.json([{"role": "user", "content": DECIDE_PROMPT + joined}], default={}, role="helper")
+        if not isinstance(d, dict) or not d.get("need") or not str(d.get("query") or "").strip():
+            return
+        if not hasattr(self, "_web"):
+            self._web = WebSearch(self.cfg)
+        q = str(d["query"]).strip()[:40]
+        res = await self._web.search(q)
+        self.db.set("search_hour", {"h": hour, "n": (int(used.get("n", 0)) + 1) if used.get("h") == hour else 1})
+        if not res:
+            return
+        self.db.add_message("event", self._web.block(q, res))
+        topic = str(d.get("topic") or q)[:20]
+        top = "；".join(r["snippet"][:80] for r in res[:2] if r.get("snippet"))
+        if top:
+            self.db.add_memory(f"我查过「{topic}」：{top}"[:200], 2, "self")
+
     async def _reply_after(self, wait: float):
         try:
             await asyncio.sleep(wait)
         except asyncio.CancelledError:
             return
         self._waiting = False
+        try:
+            await self._maybe_search()
+        except Exception as e:  # noqa: BLE001
+            log.info("搜一搜没成功：%s", e)
         async with self._lock:
             # 排队期间上一轮已经看到了他最新的消息，就不用再回一次
             last_user = self.db.last_message("user")

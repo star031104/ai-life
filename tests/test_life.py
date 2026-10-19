@@ -161,3 +161,29 @@ def test_secret_migration_with_existing_refs(tmp_path):
         'keys:\n  zhipu: "${ZHIPU_KEY}"\n  siliconflow: sk-newnewnewnew\n', encoding="utf-8")
     assert migrate(tmp_path) == ["SILICONFLOW_KEY"]
     assert "sk-newnew" not in (tmp_path / "config.yaml").read_text(encoding="utf-8")
+
+
+def test_semester_goal(env, monkeypatch):
+    import asyncio
+    from datetime import date
+    cfg, brain, bot, fake = env
+    hw = brain.herworld
+    seen = {}
+
+    async def fake_json(messages, default=None, role="helper"):
+        seen["prompt"] = messages[-1]["content"]
+        return {"title": "钢琴考级", "why": "想证明自己", "plan": [
+            {"day": "2026-10-20", "text": "报名了钢琴十级", "progress": 5},
+            {"day": "2026-11-10", "text": "期中周，练琴时间被挤没了", "progress": 30},
+            {"day": "2026-12-12", "text": "考级当天手在抖但弹完了", "progress": 80},
+            {"day": "2027-01-05", "text": "期末考试周开始，复习到半夜", "progress": 90},
+            {"day": "2027-01-17", "text": "放假回家，终于能见到哥哥了", "progress": 100},
+            {"day": "2027-03-01", "text": "超出范围的一步", "progress": 100}]}
+    monkeypatch.setattr(hw.llm, "json", fake_json)
+    if brain.rhythm.life != "student":
+        return
+    gid = asyncio.run(hw.semester_goal(date(2026, 10, 20)))
+    assert gid and "2027-01-05" in seen["prompt"] and "2027-01-17" in seen["prompt"]
+    g = [x for x in brain.db.goals("active") if x["id"] == gid][0]
+    assert g["title"] == "这学期：钢琴考级" and len(g["plan"]) == 5 and g["end_day"] == "2027-01-17"
+    assert asyncio.run(hw.semester_goal(date(2026, 10, 21))) is None        # 一学期只开一次
