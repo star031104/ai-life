@@ -1,17 +1,16 @@
-"""第八批：人设 v2（字段、代词、生活节奏、声音、照片）、角色卡导入、每个角色自己的记忆、网页编辑。"""
+"""人设 v2（字段、代词、生活节奏、声音、照片）、角色卡导入、每个角色自己的记忆、网页编辑。"""
 import asyncio
 import base64
 import json
 import struct
 import zlib
-from datetime import date, datetime
-from pathlib import Path
+from datetime import datetime
 
-from test_flow import cfg_root, env  # noqa: F401
+from fakes import cfg_root
 
 
 def test_parse_fields_and_warnings():
-    from ailife.persona import parse_persona, pronoun_note
+    from ailife.persona.loader import parse_persona, pronoun_note
     p = parse_persona("---\nname: 沈言\ngender: 男\nuser_gender: female\nage: 16\nlife: 上班族\n---\n短")
     assert p.gender == "male" and p.user_gender == "female" and p.ta == "他" and p.user_ta == "她"
     assert p.life == "worker" and p.age == 18
@@ -26,7 +25,7 @@ def test_parse_fields_and_warnings():
 
 
 def test_pronoun_note_injected():
-    from ailife.llm import LLM
+    from ailife.llm.client import LLM
     llm = LLM.__new__(LLM)
     llm.pronoun_note = "（说明：x）"
     out = llm._with_note([{"role": "system", "content": "你好"}, {"role": "user", "content": "嗯"}])
@@ -38,7 +37,7 @@ def test_pronoun_note_injected():
 
 def _use(env, name):
     cfg, brain, bot, fake = env
-    from ailife.persona import load_persona
+    from ailife.persona.loader import load_persona
     brain.persona.update_from(load_persona(cfg.root / "persona" / f"{name}.md"))
     return brain
 
@@ -75,8 +74,8 @@ def _png_with_card(card: dict) -> bytes:
 
 
 def test_card_import(tmp_path):
-    from ailife.personas import card_to_persona, read_card
-    from ailife.persona import parse_persona
+    from ailife.persona.library import card_to_persona, read_card
+    from ailife.persona.loader import parse_persona
     card = {"spec": "chara_card_v2", "data": {
         "name": "Aria", "description": "{{char}} is a librarian who loves rainy days.",
         "personality": "gentle, curious", "scenario": "{{user}} visits the library.",
@@ -96,8 +95,8 @@ def test_card_import(tmp_path):
 
 
 def test_build_persona_from_answers():
-    from ailife.personas import QUESTIONS, build_persona
-    from ailife.persona import parse_persona
+    from ailife.persona.library import QUESTIONS, build_persona
+    from ailife.persona.loader import parse_persona
     ans = {k: d for k, _, d in QUESTIONS}
     ans.update(name="阿青", gender="male", user_gender="female", identity="自由插画师")
     p = parse_persona(build_persona(ans))
@@ -106,8 +105,8 @@ def test_build_persona_from_answers():
 
 
 def test_registry_per_persona_memory(tmp_path):
-    from ailife.config import Cfg
-    from ailife.personas import assign, db_path, set_persona_file
+    from ailife.core.config import Cfg
+    from ailife.persona.library import assign, db_path, set_persona_file
     (tmp_path / "persona").mkdir()
     for n in ("a", "b"):
         (tmp_path / "persona" / f"{n}.md").write_text(f"---\nname: {n}\n---\n" + "正文" * 50, encoding="utf-8")
@@ -124,7 +123,7 @@ def test_registry_per_persona_memory(tmp_path):
 
 def test_web_persona_edit_and_reload(env):
     cfg, brain, bot, fake = env
-    from ailife.web import Dashboard
+    from ailife.web.server import Dashboard
     d = Dashboard(cfg, brain, bot)
 
     class Req:
@@ -152,7 +151,7 @@ def test_web_persona_edit_and_reload(env):
 
 
 def test_ui_pronoun_for_male(env):
-    from ailife.bot_common import UI, ui
+    from ailife.channels.telegram.common import UI, ui
     old = UI["ta"]
     UI["ta"] = "他"
     try:
@@ -162,7 +161,7 @@ def test_ui_pronoun_for_male(env):
 
 
 def test_review_fixes(tmp_path):
-    from ailife.bot_common import UI, keep, ui
+    from ailife.channels.telegram.common import UI, keep, ui
     old = UI["ta"]
     UI["ta"] = "他"
     try:
@@ -170,10 +169,10 @@ def test_review_fixes(tmp_path):
     finally:
         UI["ta"] = old
     assert ui(keep("她")) == "她"
-    from ailife.persona import parse_persona
+    from ailife.persona.loader import parse_persona
     p = parse_persona("---\r\nname: 甲\r\nlook: a---b\r\nage: .inf\r\n---\r\n正文", "x.md")
     assert p.name == "甲" and p.age is None and "a---b" in p.look
-    from ailife.personas import _load_reg
+    from ailife.persona.library import _load_reg
     (tmp_path / "data" / "chars").mkdir(parents=True)
     (tmp_path / "persona").mkdir()
     (tmp_path / "persona" / "b.md").write_text("---\nname: b\n---\n", encoding="utf-8")

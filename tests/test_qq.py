@@ -4,9 +4,9 @@ import json
 import time
 
 
-from test_flow import FakeLLM, env  # noqa: F401  （env 是 fixture）
+from fakes import FakeLLM
 
-from ailife.qq import flatten
+from ailife.channels.qq.onebot import flatten
 
 SELF, OWNER = 10001, 55555
 
@@ -90,7 +90,7 @@ class FakeNapCat:
 def _setup_qq(cfg, bot, port, groups=()):
     cfg["qq"] = {**cfg.get("qq", {}), "enabled": True, "ws_url": f"ws://127.0.0.1:{port}/", "owner_id": OWNER,
                  "groups": list(groups)}
-    from ailife.qq_bridge import QQ, wait_ready
+    from ailife.channels.qq.bridge import QQ, wait_ready
     q = QQ(cfg, bot)
     bot.qq = q
     q.start()
@@ -121,13 +121,17 @@ def test_private_qq_shares_brain_and_routes_back(env):  # noqa: F811
         assert segs[0] == {"type": "reply", "data": {"id": "2"}}       # [引用] → 回复他那条
         assert isinstance(segs, list) and all(isinstance(s, dict) for s in segs)
         assert not [s for s in fake_tg.sent if s[0] == "text"]          # 一条都没发到 Telegram
-        rows = brain.db.recent_messages(10)
+        for _ in range(40):                                              # 回复写进数据库比发出去稍晚一点
+            rows = brain.db.recent_messages(10)
+            if len(rows) >= 3:
+                break
+            await asyncio.sleep(0.05)
         assert [r["channel"] for r in rows] == ["qq", "qq", "qq"]
         assert rows[0]["content"] == "我感觉你好像有点不太开心呢"
         assert any("用 QQ 聊天" in c[0]["content"] for c in brain.llm.calls)
         # 他回到 Telegram 说话后：发回 Telegram
         brain.db.set("last_channel", "tg")
-        from ailife.output import Bubble, Parsed
+        from ailife.mind.output import Bubble, Parsed
         await bot.deliver(Parsed(bubbles=[Bubble(text="在呢")]))
         assert fake_tg.sent[-1][0] == "text" and fake_tg.sent[-1][1][1] == "在呢"
         # NapCat 断了：就算他最后在 QQ 说话，也退回 Telegram
@@ -143,8 +147,8 @@ def test_private_qq_shares_brain_and_routes_back(env):  # noqa: F811
 # ---------------- 只用 QQ（不填 Telegram token） ----------------
 def _qq_only_bot(tmp_path, port):
     import shutil
-    from test_flow import FIXTURE, cfg_root
-    from ailife.config import load_config
+    from fakes import FIXTURE, cfg_root
+    from ailife.core.config import load_config
     cfg = load_config()
     cfg["root"] = tmp_path
     shutil.copytree(cfg_root() / "persona", tmp_path / "persona", dirs_exist_ok=True)
@@ -157,8 +161,8 @@ def _qq_only_bot(tmp_path, port):
     cfg["memory"]["embed"]["enabled"] = False
     cfg["proactive"]["quiet_hours"] = ""
     cfg["qq"] = {**cfg["qq"], "enabled": True, "ws_url": f"ws://127.0.0.1:{port}/", "owner_id": OWNER}
-    from ailife.brain import Brain
-    from ailife.bot import ChatBot
+    from ailife.mind.brain import Brain
+    from ailife.channels.telegram.bot import ChatBot
     brain = Brain(cfg)
     brain.llm = FakeLLM()
     brain.memory.llm = brain.llm
@@ -173,7 +177,7 @@ def test_qq_only_mode(tmp_path):
         cfg, brain, bot = _qq_only_bot(tmp_path, nap.port)
         assert bot.tg is False and bot.app is None
         await bot.start()                                     # 不连 Telegram
-        from ailife.qq_bridge import setup, wait_ready
+        from ailife.channels.qq.bridge import setup, wait_ready
         q = setup(cfg, bot)
         assert await wait_ready(q)
         await asyncio.sleep(0.1)
@@ -246,7 +250,7 @@ def test_flatten_qq_specials():
     assert "[表情:微笑]" in f.text and "[表情包]" in f.text and not f.images
     assert f.stickers == ["https://x/s.gif"] and f.links == ["https://b23.tv/abc"]
     assert "猫猫跳舞合集" in f.text and f.forward_id == "fw1"
-    from ailife.qq import card_info, face_for
+    from ailife.channels.qq.onebot import card_info, face_for
     assert card_info("not json") == ("", "", "")
     assert face_for("开心") == 13 and face_for("超级开心") == 13 and face_for("??") is None
 
@@ -263,8 +267,8 @@ def test_private_details(tmp_path, monkeypatch):
         cfg, brain, bot = _qq_only_bot(tmp_path, nap.port)
         cfg["qq"]["poke_back"] = 1.0
         cfg["style"]["typo_rate"] = 0
-        from ailife.qq_bridge import setup, wait_ready
-        import ailife.qq_bridge as qb
+        from ailife.channels.qq.bridge import setup, wait_ready
+        import ailife.channels.qq.bridge as qb
         q = setup(cfg, bot)
         assert await wait_ready(q)
         await asyncio.sleep(0.2)
@@ -319,7 +323,7 @@ def test_private_details(tmp_path, monkeypatch):
             {"type": "image", "data": {"url": "https://x/a.gif", "sub_type": 1, "summary": "[动画表情]"}}]})
         await nap.wait_sent("send_private_msg", n + 1)
         assert any(r["content"].startswith("[发了一个表情包：开心]") for r in brain.db.recent_messages(20))
-        from ailife.output import Bubble, Parsed
+        from ailife.mind.output import Bubble, Parsed
         n = len(nap.sent("send_private_msg"))
         await bot.deliver(Parsed(bubbles=[Bubble(sticker="开心")]))
         seg = nap.sent("send_private_msg")[n]["params"]["message"][0]
@@ -329,7 +333,7 @@ def test_private_details(tmp_path, monkeypatch):
         await bot.deliver(Parsed(bubbles=[Bubble(sticker="困")]))
         assert nap.sent("send_private_msg")[-1]["params"]["message"][0] == {"type": "face", "data": {"id": "25"}}
         # 打错字：补一句“*正确的字”
-        from ailife.bot_common import TYPOS
+        from ailife.channels.telegram.common import TYPOS
         k = next(iter(TYPOS))
         cfg["style"]["typo_rate"] = 1.0
         monkeypatch.setattr(qb.random, "uniform", lambda a, b: 0.01)

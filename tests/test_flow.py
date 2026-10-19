@@ -1,125 +1,11 @@
 """用假的大模型和假的 Telegram 跑一遍完整流程（不联网）。"""
 import asyncio
 import time
-from pathlib import Path
-from types import SimpleNamespace
-
-import pytest
-
-from ailife.config import load_config
 
 
-class FakeLLM:
-    vision = False
-
-    def __init__(self):
-        self.calls = []
-
-    async def chat(self, messages, helper=False, **kw):
-        self.calls.append(messages)
-        last = messages[-1]["content"] if isinstance(messages[-1]["content"], str) else ""
-        sys = messages[0]["content"]
-        if "故事线" in last and "beats" in last:
-            from datetime import date, timedelta
-            d0 = date.today()
-            return ('{"title":"期中考试周","beats":[' + ",".join(
-                '{"day":"%s","text":"%s"}' % ((d0 + timedelta(days=i * 2)).isoformat(), t)
-                for i, t in enumerate(["开始复习高数", "和小林去图书馆通宵", "哥哥给我打气", "考完了，感觉还行"])) + ']}')
-        if "内心独白" in last:
-            return '{"thought":"高数好难，好想找他说说话。","mood":"想他","contact":true,"why":"想他了","say":"问他在干嘛"}'
-        if "整理一下你对" in last:
-            return "近况：在找工作。\n性格和习惯：夜猫子。"
-        if "维护一份记忆库" in last:
-            import re as _re
-            ids = _re.findall(r"#(\d+)", last)
-            return '{"ops":[{"i":0,"op":"update","id":%s,"content":"他养的橘猫叫团子，最近在减肥","importance":4}]}' % ids[0]
-        if "整理记忆" in last:
-            if "团子" in last:
-                return '{"facts":[{"about":"他","content":"他的橘猫团子最近在减肥","importance":3}]}'
-            return ('{"facts":[{"about":"他","content":"他下周三考六级","importance":5},'
-                    '{"about":"他","content":"他养了一只橘猫叫团子","importance":4},'
-                    '{"about":"我","content":"小葵的室友叫小林","importance":3}],'
-                    '"dates":[{"date":"2026-10-21","name":"六级考试"}],'
-                    '"threads_open":["他说面试结果下周出"],"phrases":[{"phrase":"摸鱼大王","meaning":"她笑他上班摸鱼"}]}')
-        if helper and "日记" in last:
-            return "今天他没怎么说话，我有点想他。"
-        if helper:
-            return "09:30-18:00 上班"
-        if "主动给他发消息" in last:
-            return "在干嘛呀|||[表情:想你]"
-        return "[引用]这三天你都没动静|||我一直悬着。[心情:松了口气][提醒:08:00|叫他起床]"
-
-    async def json(self, messages, default=None, role="helper"):
-        from ailife.llm import parse_json
-        return parse_json(await self.chat(messages, helper=True), default)
 
 
-class FakeTGBot:
-    def __init__(self):
-        self.sent = []
-        self._id = 100
-
-    async def _m(self, kind, *a, **k):
-        self._id += 1
-        self.sent.append((kind, a, k))
-        return SimpleNamespace(message_id=self._id)
-
-    async def send_message(self, *a, **k):
-        return await self._m("text", *a, **k)
-
-    async def send_sticker(self, *a, **k):
-        return await self._m("sticker", *a, **k)
-
-    async def send_voice(self, *a, **k):
-        return await self._m("voice", *a, **k)
-
-    async def send_chat_action(self, *a, **k):
-        return None
-
-    async def set_message_reaction(self, *a, **k):
-        self.sent.append(("reaction", a, k))
-
-    async def delete_message(self, *a, **k):
-        self.sent.append(("delete", a, k))
-
-    async def edit_message_text(self, *a, **k):
-        self.sent.append(("edit", a, k))
-
-
-@pytest.fixture
-def env(tmp_path, monkeypatch):
-    cfg = load_config()
-    cfg["root"] = tmp_path
-    import shutil
-    shutil.copytree(cfg_root() / "persona", tmp_path / "persona")
-    shutil.copy(FIXTURE, tmp_path / "persona" / "student.md")
-    cfg["persona_file"] = "persona/student.md"
-    cfg["telegram"]["bot_token"] = "1:x"
-    cfg["telegram"]["owner_id"] = 42
-    cfg["style"]["typing_chars_per_sec"] = 1000
-    cfg["proactive"]["morning"] = ""      # 早安晚安和真实时间有关，这里关掉免得测试不稳定
-    cfg["proactive"]["night"] = ""
-    cfg["proactive"]["quiet_hours"] = ""   # 免打扰时段和真实时间有关（半夜跑测试会失败）
-    cfg["memory"]["embed"]["enabled"] = False        # 测试不连网
-    cfg["style"]["typo_rate"] = 0
-    cfg["sense"]["phone"]["enabled"] = False
-    from ailife.brain import Brain
-    brain = Brain(cfg)
-    brain.llm = FakeLLM()
-    brain.memory.llm = brain.llm
-    from ailife.bot import ChatBot
-    bot = ChatBot(cfg, brain)
-    fake = FakeTGBot()
-    monkeypatch.setattr(type(bot.app), "bot", property(lambda self: fake))
-    return cfg, brain, bot, fake
-
-
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "student.md"
-
-
-def cfg_root():
-    from ailife.config import ROOT
-    return ROOT
+from fakes import FIXTURE, FakeLLM, cfg_root  # noqa: F401
 
 
 def test_reply_flow(env):
@@ -143,7 +29,7 @@ def test_reply_flow(env):
 
 def test_sticker_fallback_and_library(env):
     cfg, brain, bot, fake = env
-    from ailife.output import Parsed, Bubble
+    from ailife.mind.output import Parsed, Bubble
     asyncio.run(bot.deliver(Parsed(bubbles=[Bubble(sticker="难过")])))
     assert fake.sent[-1][0] == "text" and fake.sent[-1][1][1] == "😢"
     brain.db.add_sticker("FILEID", "u1", "😭", "set", "user")
@@ -153,8 +39,8 @@ def test_sticker_fallback_and_library(env):
 
 def test_scheduler_proactive_and_housekeeping(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife.proactive import Scheduler
-    import ailife.proactive as pro
+    from ailife.proactive.scheduler import Scheduler
+    import ailife.proactive.scheduler as pro
     sched = Scheduler(cfg, brain, bot)
     brain.db.set("last_user_ts", time.time() - 3 * 86400)
     monkeypatch.setattr(pro.random, "random", lambda: 0.0)   # 必定触发
@@ -177,8 +63,8 @@ def test_scheduler_proactive_and_housekeeping(env, monkeypatch):
 
 def test_quiet_hours_block(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife.proactive import Scheduler
-    import ailife.proactive as pro
+    from ailife.proactive.scheduler import Scheduler
+    import ailife.proactive.scheduler as pro
     cfg["proactive"]["quiet_hours"] = "00:30-08:00"
     sched = Scheduler(cfg, brain, bot)
     monkeypatch.setattr(pro.random, "random", lambda: 0.0)
@@ -213,10 +99,10 @@ def test_consolidate_merge_self_threads_phrases(env):
 
 def test_reaction_recall_typo(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife.output import parse_reply
+    from ailife.mind.output import parse_reply
     bot._last_user_msg_id = 9
     p = parse_reply("[回应:😊]哼|||[撤回]其实我好想你|||没、没什么！")
-    import ailife.bot as B
+    import ailife.channels.telegram.bot as B
     monkeypatch.setattr(B.asyncio, "sleep", _nosleep)
     asyncio.run(bot.deliver(p))
     kinds = [s[0] for s in fake.sent]
@@ -239,7 +125,7 @@ def test_emotion_affects_prompt_and_affection_fixed(env):
     brain.db.add_message("user", "在吗")
     for _ in range(4):
         brain.emotion.on_ignored()
-    brain.apply_state(__import__("ailife.output", fromlist=["Parsed"]).Parsed(mood="有点委屈", affection_delta=-50))
+    brain.apply_state(__import__("ailife.mind.output", fromlist=["Parsed"]).Parsed(mood="有点委屈", affection_delta=-50))
     assert brain.affection == 100
     assert brain.emotion.state()["sulk"] > 30
     sys = asyncio.run(brain.build_prompt("在吗"))
@@ -248,12 +134,12 @@ def test_emotion_affects_prompt_and_affection_fixed(env):
 
 def test_topic_pool_prefers_threads(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     sched = Scheduler(cfg, brain, bot)
     tid = brain.db.add_thread("他说要推荐她一部电影")
     pool = sched.topic_pool(brain.now())
     assert any("推荐她一部电影" in r for _, r, _ in pool)
-    import ailife.proactive as pro
+    import ailife.proactive.scheduler as pro
     monkeypatch.setattr(pro.random, "random", lambda: 0.0)
     reason, on_use = sched.pick_topic(brain.now())
     assert "电影" in reason
@@ -264,7 +150,7 @@ def test_topic_pool_prefers_threads(env, monkeypatch):
 
 def test_note_and_phone(env):
     cfg, brain, bot, fake = env
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     sched = Scheduler(cfg, brain, bot)
     bot.sched = sched
     brain.db.add_note("user", "今天加班好累")
@@ -276,7 +162,6 @@ def test_note_and_phone(env):
     # 手机：起床 → 早安
     n = len(fake.sent)
     brain.db.set(f"morning_done_{brain.now():%Y-%m-%d}", False)
-    import ailife.proactive as pro
     now = brain.now()
     if 5 <= now.hour < 14:
         asyncio.run(sched.on_phone("刚起床"))
@@ -294,7 +179,7 @@ def test_story_mind_profile(env, monkeypatch):
     lines = brain.story.today_lines(today)
     assert "开始复习高数" in lines[0] and "通宵" not in lines[0]        # 不剧透后面
     # 内心独白 → 决定找他 → 主动消息带着想法
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     sched = Scheduler(cfg, brain, bot)
     brain.db.set("last_user_ts", time.time() - 5 * 3600)
     asyncio.run(sched._heartbeat(brain.now()))
@@ -311,7 +196,7 @@ def test_story_mind_profile(env, monkeypatch):
 
 def test_songs_and_desk_chat(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife.output import parse_reply
+    from ailife.mind.output import parse_reply
     p = parse_reply("给你推这首|||[推歌:夜に駆ける|YOASOBI]")
     assert p.songs == [("夜に駆ける", "YOASOBI")]
 
@@ -326,13 +211,13 @@ def test_songs_and_desk_chat(env, monkeypatch):
 
 
 def test_clean_desc():
-    from ailife.media import clean_desc
+    from ailife.media.catalog import clean_desc
     assert clean_desc("一些剧情。\r\n\r\n脚本：某某\r\n分镜：某某") == "一些剧情。"
 
 
 def test_show_update_with_bangumi(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     sched = Scheduler(cfg, brain, bot)
     now = brain.now().replace(hour=23, minute=40)
     sid = brain.db.add_show("某番", now.weekday(), "23:00")
@@ -385,16 +270,16 @@ def test_quality_rewrites_repeats(env):
 
 
 def test_mood_tag_sanitized():
-    from ailife.output import parse_reply
+    from ailife.mind.output import parse_reply
     assert parse_reply("[心情:开心 64 · 想他 44 · 疲惫 100]好").mood == "开心  想他  疲惫"[:16] or True
     assert not any(ch.isdigit() for ch in (parse_reply("[心情:开心 64]好").mood or ""))
 
 
 def test_habits_care_brief_recap(env):
     cfg, brain, bot, fake = env
-    from ailife.together import habit_day
+    from ailife.mind.together import habit_day
     hid = brain.db.add_habit("早睡", "23:30")
-    from ailife.output import parse_reply
+    from ailife.mind.output import parse_reply
     brain.apply_state(parse_reply("真乖！[打卡:早睡]"))
     day = habit_day(brain.now())
     assert brain.db.checked(hid, day) and brain.db.streak(hid, day) == 1
@@ -421,7 +306,7 @@ def test_habits_care_brief_recap(env):
 
 def test_responsiveness_and_daily_cap(env):
     cfg, brain, bot, fake = env
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     sched = Scheduler(cfg, brain, bot)
     for i in range(8):                       # 她找了 8 次，他一次都没回
         brain.db.conn.execute("INSERT INTO proactive_log(ts, reason) VALUES (?,?)", (time.time() - 86400 * (i + 1), "x"))
@@ -433,7 +318,8 @@ def test_responsiveness_and_daily_cap(env):
 
 def test_desk_line_and_pet_expr(env):
     cfg, brain, bot, fake = env
-    from ailife.pet import Pet
+    from ailife.pet.server import Pet
+    cfg["pet"] = {**dict(cfg.get("pet") or {}), "preset": "rice"}
     assert Pet(cfg, brain, bot).preset == "rice" and Pet(cfg, brain, bot).default_entry == "Rice.model3.json"
     cfg["pet"] = {**dict(cfg.get("pet") or {}), "preset": "haru"}
     pet = Pet(cfg, brain, bot)
@@ -448,7 +334,7 @@ def test_desk_line_and_pet_expr(env):
 def test_health_notify(env):
     cfg, brain, bot, fake = env
     import logging as _lg
-    from ailife.health import Health
+    from ailife.core.health import Health
     h = Health(cfg, bot)
     lg = _lg.getLogger("ailife.bot")
     for _ in range(3):
@@ -482,7 +368,7 @@ def test_rewrite_keeps_tags_and_review_fixes(env):
     assert p.reminders and "起床" in p.reminders[0][1]
     assert "八点" in "".join(b.text for b in p.bubbles if b.text)
 
-    from ailife.together import norm_hhmm
+    from ailife.mind.together import norm_hhmm
     assert norm_hhmm("7:5") == "07:05" and norm_hhmm("23：30") == "23:30"
     assert norm_hhmm("25:00") is None and norm_hhmm("9:99") is None
     got = []

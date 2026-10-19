@@ -4,9 +4,9 @@
 
 ## 0. 更新前
 
-- [ ] 关掉正在运行的 start.bat 窗口（同一个 bot 只能有一处在跑）。
+- [ ] 托盘图标右键“退出”（同一个 bot 只能有一处在跑）。
 - [ ] 备份 `data/` 文件夹（复制一份到别处）。
-- [ ] 双击 `selftest.bat`：全部 ✅。版本显示 `8.0（第八批）`。
+- [ ] 双击 `scripts\selftest.bat`：全部 ✅，版本号和 `ailife/__init__.py` 里的一样。
 - [ ] `python run.py persona list`：能看到你的人设和 linxi / shenyan / template，当前是你选的那个，记忆是 `data/ailife.db`。
 - [ ] 双击 `start.bat`，日志里出现“<角色名> 上线了”，没有红色报错。
 
@@ -63,7 +63,7 @@
 在另一个文件夹里（不要在正在用的那份上做）：
 
 - [ ] 解压一份干净的代码（不带 config.yaml、.env、data/）。
-- [ ] 双击 `install.bat` → 装完自动进配置向导：填 token、key、代理、选人设。
+- [ ] 双击 `install.bat` → 装完自动进配置向导：选聊天软件、代理、人设，再加一个大模型（地址 + Key）。
 - [ ] 生成的 `config.yaml` 里没有明文密钥（密钥在 `.env`）。
 - [ ] 只做到这里，不要启动（会和你正在用的 bot 抢消息）。测完删掉这个文件夹。
 

@@ -12,7 +12,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-555)](#部署)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[功能](#功能) · [部署](#部署) · [配置](#配置详解) · [日常使用](#日常使用) · [常见问题](#常见问题) · [功能详解](docs/FEATURES.md) · [写人设](PERSONA.md) · [设计风格](docs/DESIGN.md)
+[功能](#功能) · [部署](#部署) · [配置](#配置详解) · [日常使用](#日常使用) · [常见问题](#常见问题) · [功能详解](docs/FEATURES.md) · [写人设](docs/PERSONA.md) · [代码结构](docs/ARCHITECTURE.md) · [设计风格](docs/DESIGN.md) · [更新记录](CHANGELOG.md)
 
 </div>
 
@@ -23,7 +23,7 @@
 ai-life 不是一个“问一句答一句”的聊天机器人。TA 有自己的一天：要上课或上班，晚上写日记，身边有固定的朋友，也有持续几周的经历和几个月的长期目标。TA 记得你说过的事，会在合适的时候主动找你，你很久不回会想你，你难过时会认真陪你。
 
 - **完全本地运行**：程序和全部数据都在你自己的电脑上，只有发给大模型的那部分内容会经过对应的服务商。
-- **零成本可用**：默认配置只用免费的大模型接口（智谱、硅基流动等），不需要显卡，也不需要服务器。
+- **大模型你自己选**：程序里不内置任何接口，填一个 OpenAI 兼容的地址和 Key 就能用（云上的大模型服务、本机 Ollama / LM Studio 都行）；很多服务商都有免费额度。不需要显卡，也不需要服务器。
 - **角色完全由你决定**：自带几个人设，也可以回答几个问题自动生成、导入 SillyTavern 角色卡，或者用 Markdown 自己写。
 
 ## 功能
@@ -38,7 +38,7 @@ ai-life 不是一个“问一句答一句”的聊天机器人。TA 有自己的
 | 🌙 | **关机前后** | 关掉程序时 TA 说一声“先去忙了”；开机后说说这段时间在干嘛，错过的提醒和纪念日一起补上 |
 | 🖥️ | **知道你在干嘛**（可关） | 电脑上在玩哪个游戏、在 B 站看什么、今天各忙了多久，会顺着聊，提醒你歇会儿 |
 | 🏠 | **小屋** | Telegram 里点“小屋”打开，看 TA 的心情、日记、记忆、留言板，还能直接改人设；电脑浏览器也能看。电脑上还多几样：各个连接的状态（绿 / 蓝 / 黄 / 灰四色一眼看清）、换大模型、换桌宠的样子、软件更新 |
-| 🧸 | **桌宠** | 小人待在桌面上，透明背景、不占任务栏，可以打字聊天，话冒在头顶气泡里。两种样子：Live2D（默认是金发小魔法师 Rice，官方免费示例模型，也能换成自己的模型），或者在小屋里一键换成 [codex-pets.net](https://codex-pets.net) 上的**像素宠物**——她想回复时托腮思考、开心了蹦一下、难过时垂头、说完等你回话，闲着会在屏幕上走几步、眼睛跟着鼠标转，空闲时几乎不占 CPU。**不打扰你**：她主动说话时可以只亮一个小点（光环转三圈），鼠标经过才说；有程序全屏（打游戏、看视频）时先藏起来；你离开电脑时她安静下来，回来再告诉你。换样子只换外表，人设不变 |
+| 🧸 | **桌宠** | 小人待在桌面上，透明背景、不占任务栏，可以打字聊天，话冒在头顶气泡里。两种样子：Live2D（默认是官方免费示例模型 Haru，也能换成自己的模型），或者在小屋里一键换成 [codex-pets.net](https://codex-pets.net) 上的**像素宠物**——她想回复时托腮思考、开心了蹦一下、难过时垂头、说完等你回话，闲着会在屏幕上走几步、眼睛跟着鼠标转，空闲时几乎不占 CPU。**不打扰你**：她主动说话时可以只亮一个小点（光环转三圈），鼠标经过才说；有程序全屏（打游戏、看视频）时先藏起来；你离开电脑时她安静下来，回来再告诉你。换样子只换外表，人设不变 |
 | 🎧 | **一起做的事** | 打卡、追番、听歌、愿望清单、时间胶囊、每月纪念册、睡前故事、小游戏 |
 | 🔗 | **看得懂你发的东西** | 图片、动图、视频、文件、位置，B 站 / YouTube / 公众号 / 网页链接（先点开读完再回你） |
 | 🐧 | **QQ** | 一键自动下载配置 NapCat，扫一次码以后自动登录；私聊和 Telegram 共用记忆、你在哪边说话就在哪边回，也可以只用 QQ |
@@ -53,7 +53,7 @@ flowchart LR
     U["📱 你（QQ / Telegram）"] <--> B["Bot<br/>收发消息 · 分条 · 贴纸 · 照片"]
     NC["NapCat（QQ 小号，自动登录）"] <--> B
     B <--> BR["Brain<br/>人设 · 情绪 · 时间感 · 拼提示词"]
-    BR <--> LLM["大模型路由<br/>智谱 / 硅基流动 / Groq / Ollama…<br/>限流自动切换"]
+    BR <--> LLM["大模型路由<br/>你加的任何 OpenAI 兼容接口<br/>按用途排序 · 限流自动切换"]
     BR <--> M[("SQLite<br/>聊天 · 记忆 · 日记 · 向量")]
     S["调度器<br/>主动消息 · 提醒 · 日记 · 备份"] --> BR
     P["感知<br/>电脑窗口 · 正在播放"] --> BR
@@ -80,7 +80,7 @@ irm https://raw.githubusercontent.com/star031104/ai-life/main/get.ps1 | iex
 | Python | 有 conda 的 `ailife` 环境就用它；否则在项目里建 `.venv`；电脑上连 Python 都没有就用 `winget` 装 Python 3.11 | 无 |
 | 依赖 | 清华镜像装依赖，失败自动换默认源；顺带装农历、正在播放的歌、透明桌宠（PySide6） | 无 |
 | ffmpeg | 用 `winget` 装（看你发的动图、视频要用） | 无 |
-| 配置向导 | 问你在哪聊（QQ / Telegram / 都要）、大模型 Key、城市、人设 | 回答几个问题 |
+| 配置向导 | 问你在哪聊（QQ / Telegram / 都要）、城市、人设，再加一个大模型（填地址和 Key，自动测连通、列出模型让你选） | 回答几个问题 |
 | NapCat（选了 QQ 时） | 自动下载官方 NapCat（Node 版，**自带 QQ 内核，不用另外装 QQ**）、配好 WebSocket 和 token、启动它 | 用 TA 的 **QQ 小号**扫一次码 |
 | 自动登录 | 登录成功后把小号写进 NapCat 的自动登录；以后 `start.bat` 会顺便带 `-q 号码` 启动 NapCat | 无（**以后不用再扫码**） |
 | 选你自己 | 列出小号的好友，你选出自己的 QQ，写好 `config.yaml` | 选一个编号 |
@@ -89,29 +89,27 @@ irm https://raw.githubusercontent.com/star031104/ai-life/main/get.ps1 | iex
 
 > 不想用 PowerShell：点本页右上角绿色的 **Code → Download ZIP**，解压（路径里最好别有中文和空格，比如 `C:\ai-life`），双击 **`install.bat`**，效果一样。
 >
-> 已经装过、只想加 QQ：双击 **`qq_setup.bat`**（没有 NapCat 会自动下载；已经有的直接用）。
+> 已经装过、只想加 QQ：双击 **`scripts\qq_setup.bat`**（没有 NapCat 会自动下载；已经有的直接用）。
 
 ### 你需要准备
 
 | 项目 | 说明 | 必需 |
 | --- | --- | --- |
 | 一台电脑 | Windows 10/11（推荐，一键部署和桌宠只支持 Windows）或 Linux / macOS。不需要独立显卡，内存 8 GB 以上 | ✅ |
-| 大模型 API Key | [智谱开放平台](https://open.bigmodel.cn) 和 / 或 [硅基流动](https://cloud.siliconflow.cn)，都有免费模型。有一个就能用，两个都有更稳 | ✅ |
+| 一个大模型 | 任何 OpenAI 兼容的接口：接口地址 + API Key（本机 Ollama / LM Studio 不要 Key）。至少一个能聊天的；再加一个当备用更稳 | ✅ |
 | 聊天的地方（二选一或都要） | **QQ**：给 TA 准备一个 QQ **小号**（非官方协议有封号风险，别用主号）；**Telegram**：在 [@BotFather](https://t.me/BotFather) 建一个 bot | ✅ |
 | 代理 | 只有用 Telegram 时需要（中国大陆），例如 Clash 的 `http://127.0.0.1:7890` | 视情况 |
 
 > 程序跑在电脑上，电脑关机或睡眠时 TA 不在线。想让 TA 一直在，见 [让 TA 一直在线](#让-ta-一直在线)。
 
-### 申请大模型 API Key
+### 准备一个大模型
 
-| 平台 | 获取方式 | 用途 |
-| --- | --- | --- |
-| **智谱** | 注册 [open.bigmodel.cn](https://open.bigmodel.cn) → 右上角“API Keys” → 新建 | 主力聊天（GLM Flash 系列免费）、看图 |
-| **硅基流动** | 注册 [cloud.siliconflow.cn](https://cloud.siliconflow.cn) → “API 密钥” → 新建 | 兜底聊天、记忆向量检索 |
-| Groq（可选） | [console.groq.com](https://console.groq.com) → API Keys（需要代理） | 极快的兜底 |
-| 魔搭（可选） | [modelscope.cn](https://modelscope.cn) → 访问令牌（需绑定阿里云账号） | 每晚整理记忆、写日记 |
+程序里不内置任何接口地址，用哪家由你决定。你需要的只是**接口地址**（OpenAI 兼容，一般以 `/v1` 结尾）和 **API Key**：
 
-> 各平台的免费额度和模型以官网为准。任何 OpenAI 兼容接口（DeepSeek、通义、Kimi、本地 Ollama……）都可以加进去，见 [大模型配置](#大模型配置)。
+- 云上的大模型服务：在服务商的控制台里新建 API Key，文档里会写接口地址；很多都有免费额度或免费模型。
+- 本机模型：装 [Ollama](https://ollama.com) 或 LM Studio，地址是 `http://127.0.0.1:11434/v1`（Ollama），不要 Key。
+
+配置向导里会让你加第一个；之后在小屋“设置 → 大模型”或 `scripts\llm.bat` 里随时加、删、排顺序。除了聊天，还可以分别给“看图”“画她的照片”“记忆检索（向量）”加模型，不加就不做这些事。
 
 ### 用 Telegram 的话：创建 Bot
 
@@ -164,18 +162,18 @@ python run.py setup                       # 配置向导；或者把 config.exam
 
 ### 自检并启动
 
-1. 双击 **`selftest.bat`**（或 `python run.py selftest`）：离线跑一遍核心流程，不联网、不碰你的数据。全是 ✅ 就可以继续。
+1. 双击 **`scripts\selftest.bat`**（或 `python run.py selftest`）：离线跑一遍核心流程，不联网、不碰你的数据。全是 ✅ 就可以继续。
 2. 双击 **`start.bat`**（Linux / macOS：`bash start.sh`）启动。**不会开黑窗口**：她和 NapCat 都在后台跑，任务栏右下角多一个粉色的小图标（可能藏在 ^ 里）。
    右键图标：看状态、打开小屋、看日志、换大模型、重启、开机自动启动、退出；双击图标打开小屋。用了 QQ 的话，NapCat 会顺便在后台启动（自动登录）。
-   程序意外退出时 10 秒后自动重启。第一次运行会自动装上托盘需要的两个小包（pystray、Pillow）。想看实时输出排查问题就用 `start_console.bat`（老样子，开一个窗口）。
+   程序意外退出时 10 秒后自动重启。第一次运行会自动装上托盘需要的两个小包（pystray、Pillow）。想看实时输出排查问题就用 `scripts\start_console.bat`（老样子，开一个窗口）。
 3. 用你的 QQ 给 TA 的小号发句话（记得先**加好友**，不然 TA 没法主动找你），或者在 Telegram 里给 bot 发 `/start`。
 4. 遇到问题先发 **`/diag`**：它会检查每个大模型接口、代理、QQ、数据库，告诉你哪里没配好。
 
 ### 可选：桌宠、小屋、开机自启
 
-- **桌宠**：Windows 上启动时自动出现在桌面右下角。背景不透明的话，双击 `pet_setup.bat` 安装 PySide6 后重启。默认形象是 Live2D 官方免费示例模型 Rice（金发、贝雷帽的小魔法师），`pet.preset: haru` 可以换回原来的 Haru。**像素宠物**：在电脑上打开小屋 →“设置 → 桌宠的样子”，搜一只（比如 `claude`、`blonde`）点“下载并用她”，桌宠几秒内就换好；也可以在 `config.yaml` 里写 `pet: {sprite: claude-chan}`，第一次启动时自动下载。像素宠物的版权归各自作者（很多是同人二创），程序只把它下载到你自己电脑的 `data/pet/sprites/` 里，不打包、不上传。想换成自己的 Live2D 模型，把模型文件夹放进 `data/pet/model/` 就会自动识别（请使用你有权使用的模型）。
+- **桌宠**：Windows 上启动时自动出现在桌面右下角。背景不透明的话，双击 `scripts\pet_setup.bat` 安装 PySide6 后重启。默认形象是 Live2D 官方免费示例模型 Haru，`pet.preset: rice` 可以换成另一个示例模型 Rice。**像素宠物**：在电脑上打开小屋 →“设置 → 桌宠的样子”，搜一只（或者粘贴它的网址）点“下载并用她”，桌宠几秒内就换好；也可以在 `config.yaml` 里写 `pet: {sprite: 宠物的 id}`，第一次启动时自动下载。像素宠物的版权归各自作者（很多是同人二创），程序只把它下载到你自己电脑的 `data/pet/sprites/` 里，不打包、不上传。想换成自己的 Live2D 模型，把模型文件夹放进 `data/pet/model/` 就会自动识别（请使用你有权使用的模型）。
 - **小屋**：手机上在 Telegram bot 聊天框左边点“小屋”按钮，QQ 里给 TA 发 `/小屋`；电脑上浏览器打开 `http://127.0.0.1:8765`。手机小屋通过免费的 Cloudflare 临时隧道访问，程序会自动下载 `cloudflared`。
-- **开机自启**：双击 `autostart_on.bat`，或者发 `/autostart 开`。关闭用 `autostart_off.bat`。
+- **开机自启**：托盘图标右键“开机自动启动”，或者双击 `scripts\autostart_on.bat`、发 `/autostart 开`。关闭用 `scripts\autostart_off.bat`。
 - **QQ 群**：ai-life 只管私聊。群里的角色是单独的程序 **[ai-life-group](https://github.com/star031104/ai-life-group)**：另一个 QQ 小号、另一个人设，一行命令部署，它会从这里的 NapCat 克隆一份给自己用，两边可以同时开。
 - **QQ 的更多说明**：见 [docs/QQ.md](docs/QQ.md)。
 
@@ -187,11 +185,11 @@ python run.py setup                       # 配置向导；或者把 config.exam
 
 ### 更新
 
-程序每天自己看一次 GitHub 上有没有新版本，有的话小屋的“连接”里会亮黄点。在电脑上打开小屋 →“设置 → 软件更新”点“更新”（或者双击 `update.bat`、托盘菜单“检查更新”）：
+程序每天自己看一次 GitHub 上有没有新版本，有的话小屋的“连接”里会亮黄点。在电脑上打开小屋 →“设置 → 软件更新”点“更新”（或者双击 `scripts\update.bat`、托盘菜单“检查更新”）：
 
 - 下载的代码先检查（zip 完整、版本号确实更新、关键文件都在），不对就不装，一个文件都不动；
 - 换之前把要覆盖的文件备份到 `data/backup/code-<旧版本>-<时间>.zip`；`config.yaml`、`config.llm.yaml`、`.env`、`data/`、`napcat/` 和你已有的人设永远不碰；
-- 换好自动重启。新版连续两次刚启动就退出，托盘会自动换回旧版；也可以随时点“换回上一个版本”（`update.bat rollback`）。
+- 换好自动重启。新版连续两次刚启动就退出，托盘会自动换回旧版；也可以随时点“换回上一个版本”（`scripts\update.bat rollback`）。
 - 国内连 GitHub 慢：在 Gitee 上导入这个仓库，在 `config.yaml` 里写 `update: {gitee: 你的用户名/ai-life}`，会先从 Gitee 下载。不想自动检查：`update: {auto_check: false}`。
 
 也可以再跑一次一键部署那行 PowerShell：它只覆盖代码，不动 `config.yaml`、`.env`、`data/`、`napcat/`。用 git 的话：
@@ -221,8 +219,7 @@ python run.py import 包.zip     # 在新电脑装好程序后导入
 | --- | --- |
 | `proxy` | 访问 Telegram 的代理，支持 `http://` 和 `socks5://` |
 | `persona_file` | 当前使用的人设文件 |
-| `keys` | 各平台的 API Key（首次启动后会挪进 `.env`） |
-| `llm.profiles` / `llm.routes` | 大模型接口，以及每种用途按顺序用哪些 |
+| `llm.profiles` / `llm.routes` | 你加的大模型，以及每种用途按顺序用哪些（一般在小屋里加，写进 `config.llm.yaml`） |
 | `telegram` | bot token、主人 ID、贴纸包 |
 | `style` | 打字速度、表情包频率、错字率 |
 | `proactive` | 主动消息：频率、免打扰时段、早安晚安时间、连续未回复上限 |
@@ -245,34 +242,46 @@ python run.py persona use persona/xxx.md    # 切换角色（每个角色有自�
 python run.py persona check persona/xxx.md  # 检查写法
 ```
 
-自带：`linxi.md`（林汐，温柔的插画编辑）、`shenyan.md`（沈言，男友向）、`template.md`（带注释的模板）。完整写法见 **[PERSONA.md](PERSONA.md)**。
+自带：`linxi.md`（林汐，温柔的插画编辑）、`shenyan.md`（沈言，男友向）、`template.md`（带注释的模板）。完整写法见 **[docs/PERSONA.md](docs/PERSONA.md)**。
 
 ### 大模型配置
 
-**最省事：用自己的接口不用写配置。** 双击 **`llm.bat`**，或者在电脑上打开小屋（`http://127.0.0.1:8765`）→ 设置 →“大模型”：
-填接口地址（DeepSeek、通义、Kimi、OpenRouter、本机 Ollama / LM Studio 都列好了，也可以粘贴任何 OpenAI 兼容的地址）和 Key →
-自动测连通、列出这个接口的模型 → 选一个 → 试聊一句看速度 → 选它当主力、当备用，还是只干后台的活（整理记忆、写日记）。
-推理模型回复是空的时候会自动试着关掉“思考”。加的接口写在 `config.llm.yaml`（Key 在 `.env`），不动你的 `config.yaml`；
-小屋里加完点“重启生效”就能用上。配置向导里也可以顺便加一个。
+**不用写配置。** 在电脑上打开小屋（`http://127.0.0.1:8765`）→ 设置 →“大模型”，或者双击 **`scripts\llm.bat`**：
+填接口地址和 Key → 自动测连通、列出这个接口的模型 → 选一个 → 试一下 → 勾上它干什么：
 
-手动写：`llm.profiles` 里是各个接口，`llm.routes` 是每种用途按顺序用哪些：
+| 用途 | 说明 | 没配的时候 |
+| --- | --- | --- |
+| `chat` | 聊天、主动消息 | ★ 至少要有一个 |
+| `helper` | 其它小活（打标签、做判断） | 用 `chat` 的 |
+| `memory` | 整理记忆（要准，可以用强一点的） | 用 `helper`，再没有用 `chat` |
+| `night` | 写日记、排日程、周日来信 | 同上 |
+| `vision` | 看你发的图 | 不看图 |
+| `image` | 画她的照片（`/images/generations`） | 不发照片 |
+| `embed` | 记忆检索的向量（`/embeddings`） | 只用关键词检索 |
+
+列模型时会按名字猜它是聊天、看图、画图还是向量模型，帮你勾好；推理模型回复是空的时候会自动试着关掉“思考”。
+加的模型写在 `config.llm.yaml`（Key 在 `.env`），不动你的 `config.yaml`；小屋里加完点“重启生效”就能用上。
+
+也可以在 `config.yaml` 里手写：
 
 ```yaml
 llm:
   profiles:
-    my_deepseek:                       # 名字随便起
-      base_url: https://api.deepseek.com/v1
-      key: deepseek                    # 对应 keys 里的名字
-      model: deepseek-chat
+    my_chat:                           # 名字随便起
+      base_url: https://你的接口地址/v1
+      api_key: "${MY_CHAT_KEY}"        # Key 写在 .env：MY_CHAT_KEY=sk-...
+      model: 模型名
+    my_backup:
+      base_url: http://127.0.0.1:11434/v1
+      api_key: none
+      model: qwen3:8b
   routes:
-    chat:   [glm_flash, my_deepseek, sf_qwen3_8b]   # 聊天、主动消息
-    helper: [sf_glm4_9b, glm_flash]                 # 整理记忆、写日记等后台任务
-    vision: [zhipu_vision]                          # 看图
+    chat:   [my_chat, my_backup]       # 前一个限流 / 出错自动换下一个
+    vision: [my_chat]
 ```
 
-- 一个接口限流或出错会自动换下一个；全部失败时 TA 会先说一句“网卡了，等我一下”，然后自动重试。
+- 一个模型限流或出错会自动换下一个并冷却一会儿；全部失败时 TA 会先说一句“网卡了，等我一下”，然后自动重试。
 - 聊天优先：后台整理记忆这类任务会等你聊完再做，免得抢免费额度。
-- 想用本地模型：装 [Ollama](https://ollama.com)，取消 `config.example.yaml` 里 `local_qwen` 的注释，加进 routes 当最后的兜底。
 - 换完模型跑 `python run.py bench` 测速度，跑 `python run.py eval` 看人设表现有没有变差。
 
 ---
@@ -304,7 +313,7 @@ llm:
 | --- | --- |
 | `python run.py` | 启动 |
 | `python run.py setup` | 配置向导 |
-| `python run.py llm` | 自定义大模型：填地址和 Key → 测连通 → 选模型 → 试聊 → 加进路由（`llm.bat`） |
+| `python run.py llm` | 管理大模型：填地址和 Key → 测连通 → 选模型 → 试一下 → 选用途（`scripts\llm.bat`） |
 | `python run.py qqsetup` | QQ 一键配置（没有 NapCat 就自动下载；`--manual` 只读现成配置） |
 | `python run.py persona …` | 人设管理（list / check / use / new / import） |
 | `python run.py selftest` | 离线自检 |
@@ -312,6 +321,8 @@ llm:
 | `python run.py eval [--quick] [--judge]` | 人设评测：重复率、出戏、长对话、记忆 |
 | `python run.py bench` | 测每个大模型接口的速度 |
 | `python run.py pet` | 重新打开桌宠 |
+| `python run.py update [apply\|rollback]` | 检查 / 安装更新、换回上一个版本 |
+| `python run.py help` | 所有命令 |
 | `python run.py export` / `import 包.zip` | 备份 / 换电脑 |
 
 ---
@@ -321,7 +332,7 @@ llm:
 <details>
 <summary><b>TA 不回消息</b></summary>
 
-在 Telegram 里发 `/diag`，或者看 `data/logs/ailife.log`。最常见的原因：代理没开、API Key 填错、免费模型限流（会自动换备用接口，可以多配一个平台的 Key）。
+在 Telegram 里发 `/diag`，或者看 `data/logs/ailife.log`。最常见的原因：代理没开、API Key 填错、免费模型限流（会自动换备用模型：在小屋“设置 → 大模型”里多加一个当备用）。
 
 </details>
 
@@ -342,14 +353,14 @@ llm:
 <details>
 <summary><b>每次启动 NapCat 都要扫码</b></summary>
 
-旧版本的启动参数写错了（NapCat 只认 `-q 号码`），更新到最新代码就好。确认 `config.yaml` 的 `qq:` 里有 `napcat_qq: 她的小号`（`qq_setup.bat` 会写）。如果小号在手机上被踢下线、改了密码，或者很久没登录，QQ 会要求重新扫码，这时二维码会自动弹出来，扫一次就行。
+旧版本的启动参数写错了（NapCat 只认 `-q 号码`），更新到最新代码就好。确认 `config.yaml` 的 `qq:` 里有 `napcat_qq: 她的小号`（`scripts\qq_setup.bat` 会写）。如果小号在手机上被踢下线、改了密码，或者很久没登录，QQ 会要求重新扫码，这时二维码会自动弹出来，扫一次就行。
 
 </details>
 
 <details>
 <summary><b>NapCat 下载失败</b></summary>
 
-会依次试 GitHub 直连和几个公共加速地址。都不行的话，手动打开 [NapCat 发布页](https://github.com/NapNeko/NapCatQQ/releases) 下载 `NapCat.Shell.Windows.Node.zip`，放进项目文件夹，再双击 `qq_setup.bat`（会直接用这个 zip）。
+会依次试 GitHub 直连和几个公共加速地址。都不行的话，手动打开 [NapCat 发布页](https://github.com/NapNeko/NapCatQQ/releases) 下载 `NapCat.Shell.Windows.Node.zip`，放进项目文件夹，再双击 `scripts\qq_setup.bat`（会直接用这个 zip）。
 
 </details>
 
@@ -370,7 +381,7 @@ llm:
 <details>
 <summary><b>桌宠有白色方框 / 占了任务栏</b></summary>
 
-双击 `pet_setup.bat` 安装 PySide6，然后重启 start.bat。
+双击 `scripts\pet_setup.bat` 安装 PySide6，然后重启 start.bat。
 
 </details>
 
@@ -392,44 +403,38 @@ llm:
 
 ```
 ai-life/
-├── run.py                 入口：启动、配置向导、人设管理、自检、评测、备份
-├── config.example.yaml    配置模板（复制成 config.yaml）
+├── run.py                 入口：python run.py [命令]（命令列表在 ailife/cli.py）
+├── config.example.yaml    所有设置和默认值（复制成 config.yaml 改你要的那几项）
 ├── persona/               人设（template.md 是带注释的模板）
-├── ailife/                程序本体
-│   ├── bot*.py            Telegram 收发、命令、媒体
-│   ├── brain.py           拼提示词、时间感、生成回复
-│   ├── memory.py          记忆整理、日记、日程、每周来信
-│   ├── retrieval.py       关键词 + 向量混合检索
-│   ├── emotion.py         情绪数值与衰减
-│   ├── proactive*.py      主动消息、提醒、纪念日
-│   ├── away.py            关机前道别、开机后补上错过的事
-│   ├── story.py · herworld.py · mind.py   TA 的故事线、身边的人、内心独白
-│   ├── sense.py           电脑感知
-│   ├── web*.py · tunnel.py                 小屋网页、Mini App 隧道
-│   ├── pet.py             桌宠窗口（Live2D 和像素宠物）
-│   ├── pet_sprite.py      像素宠物：从 codex-pets.net 下载、图库
-│   ├── update.py          自动更新：检查、下载、备份、回滚
-│   ├── qq*.py · napcat_*.py                 QQ（NapCat）收发、一键安装、自动登录
-│   └── fftool.py          ffmpeg（动图 / 视频截帧）
-├── docs/
-│   ├── FEATURES.md        各功能详细说明
-│   └── TESTING.md         实机测试清单
-├── tests/                 自动测试（python -m pytest tests）
-├── get.ps1                一行命令部署（下载代码 + 运行 install.bat）
-├── tools/tray.pyw         托盘图标（start.bat 用它在后台运行，不开窗口）
-├── install.bat · start.bat · start_console.bat · selftest.bat · setup.bat · qq_setup.bat · llm.bat · update.bat · pet_setup.bat   Windows 脚本
-├── tools/env.bat          Windows 脚本共用：找到 .venv 或 conda 环境
-└── install.sh · start.sh  Linux / macOS 脚本
+├── ailife/                程序本体，按职责分包（详见 docs/ARCHITECTURE.md）
+│   ├── cli.py · app.py    命令行入口 · 把各部分装起来运行
+│   ├── core/              配置、密钥、数据库、日志与健康检查、自检、备份、自动更新
+│   ├── llm/               大模型：调用与兜底、用途路由、你加的模型（config.llm.yaml）、测连通、向量、画图
+│   ├── persona/           人设的读取、角色库（新建 / 导入角色卡 / 切换）、对话示例
+│   ├── mind/              她的“脑子”：拼提示词、记忆与检索、情绪、作息、故事线、身边的人、日记……
+│   ├── proactive/         主动消息、提醒、纪念日
+│   ├── channels/          聊天软件：telegram/、qq/（OneBot + NapCat 一键安装、自动登录）
+│   ├── media/             链接、番剧和歌、她的照片、ffmpeg
+│   ├── sense/             电脑感知、手机快捷指令
+│   ├── web/               小屋网页（页面、门卫、各组接口）、手机 Mini App 隧道
+│   └── pet/               桌宠：页面和接口、窗口（PySide6）、像素宠物
+├── scripts/               Windows 辅助脚本（托盘、调试窗口、大模型、QQ、更新、自检、开机自启……）
+├── docs/                  功能详解、人设写法、代码结构、设计风格、QQ、实机测试清单
+├── tests/                 自动测试（python -m pytest），不联网，用假的大模型和假的聊天软件
+├── install.bat · start.bat · setup.bat   Windows：安装 · 启动（托盘）· 重新配置
+├── install.sh · start.sh · get.ps1       Linux / macOS 脚本 · Windows 一行命令部署
+└── pyproject.toml         测试和代码检查（ruff）的设置
 ```
 
 ## 参与开发
 
 ```bash
-pip install -r requirements.txt pytest pytest-asyncio
-python -m pytest tests -q        # 不联网，用假的大模型和假的 Telegram
+pip install -r requirements.txt pytest ruff
+python -m pytest                 # 不联网，用假的大模型和假的聊天软件
+ruff check .                     # 代码检查
 ```
 
-欢迎提 Issue 和 Pull Request。报告问题时请附上 `/diag` 的结果和相关日志片段（记得删掉私人内容）。
+代码怎么分层、加一个功能该改哪里，见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。欢迎提 Issue 和 Pull Request。报告问题时请附上 `/diag` 的结果和相关日志片段（记得删掉私人内容）。
 
 ## 许可
 
@@ -438,4 +443,4 @@ python -m pytest tests -q        # 不联网，用假的大模型和假的 Teleg
 ## 致谢
 
 - 像素宠物的格式和“按状态播动作”的思路参考了 [Wakuwaku](https://github.com/zhoupengjie/Wakuwaku)（MIT），宠物来自 [codex-pets.net](https://codex-pets.net)，版权归各自作者。
-- 默认的 Live2D 模型 Rice 是 Live2D 官方的免费示例模型（Free Material License）。
+- 自带的 Live2D 模型 Haru、Rice 是 Live2D 官方的免费示例模型（Free Material License）。

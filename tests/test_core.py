@@ -1,17 +1,14 @@
 """不连网的核心逻辑测试：python -m pytest tests -q"""
 import asyncio
 import math
-import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-import numpy as np
-import pytest
 
-from ailife.config import load_config
-from ailife.output import emotion_to_emojis, parse_reply, parse_when
-from ailife.proactive import fire_probability, in_quiet, parse_range
-from ailife.llm import parse_json
+from ailife.core.config import load_config
+from ailife.mind.output import emotion_to_emojis, parse_reply, parse_when
+from ailife.proactive.scheduler import fire_probability, in_quiet, parse_range
+from ailife.llm.client import parse_json
 
 TZ = ZoneInfo("Asia/Shanghai")
 
@@ -78,8 +75,12 @@ def test_parse_json():
 
 def test_llm_fallback_and_cooldown():
     from types import SimpleNamespace
-    from ailife.llm import LLM
-    cfg = load_config('/nonexistent.yaml')   # 只用示例配置
+    from ailife.llm.client import LLM
+    cfg = load_config('/nonexistent.yaml')   # 示例配置里没有模型：这里加两个假的
+    cfg["llm"]["profiles"] = {"a": {"base_url": "http://127.0.0.1:1/v1", "model": "a"},
+                              "b": {"base_url": "http://127.0.0.1:1/v1", "model": "b",
+                                    "extra_body": {"reasoning_effort": "none"}}}
+    cfg["llm"]["routes"] = {"chat": ["a", "b"]}
     llm = LLM(cfg)
 
     def client(fn):
@@ -92,16 +93,16 @@ def test_llm_fallback_and_cooldown():
         assert kw["extra_body"] == {"reasoning_effort": "none"}
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="<think>x</think>好呀"))])
 
-    llm.profiles["glm_flash"].client = client(boom)
-    llm.profiles["groq_qwen"].client = client(ok)
+    llm.profiles["a"].client = client(boom)
+    llm.profiles["b"].client = client(ok)
     assert asyncio.run(llm.chat([{"role": "user", "content": "hi"}])) == "好呀"
-    assert not llm.profiles["glm_flash"].available()
-    assert [p.name for p in llm._chain("chat")][0] == "groq_qwen"
+    assert not llm.profiles["a"].available()
+    assert [p.name for p in llm._chain("chat")][0] == "b"
 
 
 def test_persona_files_load():
-    from ailife.persona import load_persona
-    from ailife.config import ROOT
+    from ailife.persona.loader import load_persona
+    from ailife.core.config import ROOT
     y = load_persona(ROOT / "tests" / "fixtures" / "student.md")
     assert y.name == "小葵" and y.call_name == "哥哥" and "傲娇" in y.body
 
@@ -114,7 +115,7 @@ def test_parser_cleanup():
 
 
 def test_date_dedupe(tmp_path):
-    from ailife.db import DB
+    from ailife.core.db import DB
     db = DB(tmp_path / "x.db")
     db.add_date("2026-12-20", "哥哥考研")
     db.add_date("2026-12-20", "考研")

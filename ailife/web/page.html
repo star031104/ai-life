@@ -1,0 +1,1270 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>小屋</title>
+<script>/* 只有在 Telegram 里打开时才加载它的脚本：从 QQ / 浏览器打开时（手机上没开代理）这个地址连不上，会让整页一直白着 */
+if(location.hash.indexOf("tgWebAppData")>=0||/Telegram/i.test(navigator.userAgent))document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
+<style>
+/* ============ 设计令牌 ============ */
+:root{
+  color-scheme:light;
+  --bg:#f5f4f1; --surface:#fcfcfb; --surface-2:#f2f0ec; --surface-3:#e9e6e0;
+  --ink:#1b1a18; --ink-2:#52514e; --ink-3:#8a8882;
+  --line:#e4e1db; --line-2:#d6d2ca; --grid:#ebe8e2;
+  --accent:#7a4fd1; --accent-ink:#5b35ad; --accent-soft:#f1ecfb; --accent-line:#d9ccf5;
+  --rose:#c4416f; --rose-soft:#fbecf1; --solid:#6a43c4;
+  --good:#1f7a3f; --warn:#a65d00; --bad:#c23a3a;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;     /* 图表：已验证的色盲安全顺序 */
+  --shadow:0 1px 0 rgba(20,18,14,.03),0 1px 3px rgba(20,18,14,.06);
+  --shadow-lg:0 12px 32px rgba(20,18,14,.12);
+  --r-lg:16px; --r:12px; --r-sm:8px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#121211; --surface:#1a1a19; --surface-2:#222220; --surface-3:#2b2b28;
+  --ink:#f0efec; --ink-2:#c3c2b7; --ink-3:#8e8c85;
+  --line:#2c2b29; --line-2:#3a3936; --grid:#292826;
+  --accent:#a68bf0; --accent-ink:#c4b3f7; --accent-soft:#251f36; --accent-line:#3d3359;
+  --rose:#e86a95; --rose-soft:#33202a;
+  --good:#4cc77a; --warn:#e7a23c; --bad:#ef6b6b;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --shadow:none; --shadow-lg:0 12px 32px rgba(0,0,0,.5);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121211; --surface:#1a1a19; --surface-2:#222220; --surface-3:#2b2b28;
+  --ink:#f0efec; --ink-2:#c3c2b7; --ink-3:#8e8c85;
+  --line:#2c2b29; --line-2:#3a3936; --grid:#292826;
+  --accent:#a68bf0; --accent-ink:#c4b3f7; --accent-soft:#251f36; --accent-line:#3d3359;
+  --rose:#e86a95; --rose-soft:#33202a;
+  --good:#4cc77a; --warn:#e7a23c; --bad:#ef6b6b;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --shadow:none; --shadow-lg:0 12px 32px rgba(0,0,0,.5);
+}
+
+/* ============ 基础 ============ */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.6 var(--font);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-3)} .report{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.rep{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.rep .k{font-size:12px;color:var(--ink-3)} .rep .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.rep .t{font-size:11.5px;color:var(--ink-3)} .rep .t.bad{color:var(--bad)} .rep .t.good{color:var(--good)}
+.pwarn{font-size:13px;color:var(--warn);line-height:1.8;margin-top:8px}
+.mono{font-family:var(--mono,ui-monospace,Consolas,monospace)}
+.ink2{color:var(--ink-2)} .small{font-size:12.5px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ============ 顶栏 ============ */
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1180px;margin:0 auto;padding:12px 20px 0;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.ava{width:40px;height:40px;border-radius:50%;flex:none;background:#6a43c4 center/cover no-repeat;color:#fff;
+  display:grid;place-items:center;font-weight:650;font-size:17px;position:relative}
+.ava::after{content:"";position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;border-radius:50%;background:var(--good);border:2px solid var(--bg)}
+.brand h1{margin:0;font-size:16px;font-weight:650;letter-spacing:.2px}
+.brand .sub{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand .grow{flex:1;min-width:0}
+.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer;color:var(--ink-2)}
+.iconbtn:hover{color:var(--ink);border-color:var(--line-2)}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -4px}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs button{border:0;background:none;padding:9px 12px 11px;cursor:pointer;color:var(--ink-3);font-weight:550;white-space:nowrap;
+  display:flex;align-items:center;gap:6px;border-bottom:2px solid transparent;margin-bottom:-1px}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs .badge{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--rose);color:#fff;font-size:11px;display:inline-grid;place-items:center}
+
+/* ============ 布局 ============ */
+main{max-width:1180px;margin:0 auto;padding:20px 20px 64px}
+.page{display:none} .page.on{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:.4;transform:translateY(2px)}to{opacity:1;transform:none}}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.c12{grid-column:span 12}.c8{grid-column:span 8}.c7{grid-column:span 7}.c6{grid-column:span 6}.c5{grid-column:span 5}.c4{grid-column:span 4}
+@media(max-width:920px){.c8,.c7,.c6,.c5,.c4{grid-column:span 12}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);min-width:0}
+.card-h{display:flex;align-items:center;gap:10px;padding:16px 18px 0}
+.card-h h2{margin:0;font-size:14px;font-weight:650;display:flex;align-items:center;gap:8px}
+.card-h h2 svg{color:var(--ink-3)}
+.card-h .sp{flex:1}
+.card-h .hint{font-size:12px;color:var(--ink-3)}
+.card-b{padding:14px 18px 18px}
+.empty{color:var(--ink-3);font-size:13px;padding:22px 8px;text-align:center}
+
+/* ============ 概览：问候 ============ */
+.hello{display:flex;gap:18px;align-items:flex-start;padding:20px}
+.hello .big{width:64px;height:64px;font-size:26px}
+.hello .big::after{width:14px;height:14px}
+.hello h2{margin:0;font-size:20px;font-weight:650;letter-spacing:.2px}
+.hello .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:13px;background:var(--surface-2);color:var(--ink-2);font-size:12.5px;border:1px solid var(--line)}
+.pill b{color:var(--ink);font-weight:600}
+.pill.heart{background:var(--rose-soft);border-color:transparent;color:var(--rose)}
+.pill.heart b{color:var(--rose)}
+.said{margin-top:14px;position:relative;padding:10px 14px;border-radius:4px 14px 14px 14px;background:var(--surface-2);color:var(--ink);max-width:640px;font-size:14px}
+.said small{display:block;color:var(--ink-3);font-size:11.5px;margin-bottom:2px}
+
+/* ============ KPI ============ */
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line);border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden}
+.kpi{padding:16px 18px;background:var(--surface)}
+.kpi .l{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.kpi .v{font-size:24px;font-weight:650;line-height:1.3;margin-top:2px;letter-spacing:-.2px}
+.kpi .v small{font-size:12.5px;color:var(--ink-3);font-weight:500;margin-left:3px}
+.kpi.heart .v{color:var(--rose)}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi.heart{grid-column:span 2}.kpi{padding:12px 16px}.kpi .v{font-size:21px}}
+@media(max-width:560px){
+  .top-in{padding:10px 14px 0} main{padding:14px 12px 48px}
+  .hello{padding:16px;gap:14px} .hello .big{width:48px;height:48px;font-size:20px} .hello h2{font-size:17px}
+  .tl li{grid-template-columns:1fr;gap:2px}
+  .card-h{padding:14px 14px 0} .card-b{padding:12px 14px 14px}
+  .card-h .hint{display:none}
+}
+
+/* ============ 情绪 ============ */
+.meters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+@media(max-width:640px){.meters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.meter .top-l{display:flex;justify-content:space-between;align-items:baseline}
+.meter .name{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:7px}
+.meter .name i{width:10px;height:3px;border-radius:2px;background:var(--c)}
+.meter .val{font-size:20px;font-weight:650}
+.track{height:6px;border-radius:3px;background:var(--surface-3);margin-top:8px;overflow:hidden}
+.track span{display:block;height:100%;border-radius:3px;background:var(--c);transition:width .4s ease}
+.meter .note{font-size:11.5px;color:var(--ink-3);margin-top:6px}
+.chart{position:relative;margin-top:18px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:10px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend span i{width:14px;height:2px;border-radius:1px;background:var(--c)}
+.legend .sp{flex:1}
+.tip{position:absolute;pointer-events:none;z-index:5;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-lg);
+  border-radius:10px;padding:8px 10px;font-size:12px;min-width:120px;display:none}
+.tip .t{color:var(--ink-3);margin-bottom:4px}
+.tip .r{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.tip .r span{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.tip .r span i{width:10px;height:2px;background:var(--c);border-radius:1px}
+.tip .r b{font-weight:650;color:var(--ink)}
+.linkbtn{border:0;background:none;padding:0;color:var(--ink-3);cursor:pointer;font-size:12px;text-decoration:underline;text-underline-offset:2px}
+table.dt{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+table.dt th,table.dt td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.dt th:first-child,table.dt td:first-child{text-align:left}
+table.dt th{color:var(--ink-3);font-weight:500}
+
+/* ============ 时间线 / 列表 ============ */
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:9px 0;border-top:1px dashed var(--line)}
+.tl li:first-child{border-top:0}
+.tl .t{font-size:12px;color:var(--accent-ink);font-weight:600;font-family:var(--mono);padding-top:1px}
+.tl li.now .t::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--rose);margin-right:6px;vertical-align:2px}
+.wx{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:10px 12px;border-radius:var(--r);background:var(--surface-2);font-size:12.5px;color:var(--ink-2)}
+.wx svg{margin-top:2px;color:var(--ink-3)}
+.rows{list-style:none;margin:0;padding:0}
+.rows li{display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
+.rows li:first-child{border-top:0}
+.rows .grow{flex:1;min-width:0;word-break:break-word}
+.rows .title{font-weight:550}
+.rows .meta{font-size:12px;color:var(--ink-3);margin-top:1px}
+.cd{flex:none;width:54px;height:48px;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;align-content:center;line-height:1.1}
+.cd b{font-size:17px;font-weight:650}
+.cd span{font-size:10.5px;color:var(--ink-3)}
+.cd.today{background:var(--rose);} .cd.today b,.cd.today span{color:#fff}
+.cd.soon b{color:var(--rose)}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;background:var(--surface-2);color:var(--ink-2);font-size:11.5px;border:1px solid var(--line);white-space:nowrap}
+.tag.ok{background:color-mix(in srgb,var(--good) 12%,transparent);color:var(--good);border-color:transparent}
+.tag.no{background:var(--surface-2);color:var(--ink-3)}
+.tag.wait{background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn);border-color:transparent}
+
+/* ============ 按钮 / 表单 ============ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 13px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;font-weight:550;font-size:13px;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn.pri{background:var(--solid);border-color:var(--solid);color:#fff}
+.btn.pri:hover{filter:brightness(1.1);background:var(--solid)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.sm{height:28px;padding:0 10px;font-size:12.5px;border-radius:8px}
+.btn.ghost{border-color:transparent;background:none;color:var(--ink-3)}
+.btn.ghost:hover{background:var(--surface-2);color:var(--ink)}
+.btn.ghost.danger:hover{color:var(--bad)}
+.input,select.input,textarea.input{height:36px;border:1px solid var(--line-2);background:var(--surface);border-radius:10px;padding:0 12px;min-width:0;outline:none;transition:border-color .15s,box-shadow .15s}
+textarea.input{height:auto;padding:9px 12px;width:100%;resize:vertical;line-height:1.6}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.form{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.form .input{flex:1 1 140px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;color:var(--ink-3);font-weight:550}
+.search{position:relative;flex:1;min-width:160px}
+.search svg{position:absolute;left:11px;top:10px;color:var(--ink-3)}
+.search .input{width:100%;padding-left:34px}
+.seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
+.seg button{border:0;background:none;height:28px;padding:0 12px;border-radius:7px;cursor:pointer;color:var(--ink-2);font-size:12.5px;font-weight:550;white-space:nowrap}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg button .n{color:var(--ink-3);margin-left:4px;font-weight:500}
+
+/* ============ 记忆 ============ */
+.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.mems{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+@media(max-width:760px){.mems{grid-template-columns:1fr}}
+.mem{display:flex;gap:10px;align-items:flex-start;padding:12px 12px 10px 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface)}
+.mem:hover{border-color:var(--line-2)}
+.mem .txt{flex:1;min-width:0;word-break:break-word}
+.mem .foot{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11.5px;color:var(--ink-3)}
+.stars{display:inline-flex;gap:1px}
+.stars button{border:0;background:none;padding:0 1px;cursor:pointer;color:var(--line-2);font-size:13px;line-height:1}
+.stars button.on{color:var(--warn)}
+.stars:hover button{color:var(--warn)} .stars button:hover~button{color:var(--line-2)}
+
+/* ============ 日记 / 信 ============ */
+.paper{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--surface);margin-bottom:12px}
+.paper .d{font-size:12px;color:var(--ink-3);display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.paper .d b{color:var(--ink);font-weight:600}
+.paper p{margin:0;white-space:pre-wrap;line-height:1.85;color:var(--ink)}
+.letter{background:linear-gradient(var(--surface),var(--surface)) padding-box;border-left:3px solid var(--rose)}
+.scroll{max-height:560px;overflow:auto;padding-right:4px;scrollbar-width:thin}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.photos a{display:block;aspect-ratio:3/4;border-radius:10px;background:var(--surface-2) center/cover no-repeat;border:1px solid var(--line);transition:transform .15s,box-shadow .15s}
+.links{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.link{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);min-width:0}
+.link i{width:10px;height:10px;border-radius:50%;flex:none;margin-top:5px;background:var(--c)}
+.link.green{--c:#1f9d55}.link.blue{--c:#2a78d6}.link.yellow{--c:#e0a100;border-color:color-mix(in srgb,#e0a100 45%,var(--line));background:color-mix(in srgb,#e0a100 7%,transparent)}.link.gray{--c:var(--line-2)}
+.link .n{font-weight:600;font-size:13px}.link .t{font-size:12px;color:var(--ink-3);word-break:break-word}
+.skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.skin{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.skin.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.skin .pic{aspect-ratio:192/208;border-radius:8px;background:var(--surface-2) center/contain no-repeat}
+.skin .nm{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.skin .by{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.skin .btn{width:100%}
+.skin-cur{display:flex;gap:14px;align-items:flex-start}
+.skin-cur .pic{width:96px;flex:none;aspect-ratio:192/208;border-radius:10px;background:var(--surface-2) no-repeat}
+.photos a:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+
+/* ============ 留言板 ============ */
+.chat{display:flex;flex-direction:column;gap:10px;max-height:58vh;min-height:220px;overflow:auto;padding:4px 2px}
+.msg{max-width:78%;display:flex;flex-direction:column;gap:3px}
+.msg .b{padding:9px 13px;border-radius:14px;background:var(--surface-2);white-space:pre-wrap;word-break:break-word}
+.msg .w{font-size:11px;color:var(--ink-3);padding:0 4px}
+.msg.me{align-self:flex-end;align-items:flex-end}
+.msg.me .b{background:var(--solid);color:#fff;border-bottom-right-radius:4px}
+.msg.her .b{border-bottom-left-radius:4px}
+.composer{display:flex;gap:8px;margin-top:14px;align-items:flex-end}
+.composer textarea{flex:1}
+
+/* ============ 设置 ============ */
+.kv{display:grid;grid-template-columns:120px 1fr;gap:10px 16px;font-size:13px}
+.kv dt{color:var(--ink-3)} .kv dd{margin:0;word-break:break-all}
+code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);word-break:break-all}
+.copy{margin-left:6px}
+
+/* 故事线 / 想法 / 音乐 */
+.arc{padding:12px 0;border-top:1px solid var(--line)} .arc:first-child{border-top:0;padding-top:2px}
+.arc .h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.arc .h b{font-weight:650}
+.prog{display:flex;gap:4px;margin-left:auto}
+.prog i{width:14px;height:4px;border-radius:2px;background:var(--surface-3)} .prog i.on{background:var(--accent)}
+.beats{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line)}
+.beats li{position:relative;padding:3px 0 6px 10px;font-size:13px;color:var(--ink-2)}
+.beats li::before{content:"";position:absolute;left:-19px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--surface);border:2px solid var(--line-2)}
+.beats li.today{color:var(--ink)} .beats li.today::before{border-color:var(--accent);background:var(--accent)}
+.beats .d{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-right:8px}
+.thought{padding:12px 14px;border-radius:var(--r);background:var(--surface-2);font-size:14px;line-height:1.75;position:relative}
+.thought .meta{font-size:11.5px;color:var(--ink-3);margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.thoughts-old{list-style:none;margin:10px 0 0;padding:0}
+.thoughts-old li{font-size:12.5px;color:var(--ink-2);padding:6px 0;border-top:1px dashed var(--line)}
+.thoughts-old .t{font-family:var(--mono);color:var(--ink-3);margin-right:8px;font-size:11.5px}
+.profile{white-space:pre-wrap;line-height:1.85;font-size:14px}
+.song{display:flex;gap:10px;align-items:center}
+.song .art{width:34px;height:34px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;color:var(--ink-3);flex:none}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.habit{display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
+.habit:first-child{border-top:0}
+.week{display:flex;gap:4px;margin-top:5px}
+.week i{width:16px;height:16px;border-radius:5px;background:var(--surface-3);display:block}
+.week i.on{background:var(--good)}
+.streak{font-size:12px;color:var(--ink-3)} .streak b{color:var(--ink);font-size:15px}
+.recap{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:12px}
+.recap h3{margin:0 0 6px;font-size:15px}
+.recap p{margin:8px 0 0;white-space:pre-wrap;line-height:1.85}
+.ink2{color:var(--ink-2)} .ink3{color:var(--ink-3)} .ok{color:var(--good)}
+.wish .grow,.cap .grow{flex:1;min-width:0}
+.wish{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.wish:first-child{border-top:0}
+.wish.done .title{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--line-2,var(--line))}
+.wish .by{font-size:11.5px;color:var(--ink-3)}
+.cap{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
+.cap:first-child{border-top:0}
+.cap .seal{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--surface-2);color:var(--ink-3);flex:none}
+.cap.open .seal{background:var(--accent-soft,var(--surface-2));color:var(--accent)}
+.cap .meta,.goal .meta{font-size:12px;color:var(--ink-3)}
+.cap p{margin:6px 0 0;white-space:pre-wrap;line-height:1.75;font-size:13.5px}
+.cap .reply{color:var(--ink-2)}
+.goal{padding:12px 0;border-top:1px solid var(--line)}
+.goal:first-child{border-top:0}
+.goal .bar{height:8px;border-radius:5px;background:var(--surface-3);overflow:hidden;margin:8px 0 6px}
+.goal .bar span{display:block;height:100%;background:var(--accent);border-radius:5px}
+.goal.done .bar span{background:var(--good)}
+.goal .steps{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px;color:var(--ink-2)}
+.goal .steps li{padding:3px 0}
+.goal .steps .d{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-right:8px}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.person{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.person .n{font-weight:600}
+.person .r{font-size:11.5px;color:var(--ink-3);margin-left:6px}
+.person .d{font-size:12.5px;color:var(--ink-2);margin-top:4px;line-height:1.6}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,8px);opacity:0;background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:10px;font-size:13px;z-index:50;transition:all .2s;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.foot{margin-top:28px;text-align:center;color:var(--ink-3);font-size:12px}
+.skel{opacity:.55}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <div class="ava" id="ava">·</div>
+      <div class="grow">
+        <h1 id="name">小屋</h1>
+        <div class="sub" id="sub">正在连接…</div>
+      </div>
+      <a class="iconbtn" id="petBtn" href="/pet" target="_blank" title="桌面上的她" aria-label="桌宠" hidden></a>
+      <button class="iconbtn" id="refresh" title="刷新" aria-label="刷新"></button>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist">
+      <button data-p="home" class="on"><span data-i="home"></span>概览</button>
+      <button data-p="mem"><span data-i="brain"></span>记忆</button>
+      <button data-p="days"><span data-i="book"></span>日记与来信</button>
+      <button data-p="notes"><span data-i="chat"></span>留言板 <span class="badge" id="nbadge" hidden></span></button>
+      <button data-p="life"><span data-i="calendar"></span>一起做的事</button>
+      <button data-p="set"><span data-i="gear"></span>设置</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ================= 概览 ================= -->
+  <section class="page on" id="p-home">
+    <div class="grid">
+      <div class="card c12">
+        <div class="hello">
+          <div class="ava big" id="ava2">希</div>
+          <div style="flex:1;min-width:0">
+            <h2 id="greet">…</h2>
+            <div class="meta">
+              <span class="pill heart"><span data-i="heart"></span>好感 <b>永远满格</b></span>
+              <span class="pill">此刻 <b id="mood">…</b></span>
+              <span class="pill">认识第 <b id="days" class="num">–</b> 天</span>
+              <span class="pill" id="schoolPill" hidden><span data-i="book"></span><span id="school"></span></span>
+              <span class="pill" id="wpill" hidden><span data-i="cloud"></span><span id="wshort"></span></span>
+            </div>
+            <div class="said" id="said" hidden><small>她刚刚说</small><span id="saidTxt"></span></div>
+          </div>
+        </div>
+        <div class="kpis" style="border-top:1px solid var(--line)">
+          <div class="kpi heart"><div class="l">对你的好感</div><div class="v">100<small>/ 100</small></div></div>
+          <div class="kpi"><div class="l">今天的消息</div><div class="v num" id="kToday">–</div></div>
+          <div class="kpi"><div class="l">一共聊过</div><div class="v num" id="kTotal">–</div></div>
+          <div class="kpi"><div class="l">记得的事</div><div class="v num" id="kMem">–</div></div>
+          <div class="kpi"><div class="l">今天还能发照片</div><div class="v num" id="kPhoto">–</div></div>
+        </div>
+      </div>
+
+      <div class="card c12" id="linksCard" hidden>
+        <div class="card-h"><h2><span data-i="eye"></span>连接</h2><span class="hint">绿：好好的　蓝：装好了，等第一次　黄：要你看一下　灰：没开</span></div>
+        <div class="card-b"><div class="links" id="links"></div></div>
+      </div>
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="pulse"></span>她的心情</h2><span class="sp"></span><span class="hint">会随事情起伏，过一阵慢慢回到平常</span></div>
+        <div class="card-b">
+          <div class="meters" id="meters"></div>
+          <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+          <div class="legend" id="legend"></div>
+          <div id="emoTable" hidden></div>
+        </div>
+      </div>
+
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="spark"></span>她在想</h2><span class="sp"></span><span class="hint">一个人的时候，每隔几小时</span></div>
+        <div class="card-b" id="mind"></div>
+      </div>
+
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="route"></span>她最近在经历的事</h2><span class="sp"></span><button class="btn ghost sm" data-go="days">全部</button></div>
+        <div class="card-b" id="arcsMini"></div>
+      </div>
+
+      <div class="card c7">
+        <div class="card-h"><h2><span data-i="clock"></span>她今天的安排</h2></div>
+        <div class="card-b"><ul class="tl" id="life"></ul><div class="wx" id="wx"></div></div>
+      </div>
+
+      <div class="card c5">
+        <div class="card-h"><h2><span data-i="thread"></span>还没聊完的事</h2><span class="sp"></span><span class="hint">她会找机会接上</span></div>
+        <div class="card-b"><ul class="rows" id="threads"></ul></div>
+      </div>
+
+      <div class="card c7">
+        <div class="card-h"><h2><span data-i="gift"></span>快到的日子</h2><span class="sp"></span><button class="btn ghost sm" data-go="life">全部</button></div>
+        <div class="card-b"><ul class="rows" id="soon"></ul></div>
+      </div>
+
+      <div class="card c5">
+        <div class="card-h"><h2><span data-i="eye"></span>她感觉到的你</h2></div>
+        <div class="card-b"><ul class="rows" id="senseMini"></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 记忆 ================= -->
+  <section class="page" id="p-mem">
+    <div class="grid">
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="heart"></span>她心里的你</h2><span class="sp"></span><span class="hint" id="profTs">每周整理一次</span></div>
+        <div class="card-b"><div class="profile" id="profile"></div></div>
+      </div>
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="brain"></span>她的记忆</h2><span class="sp"></span><span class="hint">点星星调重要度，越重要越常想起</span></div>
+        <div class="card-b">
+          <div class="tools">
+            <div class="seg" id="memSeg">
+              <button data-o="user" class="on">关于你<span class="n" id="n-user"></span></button>
+              <button data-o="us">你们俩<span class="n" id="n-us"></span></button>
+              <button data-o="self">她自己的设定<span class="n" id="n-self"></span></button>
+            </div>
+            <label class="search"><span data-i="search"></span><input class="input" id="memq" placeholder="搜索记忆" aria-label="搜索记忆"></label>
+          </div>
+          <div class="mems" id="memlist"></div>
+        </div>
+      </div>
+
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="x"></span>她会避开的说法</h2><span class="sp"></span><span class="hint" id="hintDislike">觉得她哪句话不对味，给那句话一个 👎，她就记下不再这样说</span></div>
+        <div class="card-b"><ul class="rows" id="disliked"></ul></div>
+      </div>
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="quote"></span>你们的说法和梗</h2><span class="sp"></span><span class="hint">从聊天里学的，出现两次自动启用，你说了算</span></div>
+        <div class="card-b"><ul class="rows" id="exprs"></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 日记与来信 ================= -->
+  <section class="page" id="p-days">
+    <div class="grid">
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="route"></span>她的故事线</h2><span class="sp"></span><span class="hint">她自己生活里一段一段的事，只显示到今天</span></div>
+        <div class="card-b" id="arcs"></div>
+      </div>
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="target"></span>她的长期目标</h2><span class="sp"></span><span class="hint">她自己在努力的事，只显示到今天</span></div>
+        <div class="card-b" id="goals"></div>
+      </div>
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="users"></span>她身边的人</h2><span class="sp"></span><span class="hint">名字是固定的，聊天和日记里都一样</span></div>
+        <div class="card-b"><div class="people" id="people"></div></div>
+      </div>
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="book"></span>每月纪念册</h2><span class="sp"></span><span class="hint">每月 1 号，她把上个月写成一页</span></div>
+        <div class="card-b" id="recaps"></div>
+      </div>
+      <div class="card c7">
+        <div class="card-h"><h2><span data-i="book"></span>她的日记</h2><span class="sp"></span><span class="hint">每晚自动写</span></div>
+        <div class="card-b scroll" id="diaries"></div>
+      </div>
+      <div class="card c5">
+        <div class="card-h"><h2><span data-i="mail"></span>每周来信</h2><span class="sp"></span><span class="hint">周日晚上</span></div>
+        <div class="card-b scroll" id="letters"></div>
+      </div>
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="image"></span>她的相册</h2><span class="sp"></span><span class="hint">她发给你的照片</span></div>
+        <div class="card-b"><div class="photos" id="photos"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 留言板 ================= -->
+  <section class="page" id="p-notes">
+    <div class="card" style="max-width:760px;margin:0 auto">
+      <div class="card-h"><h2><span data-i="chat"></span>留言板</h2><span class="sp"></span><span class="hint">写给她，她看到会回</span></div>
+      <div class="card-b">
+        <div class="chat" id="notes"></div>
+        <div class="composer">
+          <textarea class="input" id="noteText" rows="2" placeholder="想对她说的话…（Ctrl + Enter 发送）"></textarea>
+          <button class="btn pri" id="noteBtn"><span data-i="send"></span>贴上去</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 日子与追番 ================= -->
+  <section class="page" id="p-life">
+    <div class="grid">
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="check"></span>一起打卡</h2><span class="sp"></span><span class="hint">到点没打卡她会来催，坚持了她会夸你</span></div>
+        <div class="card-b">
+          <div id="habits"></div>
+          <div class="form">
+            <input class="input" id="hName" placeholder="目标，如：早睡 / 背单词 / 运动">
+            <input class="input" id="hTime" type="time" style="flex:0 1 130px" aria-label="提醒时间（可不填）">
+            <button class="btn pri" id="hAdd">添加</button>
+          </div>
+        </div>
+      </div>
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="star"></span>愿望清单</h2><span class="sp"></span><span class="hint">想一起做的事，做到了打个勾</span></div>
+        <div class="card-b">
+          <div id="wishes"></div>
+          <div class="form">
+            <input class="input" id="wText" placeholder="比如：一起去看海 / 一起打通一款游戏" maxlength="60">
+            <button class="btn pri" id="wAdd">写进去</button>
+          </div>
+        </div>
+      </div>
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="lock"></span>时间胶囊</h2><span class="sp"></span><span class="hint">写给未来的你们，到那天才打开</span></div>
+        <div class="card-b">
+          <div id="capsules"></div>
+          <div class="form" style="flex-direction:column;align-items:stretch">
+            <textarea class="input" id="cText" rows="3" style="flex:none;resize:vertical" placeholder="想对那时候的你们说什么…（她也会偷偷写一封，同一天一起拆）" maxlength="2000"></textarea>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input class="input" id="cDay" type="date" style="flex:1 1 160px" aria-label="打开日期">
+              <button class="btn pri" id="cAdd">埋下</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="gift"></span>重要的日子</h2><span class="sp"></span><span class="hint">提前惦记，当天找你</span></div>
+        <div class="card-b">
+          <ul class="rows" id="dates"></ul>
+          <div class="form">
+            <input class="input" id="dDate" placeholder="11-20 或 2026-12-20" style="flex:0 1 170px">
+            <input class="input" id="dName" placeholder="名称，如：在一起纪念日">
+            <button class="btn pri" id="dAdd">添加</button>
+          </div>
+        </div>
+      </div>
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="tv"></span>一起追的番</h2><span class="sp"></span><span class="hint">更新后她会来找你</span></div>
+        <div class="card-b">
+          <ul class="rows" id="shows"></ul>
+          <div class="form">
+            <input class="input" id="sName" placeholder="番名">
+            <select class="input" id="sWd" style="flex:0 1 90px"></select>
+            <input class="input" id="sTime" type="time" value="23:00" style="flex:0 1 120px">
+            <button class="btn pri" id="sAdd">添加</button>
+          </div>
+        </div>
+      </div>
+      <div class="card c7">
+        <div class="card-h"><h2><span data-i="music"></span>一起听的歌</h2><span class="sp"></span><span class="hint">电脑上在放的歌、她推荐给你的歌</span></div>
+        <div class="card-b"><div class="chips" id="artists"></div><ul class="rows" id="music"></ul></div>
+      </div>
+      <div class="card c5">
+        <div class="card-h"><h2><span data-i="bell"></span>待提醒</h2></div>
+        <div class="card-b"><ul class="rows" id="rem"></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 设置 ================= -->
+  <section class="page" id="p-set">
+    <div class="grid">
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="pulse"></span>这一周她的表现</h2><span class="sp"></span><span class="hint">用你们真实的聊天算的，和上周比；每周一也会发给你一份</span></div>
+        <div class="card-b"><div class="report" id="report"></div></div>
+      </div>
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="heart"></span>人设</h2><span class="sp"></span><span class="hint">改完保存马上生效；换成别的角色会自动重启（每个角色有自己的记忆）</span></div>
+        <div class="card-b">
+          <div class="form" style="margin-top:0;flex-wrap:wrap">
+            <select class="input" id="pSel" style="flex:1 1 220px" aria-label="人设文件"></select>
+            <button class="btn" id="pEdit">编辑</button>
+            <button class="btn" id="pUse">换成这个</button>
+            <label class="ink2" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="pShare">沿用现在的记忆</label>
+            <button class="btn ghost" id="pNew">新建</button>
+          </div>
+          <div id="pWarn" class="pwarn"></div>
+          <div id="pEditor" hidden>
+            <div class="meta" id="pFile" style="margin:10px 0 6px"></div>
+            <textarea class="input mono" id="pText" rows="20" spellcheck="false" style="width:100%;resize:vertical;font-size:13px;line-height:1.7"></textarea>
+            <div class="form"><button class="btn" id="pCheck">检查</button><button class="btn pri" id="pSave">保存</button>
+              <span class="hint">写法见 persona/template.md 和 docs/PERSONA.md；保存前会自动备份旧版本</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="gear"></span>基本</h2></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:16px">
+          <div class="field"><label for="city">你所在的城市（天气）</label>
+            <div class="form" style="margin:0"><input class="input" id="city" placeholder="广州"><button class="btn" data-save="city">保存</button></div></div>
+          <div class="field"><label for="schedule">你的作息 / 课表（她会避开你忙的时候）</label>
+            <textarea class="input" id="schedule" rows="3" placeholder="工作日 9-18 上班，周二周四晚上有课，一般 1 点睡、10 点起"></textarea>
+            <div><button class="btn" data-save="schedule">保存作息</button></div></div>
+          <div class="field"><label>她从聊天里记下的固定安排</label>
+            <ul class="rows" id="routines"></ul></div>
+        </div>
+      </div>
+      <div class="card c12" id="llmCard" hidden>
+        <div class="card-h"><h2><span data-i="gear"></span>大模型</h2><span class="hint">全部是你自己加的：任何 OpenAI 兼容的接口（云上的、本机 Ollama / LM Studio……），填什么用什么</span></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:14px">
+          <div class="pwarn" id="llmEmpty" hidden>还没有模型：她现在没法说话。在下面加一个，勾上“聊天”。</div>
+          <ul class="rows" id="llmList"></ul>
+          <div class="field"><label>每种用途按顺序用哪些（前一个限流 / 出错自动换下一个）</label><dl class="kv" id="llmRoutes" style="margin:0"></dl></div>
+          <div class="field"><label for="llmUrl">加一个：接口地址和 Key</label>
+            <div class="form" style="margin:0;flex-wrap:wrap">
+              <input class="input" id="llmUrl" placeholder="接口地址，一般以 /v1 结尾" style="flex:2;min-width:220px" autocomplete="off">
+              <input class="input" id="llmKey" type="password" autocomplete="off" placeholder="API Key（本机模型可以不填）" style="flex:2;min-width:180px">
+              <button class="btn" id="llmProbe">测连通、列模型</button></div></div>
+          <div class="field" id="llmStep2" hidden><label for="llmModel">选模型</label>
+            <div class="form" style="margin:0;flex-wrap:wrap">
+              <input class="input" id="llmModel" list="llmModels" placeholder="输入可以筛选" style="flex:2;min-width:220px"><datalist id="llmModels"></datalist>
+              <button class="btn" id="llmTest">试一下</button></div>
+            <div class="small" id="llmTestOut"></div></div>
+          <div class="field" id="llmStep3" hidden><label>它用来干什么（可以多选）</label>
+            <div class="chips" id="llmRoles"></div>
+            <div class="form" style="margin:0;flex-wrap:wrap">
+              <select class="input" id="llmFirst" style="flex:none"><option value="1">排在最前面（当主力）</option><option value="0">排在最后（当备用）</option></select>
+              <input class="input" id="llmName" placeholder="名字（可以不填）" style="max-width:200px">
+              <button class="btn pri" id="llmSave">加上</button>
+              <button class="btn" id="llmRestart" hidden>重启生效</button></div></div>
+        </div>
+      </div>
+      <div class="card c12" id="updCard" hidden>
+        <div class="card-h"><h2><span data-i="gear"></span>软件更新</h2><span class="hint">每天自己看一次；更新前先备份，新版起不来会自动换回去</span></div>
+        <div class="card-b">
+          <dl class="kv"><dt>现在的版本</dt><dd id="updNow"></dd><dt>GitHub 上最新</dt><dd><span id="updLatest"></span> <span class="small muted" id="updWhen"></span></dd></dl>
+          <div class="small muted" id="updLast" style="margin-top:8px"></div>
+          <div class="form"><button class="btn" id="updCheck">现在检查</button><button class="btn pri" id="updApply" hidden>更新</button><button class="btn ghost" id="updBack" hidden>换回上一个版本</button></div>
+          <p class="small muted" style="margin:10px 0 0">国内连 GitHub 慢的话，可以在 Gitee 上导入这个仓库，然后在 config.yaml 里写 <code class="k">update: {gitee: 你的用户名/ai-life}</code>，会先从 Gitee 下载。</p>
+        </div>
+      </div>
+      <div class="card c12" id="skinCard" hidden>
+        <div class="card-h"><h2><span data-i="pet"></span>桌宠的样子</h2><span class="hint">Live2D，或者 codex-pets.net 上的像素宠物（会跑会跳、眼睛跟着鼠标）</span></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:16px">
+          <div class="skin-cur" id="skinCur"></div>
+          <div class="form" style="margin:0;flex-wrap:wrap;align-items:flex-end">
+            <div class="field" style="flex:1;min-width:200px"><label for="petAlert">她在桌面上有话说时</label>
+              <select class="input" id="petAlert" style="flex:none"><option value="bubble">直接冒气泡</option><option value="dot">亮个小点，鼠标经过再说</option><option value="none">不打扰（鼠标经过才说）</option></select></div>
+            <div class="field" style="flex:1;min-width:160px"><label for="petStay">气泡停留多久</label>
+              <select class="input" id="petStay" style="flex:none"><option value="3">3 秒</option><option value="8">8 秒</option><option value="30">30 秒</option><option value="120">2 分钟</option><option value="0">看到为止</option></select></div>
+          </div>
+          <p class="small muted" style="margin:-6px 0 0">有程序全屏（打游戏、看视频）时她会先藏起来，只攒着不说；你离开电脑时她安静下来，回来再告诉你。</p>
+          <div class="field" id="skinLocalWrap" hidden><label>下载过的</label><div class="skins" id="skinLocal"></div></div>
+          <div class="field"><label for="skinQ">从 codex-pets.net 挑一只</label>
+            <div class="form" style="margin:0;flex-wrap:wrap">
+              <input class="input" id="skinQ" placeholder="搜名字或者粘贴网址" style="flex:2;min-width:200px">
+              <select class="input" id="skinSort" style="max-width:130px"><option value="popular">最受欢迎</option><option value="new">最新</option></select>
+              <input class="input" id="skinRef" placeholder="或者粘贴宠物页面的地址" style="flex:2;min-width:200px">
+              <button class="btn" id="skinRefGo">用它</button></div></div>
+          <div class="skins" id="skinGallery"></div>
+          <div class="tools" style="justify-content:center"><button class="btn sm" id="skinPrev">上一页</button><span class="small muted" id="skinPage"></span><button class="btn sm" id="skinNext">下一页</button></div>
+          <p class="small muted" style="margin:0">宠物来自 <a href="https://codex-pets.net" target="_blank" rel="noopener">codex-pets.net</a>，版权归各自作者（很多是同人二创）。只会下载到你这台电脑的 data/pet/sprites/ 里，不会放进项目、也不会上传。</p>
+        </div>
+      </div>
+      <div class="card c6">
+        <div class="card-h"><h2><span data-i="eye"></span>感知</h2></div>
+        <div class="card-b"><dl class="kv" id="senseKv"></dl>
+          <p class="small muted" style="margin:14px 0 0">手机快捷指令（iPhone）或 MacroDroid（安卓）在闹钟关掉、到家、开始充电时，向上面的频道 POST 一句“起床 / 到家 / 充电”，她就会知道。具体步骤见 README。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot" id="foot">只在你自己的设备上运行</div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ============ 小工具 ============ */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad=n=>String(n).padStart(2,"0");
+const WD="一二三四五六日";
+const md=t=>{const d=new Date(t*1000);return `${d.getMonth()+1}月${d.getDate()}日`};
+const hm=t=>{const d=new Date(t*1000);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
+const ago=t=>{const s=Date.now()/1000-t; if(s<60)return"刚刚"; if(s<3600)return`${Math.floor(s/60)} 分钟前`; if(s<86400)return`${Math.floor(s/3600)} 小时前`; return md(t)};
+const ICONS={
+  home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/>',
+  brain:'<path d="M9 4a3 3 0 0 0-3 3v.2A3 3 0 0 0 4 10a3 3 0 0 0 1 2.2A3 3 0 0 0 6 17a3 3 0 0 0 3 3h0V4Z"/><path d="M15 4a3 3 0 0 1 3 3v.2A3 3 0 0 1 20 10a3 3 0 0 1-1 2.2A3 3 0 0 1 18 17a3 3 0 0 1-3 3h0V4Z"/><path d="M9 4h6"/>',
+  book:'<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13"/>',
+  chat:'<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4A8 8 0 1 1 20 12Z"/>',
+  calendar:'<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>',
+  heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/>',
+  cloud:'<path d="M7 18a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17 8.5 4.5 4.5 0 0 1 17 18H7Z"/>',
+  pulse:'<path d="M3 12h4l2-5 4 10 2-5h6"/>',
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  thread:'<path d="M5 6h14M5 12h10M5 18h6"/>',
+  gift:'<rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8S10.5 4 8.5 4 6 6.5 8 7.5 12 8 12 8Zm0 0s1.5-4 3.5-4S18 6.5 16 7.5 12 8 12 8Z"/>',
+  eye:'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>',
+  search:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+  quote:'<path d="M9 7H6a2 2 0 0 0-2 2v3h5v5H4M20 7h-3a2 2 0 0 0-2 2v3h5v5h-5"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6 8.5-6"/>',
+  image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  send:'<path d="M21 3 10 14M21 3l-7 18-4-7-7-4 18-7Z"/>',
+  tv:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="m8 2 4 4 4-4"/>',
+  bell:'<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  star:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5Z"/>',
+  lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+  target:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+  users:'<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18.5 20a6.5 6.5 0 0 0-3-5.5"/>',
+  refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+  laptop:'<rect x="4.5" y="5" width="15" height="10" rx="1.5"/><path d="M2.5 19h19"/>',
+  phone:'<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
+  spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  route:'<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>',
+  music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  pet:'<path d="M12 21a7 7 0 0 0 7-7c0-4-3-8-7-8s-7 4-7 8a7 7 0 0 0 7 7Z"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/><path d="M10 16c1.2.8 2.8.8 4 0"/>',
+  link:'<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+};
+const icon=(n,c="")=>`<svg class="i ${c}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]||""}</svg>`;
+function paintIcons(root=document){root.querySelectorAll("[data-i]").forEach(e=>{e.outerHTML=icon(e.dataset.i)})}
+
+/* ============ 连接（本机 / Telegram Mini App） ============ */
+let S=null, TOK="", MEMO="user", SHOW_TABLE=false;
+(function(){ /* /home 里“用浏览器打开”的链接带着 ?t=令牌：记下来，再从地址栏去掉 */
+  const u=new URL(location.href), t=u.searchParams.get("t");
+  if(t){TOK=t; try{sessionStorage.setItem("ailife_tok",t)}catch(e){} u.searchParams.delete("t"); try{history.replaceState(null,"",u.pathname+(u.search||"")+u.hash)}catch(e){}}
+  else{try{TOK=sessionStorage.getItem("ailife_tok")||""}catch(e){}}
+})();
+const LOCAL=["127.0.0.1","localhost","[::1]"].includes(location.hostname);
+const TG=(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)?Telegram.WebApp:null;
+if(TG){try{TG.ready();TG.expand();document.documentElement.dataset.theme=TG.colorScheme==="dark"?"dark":"light"}catch(e){}}
+const H=x=>Object.assign(TOK?{"X-Token":TOK}:{},x||{});
+function toast(t){const e=$("toast");e.textContent=t;e.classList.add("on");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("on"),2400)}
+async function post(u,b){return (await fetch(u.replace(/^\//,""),{method:"POST",headers:H({"Content-Type":"application/json"}),body:JSON.stringify(b)})).json()}
+async function auth(){ if(!TG)return;
+  const r=await fetch("api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({initData:TG.initData})});
+  if(r.ok)TOK=(await r.json()).token; else toast("只有主人能打开哦"); }
+
+/* ============ 大模型（只在本机网页）：全部是用户自己加的 ============ */
+let LLMP={}, LLMROLES={};
+async function loadLLM(){
+  try{const r=await fetch("api/llm",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("llmCard").hidden=false; LLMROLES=d.roles;
+    $("llmEmpty").hidden=!!d.models.length;
+    $("llmList").innerHTML=d.models.map(m=>`<li><div class="grow"><div class="title">${esc(m.name)}${m.pending?' <span class="muted small">（重启后生效）</span>':''}</div>
+      <div class="meta">${esc(m.model||"")} · ${esc(m.base_url||"")}</div>
+      <div class="chips" style="margin-top:4px">${m.roles.map(r=>`<span class="tag ok">${esc(d.roles[r])}</span>`).join("")||'<span class="muted small">没放进任何用途</span>'}</div></div>
+      ${m.editable?`<button class="btn ghost sm" data-llmdel="${esc(m.name)}">删掉</button>`:'<span class="muted small">写在 config.yaml</span>'}</li>`).join("");
+    $("llmRoutes").innerHTML=Object.entries(d.roles).map(([r,desc])=>{const own=d.routes[r]||[],eff=d.effective[r]||[];
+      return `<dt>${esc(desc)}</dt><dd>${eff.length?eff.map(esc).join(" → "):'<span class="muted">没配（不做）</span>'}${!own.length&&eff.length?' <span class="muted small">（跟着上一级）</span>':''}</dd>`}).join("");
+  }catch(e){}
+}
+function llmRoleChips(def){$("llmRoles").innerHTML=Object.entries(LLMROLES).map(([r,desc])=>`<label class="tag" style="cursor:pointer;height:28px"><input type="checkbox" value="${r}" ${def.includes(r)?"checked":""}> ${esc(desc)}</label>`).join("")}
+$("llmProbe")&&$("llmProbe").addEventListener("click",async()=>{
+  const b=$("llmProbe"); b.disabled=true; b.textContent="连接中…";
+  try{const r=await post("api/llm/models",{url:$("llmUrl").value,key:$("llmKey").value});
+    LLMP={url:r.url||$("llmUrl").value,via_proxy:r.via_proxy,models:r.models||[]}; if(r.url)$("llmUrl").value=r.url;
+    if(!r.ok){toast(r.error||"连不上");$("llmStep2").hidden=false;$("llmTestOut").textContent="读不到模型列表："+(r.error||"")+"。可以直接输入模型名再试";return}
+    $("llmModels").innerHTML=r.models.map(m=>`<option value="${esc(m.id)}">${{chat:"聊天",vision:"能看图",image:"画图",embed:"向量",other:"其它"}[m.kind]||""}</option>`).join("");
+    $("llmStep2").hidden=false; $("llmModel").value=r.models.length===1?r.models[0].id:""; $("llmModel").focus();
+    toast(`连上了，有 ${r.models.length} 个模型`+(r.via_proxy?"（走代理）":""));
+  }finally{b.disabled=false;b.textContent="测连通、列模型"}
+});
+$("llmModel")&&$("llmModel").addEventListener("change",()=>{const m=(LLMP.models||[]).find(x=>x.id===$("llmModel").value);llmRoleChips(m?m.roles:["chat"]);$("llmStep3").hidden=false});
+$("llmTest")&&$("llmTest").addEventListener("click",async()=>{
+  const b=$("llmTest"); b.disabled=true; b.textContent="试中…"; $("llmTestOut").textContent="";
+  try{const m=(LLMP.models||[]).find(x=>x.id===$("llmModel").value);
+    const r=await post("api/llm/test",{url:LLMP.url||$("llmUrl").value,key:$("llmKey").value,model:$("llmModel").value,kind:m?m.kind:"",via_proxy:LLMP.via_proxy});
+    LLMP.extra=r.extra||null;
+    $("llmTestOut").textContent=r.ok?`✅ ${r.secs} 秒：${r.text}`+(r.secs>15?"（有点慢，建议当备用）":""):`❌ ${r.text}`;
+    if($("llmStep3").hidden){llmRoleChips(m?m.roles:["chat"]);$("llmStep3").hidden=false}
+  }finally{b.disabled=false;b.textContent="试一下"}
+});
+$("llmSave")&&$("llmSave").addEventListener("click",async()=>{
+  const roles=[...document.querySelectorAll("#llmRoles input:checked")].map(x=>x.value);
+  const r=await post("api/llm/add",{url:LLMP.url||$("llmUrl").value,key:$("llmKey").value,model:$("llmModel").value,
+    name:$("llmName").value,roles,first:$("llmFirst").value==="1",via_proxy:LLMP.via_proxy,extra:LLMP.extra});
+  toast(r.message||r.error||"好了"); if(r.ok){$("llmKey").value="";$("llmRestart").hidden=false;loadLLM()}
+});
+$("llmRestart")&&$("llmRestart").addEventListener("click",async()=>{const r=await post("api/llm/restart",{});toast(r.message||r.error)});
+document.addEventListener("click",async e=>{const t=e.target.closest("[data-llmdel]");if(!t)return;
+  if(!confirm(`删掉 ${t.dataset.llmdel}？`))return; const r=await post("api/llm/remove",{name:t.dataset.llmdel});toast(r.message||r.error);loadLLM()});
+
+/* ============ 连接状态（只在本机网页） ============ */
+async function loadLinks(){
+  try{const r=await fetch("api/links",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("linksCard").hidden=false;
+    $("links").innerHTML=d.links.map(l=>`<div class="link ${l.state}" title="${esc(l.text)}"><i aria-label="${{green:"正常",blue:"等待",yellow:"要处理",gray:"没开"}[l.state]}"></i><div style="min-width:0"><div class="n">${esc(l.name)}</div><div class="t">${esc(l.text)}</div></div></div>`).join("");
+  }catch(e){}
+}
+
+/* ============ 软件更新（只在本机网页） ============ */
+async function loadUpdate(){
+  try{const r=await fetch("api/update",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("updCard").hidden=false;
+    const i=d.info||{}, last=d.last||{};
+    $("updNow").textContent=d.current;
+    $("updLatest").textContent=i.latest?(i.newer?`${i.latest}（有新版本）`:`${i.latest}（已经是最新）`):(i.error?"没查到："+i.error:"还没查过");
+    $("updWhen").textContent=i.ts?md(i.ts)+" "+new Date(i.ts*1000).toTimeString().slice(0,5):"";
+    $("updApply").hidden=!i.newer;
+    $("updBack").hidden=!(last.state==="applied"||last.state==="confirmed");
+    $("updLast").textContent=last.to?`上次更新：${last.from} → ${last.to}（${{applied:"刚换上，正在确认",confirmed:"成功",rolled_back:"已经换回去了"}[last.state]||last.state}）`:"";
+  }catch(e){}
+}
+$("updCheck")&&$("updCheck").addEventListener("click",async()=>{const b=$("updCheck");b.disabled=true;b.textContent="在看…";
+  try{const r=await post("api/update/check",{});toast(r.ok?(r.newer?`有新版本 ${r.latest}`:"已经是最新的了"):"没查到："+r.error);loadUpdate()}finally{b.disabled=false;b.textContent="现在检查"}});
+$("updApply")&&$("updApply").addEventListener("click",async()=>{if(!confirm("下载新版本并换上？会先备份现在的代码，你的配置、数据和人设都不会动。"))return;
+  const b=$("updApply");b.disabled=true;b.textContent="下载中…";const r=await post("api/update/apply",{});toast(r.message||r.error);
+  if(r.ok)setTimeout(()=>location.reload(),30000); else {b.disabled=false;b.textContent="更新"}});
+$("updBack")&&$("updBack").addEventListener("click",async()=>{if(!confirm("换回更新前的版本？"))return;const r=await post("api/update/rollback",{});toast(r.message||r.error);if(r.ok)setTimeout(()=>location.reload(),30000)});
+
+/* ============ 桌宠的样子（只在本机网页） ============ */
+let SK={page:1,total:1,q:"",cur:"",local:[]};
+const skinPic=pid=>`background-image:url('/pet/sprite/${encodeURIComponent(pid)}/spritesheet.webp');background-size:800% auto;background-position:0 0`;
+async function loadSkins(){
+  try{const r=await fetch("api/pet/sprites",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("skinCard").hidden=false;
+    SK.cur=d.current; SK.local=d.local;
+    try{const p=await (await fetch("api/pet/prefs",{headers:H()})).json(); $("petAlert").value=p.alert; $("petStay").value=String(p.stay)}catch(e){}
+    const cur=d.local.find(p=>p.id===d.current);
+    $("skinCur").innerHTML=cur?`<div class="pic" style="${skinPic(cur.id)}"></div><div class="grow" style="min-width:0"><div class="title">现在的样子：${esc(cur.name)}<span class="muted small">（只换样子，她还是${esc(S.name||"她")}）</span></div>
+        <div class="meta small muted">作者 ${esc(cur.author||"?")} · <a href="${esc(cur.source)}" target="_blank" rel="noopener">在 codex-pets.net 上看</a></div>
+        <p class="small ink2" style="margin:6px 0 10px;white-space:pre-wrap">${esc(cur.description).slice(0,300)}</p>
+        <button class="btn sm" data-skin="">换回 Live2D（${esc(d.live2d)}）</button></div>`
+      :`<div class="grow"><div class="title">现在的样子：Live2D（${esc(d.live2d)}）</div><div class="meta small muted">在下面挑一只像素宠物，桌宠马上换成它</div></div>`;
+    $("skinLocalWrap").hidden=!d.local.length;
+    $("skinLocal").innerHTML=d.local.map(p=>`<div class="skin ${p.id===d.current?"on":""}"><div class="pic" style="${skinPic(p.id)}"></div>
+      <div class="nm">${esc(p.name)}</div><div class="by">${esc(p.author||"")}</div>
+      ${p.id===d.current?'<button class="btn sm" disabled>正在用</button>':`<button class="btn sm pri" data-skin="${esc(p.id)}">用她</button>`}
+      <button class="btn ghost sm" data-skindel="${esc(p.id)}">删掉</button></div>`).join("");
+    if(!$("skinGallery").dataset.loaded)skinGallery();
+  }catch(e){}
+}
+async function skinGallery(){
+  $("skinGallery").dataset.loaded=1; $("skinGallery").innerHTML='<div class="empty" style="grid-column:1/-1">正在打开图库…</div>';
+  try{const r=await fetch(`api/pet/sprite/gallery?page=${SK.page}&sort=${$("skinSort").value}&q=${encodeURIComponent(SK.q)}`,{headers:H()}); const d=await r.json();
+    if(!d.ok){$("skinGallery").innerHTML=`<div class="empty" style="grid-column:1/-1">${esc(d.error)}</div>`;return}
+    SK.total=d.totalPages||1; $("skinPage").textContent=`${SK.page} / ${SK.total}（共 ${d.total} 只）`;
+    $("skinPrev").disabled=SK.page<=1; $("skinNext").disabled=SK.page>=SK.total;
+    $("skinGallery").innerHTML=d.items.map(p=>`<div class="skin ${p.id===SK.cur?"on":""}" title="${esc(p.description)}"><div class="pic" style="background-image:url('${esc(p.poster)}')"></div>
+      <div class="nm">${esc(p.name)}</div><div class="by">${esc(p.author)} · ♥ ${p.likes}</div>
+      ${p.id===SK.cur?'<button class="btn sm" disabled>正在用</button>':`<button class="btn sm ${SK.local.some(x=>x.id===p.id)?"pri":""}" data-skin="${esc(p.id)}">${SK.local.some(x=>x.id===p.id)?"用她":"下载并用她"}</button>`}</div>`).join("")
+      ||'<div class="empty" style="grid-column:1/-1">没找到</div>';
+  }catch(e){$("skinGallery").innerHTML='<div class="empty" style="grid-column:1/-1">图库打不开（网络？）</div>'}
+}
+async function useSkin(id,btn){ if(btn){btn.disabled=true;btn.textContent=id?"下载中…":"切换中…"}
+  const r=await post("api/pet/sprite/use",{id}); toast(r.message||r.error); if(r.ok){await loadSkins();skinGallery()} else if(btn){btn.disabled=false;btn.textContent="再试一次"} }
+document.addEventListener("click",async e=>{
+  const u=e.target.closest("[data-skin]"); if(u){useSkin(u.dataset.skin,u);return}
+  const d=e.target.closest("[data-skindel]"); if(d){ if(!confirm("从电脑上删掉这只宠物？"))return; await post("api/pet/sprite/remove",{id:d.dataset.skindel}); loadSkins(); }
+});
+["petAlert","petStay"].forEach(id=>$(id)&&$(id).addEventListener("change",async()=>{const r=await post("api/pet/prefs",{alert:$("petAlert").value,stay:+$("petStay").value});toast(r.ok?"改好了，桌宠马上照这个来":"没改成")}));
+let skT; $("skinQ")&&$("skinQ").addEventListener("input",()=>{clearTimeout(skT);skT=setTimeout(()=>{SK.q=$("skinQ").value.trim();SK.page=1;skinGallery()},400)});
+$("skinSort")&&$("skinSort").addEventListener("change",()=>{SK.page=1;skinGallery()});
+$("skinPrev")&&$("skinPrev").addEventListener("click",()=>{if(SK.page>1){SK.page--;skinGallery()}});
+$("skinNext")&&$("skinNext").addEventListener("click",()=>{if(SK.page<SK.total){SK.page++;skinGallery()}});
+$("skinRefGo")&&$("skinRefGo").addEventListener("click",()=>{const v=$("skinRef").value.trim();if(v)useSkin(v,$("skinRefGo"))});
+
+async function load(retry=true){
+  document.body.classList.add("skel-loading");
+  try{const r=await fetch("api/state",{headers:H()});
+    if(r.status===401){ if(retry&&TG){await auth(); if(TOK)return load(false)}
+      try{sessionStorage.removeItem("ailife_tok")}catch(e){}
+      $("sub").textContent="链接过期了：在 QQ 里给她发 /小屋（Telegram 里点“小屋”或发 /home）拿新链接；在运行她的电脑上直接打开 http://127.0.0.1:8765 就行";return }
+    S=await r.json()}catch(e){$("sub").textContent="连不上程序，确认 start.bat 还开着";return}
+  render(); loadLLM(); loadLinks(); loadUpdate(); if(S.pet&&!TG)loadSkins();
+}
+
+/* ============ 渲染 ============ */
+/* 她现在用的是 QQ 还是 Telegram（或者都有）：提示文字跟着变 */
+function apps(){const a=S&&S.apps||{};return {tg:a.tg!==false,qq:!!a.qq}}
+function dislikeHow(){const a=apps(),w=[];
+  if(a.qq)w.push("在 QQ 里引用她那句话、回一个 👎");
+  if(a.tg)w.push("在 Telegram 里给那条消息点个 👎");
+  return "觉得她哪句话不对味："+w.join("，或者")+"，她就记下不再这样说"}
+function render(){
+  const name=S.name||"她";
+  document.title=`${name}的小屋`; $("name").textContent=`${name}的小屋`;
+  const pc=S.sense&&S.sense.pc;
+  $("sub").textContent=`此刻${S.mood||"平静"} · 今天聊了 ${S.stats.today} 条`+(S.channel==="qq"?" · 在 QQ":S.apps&&S.apps.qq?" · 在 Telegram":"");
+  {const a=apps(),w=[]; if(a.qq)w.push("在 QQ 里给她发 /小屋"); if(a.tg)w.push("在 Telegram 里点“小屋”");
+   $("foot").textContent="只在你自己的设备上运行"+(w.length?" · 手机上"+w.join("或")+"打开":""); $("hintDislike").textContent=dislikeHow()}
+  const avatar=S.photos.length?S.photos[0].url:null;
+  for(const id of["ava","ava2"]){const a=$(id);
+    if(S.skin){const w=a.offsetWidth||40,cw=w/0.5;            // 桌宠换成像素宠物时，头像用她的样子（头部）
+      a.style.backgroundImage=`url("/pet/sprite/${encodeURIComponent(S.skin)}/spritesheet.webp")`;a.style.backgroundSize=`${cw*8}px auto`;
+      a.style.backgroundPosition=`${-(cw-w)/2}px ${-cw*0.1}px`;a.style.backgroundColor="var(--accent-soft)";a.textContent=""}
+    else if(avatar){a.style.backgroundImage=`url("${avatar}")`;a.style.backgroundSize="";a.style.backgroundPosition="";a.textContent=""}else{a.style.backgroundImage="";a.textContent=name.slice(-1)}}
+  const h=new Date().getHours();
+  const part=h<5?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
+  $("greet").textContent=`${part}，${name}在等你`;
+  $("mood").textContent=S.mood||"平静"; $("days").textContent=S.stats.days||1;
+  if(S.weather){$("wpill").hidden=false;$("wshort").textContent=S.weather.split("；")[0].replace(/^.*?：/,"")}
+  if(S.last_said){$("said").hidden=false;$("saidTxt").textContent=S.last_said}
+  $("kToday").textContent=S.stats.today; $("kTotal").textContent=S.stats.total.toLocaleString();
+  $("kMem").textContent=S.stats.memories; $("kPhoto").textContent=S.stats.photos_left;
+  const unseen=S.notes.filter(n=>n.author==="her"&&n.ts>(lastNoteSeen())).length;
+  $("nbadge").hidden=!unseen; $("nbadge").textContent=unseen;
+  renderEmotion(); renderLife(); renderThreads(); renderSoon(); renderSenseMini();
+  renderMems(); renderExprs(); renderDiaries(); renderLetters(); renderPhotos();
+  renderNotes(); renderDates(); renderShows(); renderRem(); renderSettings();
+  renderMind(); renderArcs(); renderProfile(); renderMusic(); renderHabits(); renderRecaps(); renderWishes(); renderCapsules(); renderHerWorld(); renderReport(); renderDisliked(); renderRoutines(); renderPersona(); adaptPronoun();
+  if(S.pet&&!TG){$("petBtn").hidden=false;$("petBtn").innerHTML=icon("pet")}
+  paintIcons();
+}
+
+/* ---------- 心情 ---------- */
+const EMO=[["joy","开心","--s1","0 低落 · 100 很开心"],["longing","想你","--s2","你越久不来越高"],["sulk","小委屈","--s3","被冷落时升高"],["tired","疲惫","--s4","跟着她的作息"]];
+function renderEmotion(){
+  const e=S.emotion||{};
+  $("meters").innerHTML=EMO.map(([k,n,c,note])=>`<div class="meter" style="--c:var(${c})">
+    <div class="top-l"><span class="name"><i></i>${n}</span><span class="val num">${Math.round(e[k]??0)}</span></div>
+    <div class="track" role="meter" aria-label="${n}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(e[k]??0)}"><span style="width:${Math.max(1,Math.min(100,e[k]??0))}%"></span></div>
+    <div class="note">${note}</div></div>`).join("");
+  drawChart();
+}
+function drawChart(){
+  const box=$("chart"), now=Date.now()/1000, t0=now-7*86400;
+  const pts=(S.emo_history||[]).filter(p=>p.ts>t0).sort((a,b)=>a.ts-b.ts);
+  box.querySelectorAll("svg,.empty").forEach(x=>x.remove());
+  if(pts.length<2){box.insertAdjacentHTML("afterbegin",'<div class="empty">多聊几天，这里会画出她最近 7 天的心情起伏</div>');$("legend").innerHTML="";return}
+  const W=Math.max(320,box.clientWidth||760), Hh=200, L=30, R=56, T=10, B=24;
+  const X=t=>L+(t-t0)/(now-t0)*(W-L-R), Y=v=>T+(1-v/100)*(Hh-T-B);
+  const cs=getComputedStyle(document.documentElement), col=v=>cs.getPropertyValue(v).trim();
+  let g="";
+  for(const v of[0,50,100])g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${L-8}" y="${Y(v)+4}" font-size="11" text-anchor="end" fill="var(--ink-3)">${v}</text>`;
+  for(let d=0;d<=7;d++){const t=t0+d*86400,dt=new Date(t*1000);g+=`<text x="${X(t)}" y="${Hh-6}" font-size="11" text-anchor="middle" fill="var(--ink-3)">${dt.getMonth()+1}/${dt.getDate()}</text>`}
+  let lines="", labels=[];
+  for(const [k,n,c] of EMO){
+    const ps=pts.filter(p=>p[k]!=null); if(ps.length<2)continue;
+    lines+=`<polyline points="${ps.map(p=>`${X(p.ts).toFixed(1)},${Y(p[k]).toFixed(1)}`).join(" ")}" fill="none" stroke="${col(c)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last=ps[ps.length-1]; labels.push({n,c,y:Y(last[k]),x:X(last.ts)});
+  }
+  labels.sort((a,b)=>a.y-b.y); for(let i=1;i<labels.length;i++)if(labels[i].y-labels[i-1].y<13)labels[i].y=labels[i-1].y+13;   // 端点标签防重叠
+  const lab=labels.map(l=>`<circle cx="${l.x}" cy="${l.y}" r="0"/><text x="${W-R+8}" y="${l.y+4}" font-size="11.5" fill="var(--ink-2)"><tspan fill="${col(l.c)}">━</tspan> ${l.n}</text>`).join("");
+  box.insertAdjacentHTML("afterbegin",`<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="最近 7 天心情曲线">${g}${lines}${lab}
+    <line id="xh" y1="${T}" y2="${Hh-B}" stroke="var(--ink-3)" stroke-dasharray="3 3" visibility="hidden"/>
+    <rect x="${L}" y="${T}" width="${W-L-R}" height="${Hh-T-B}" fill="transparent" id="hit"/></svg>`);
+  $("legend").innerHTML=EMO.map(([k,n,c])=>`<span style="--c:var(${c})"><i></i>${n}</span>`).join("")+`<span class="sp"></span><button class="linkbtn" id="tblBtn">${SHOW_TABLE?"收起数据表":"查看数据表"}</button>`;
+  $("tblBtn").onclick=()=>{SHOW_TABLE=!SHOW_TABLE;drawChart()};
+  const tbl=$("emoTable"); tbl.hidden=!SHOW_TABLE;
+  if(SHOW_TABLE)tbl.innerHTML=`<table class="dt"><thead><tr><th>时间</th>${EMO.map(e=>`<th>${e[1]}</th>`).join("")}</tr></thead><tbody>${pts.slice(-24).reverse().map(p=>`<tr><td>${md(p.ts)} ${hm(p.ts)}</td>${EMO.map(([k])=>`<td class="num">${p[k]==null?"–":Math.round(p[k])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const svg=box.querySelector("svg"), xh=svg.querySelector("#xh"), tip=$("tip");
+  const move=ev=>{const r=svg.getBoundingClientRect(), sx=(ev.clientX-r.left)*W/r.width;
+    let best=pts[0]; for(const p of pts)if(Math.abs(X(p.ts)-sx)<Math.abs(X(best.ts)-sx))best=p;
+    const x=X(best.ts); xh.setAttribute("x1",x); xh.setAttribute("x2",x); xh.setAttribute("visibility","visible");
+    tip.innerHTML=`<div class="t">${md(best.ts)} ${hm(best.ts)}</div>`+EMO.map(([k,n,c])=>`<div class="r"><span style="--c:var(${c})"><i></i>${n}</span><b class="num">${best[k]==null?"–":Math.round(best[k])}</b></div>`).join("");
+    tip.style.display="block"; const px=x*r.width/W; tip.style.left=Math.min(r.width-tip.offsetWidth,Math.max(0,px+12))+"px"; tip.style.top="8px";};
+  svg.querySelector("#hit").addEventListener("pointermove",move);
+  svg.querySelector("#hit").addEventListener("pointerleave",()=>{xh.setAttribute("visibility","hidden");tip.style.display="none"});
+}
+
+/* ---------- 今天 ---------- */
+function renderLife(){
+  const txt=(S.life_today||"").trim(), now=new Date(), cur=now.getHours()*60+now.getMinutes();
+  if(!txt){$("life").innerHTML='<li class="empty" style="display:block">今天的安排还没排好</li>'}
+  else{const items=txt.split(/(?<!\d)(?=\d{1,2}:\d{2}\s*[-–~至]\s*\d{1,2}:\d{2})|\n+/).map(s=>s.trim()).filter(Boolean);
+    $("life").innerHTML=items.map(s=>{const m=s.match(/^(\d{1,2}):(\d{2})\s*[-–~至]\s*(\d{1,2}):(\d{2})\s*(.*)$/s);
+      if(!m)return`<li><span class="t"></span><span>${esc(s)}</span></li>`;
+      const a=+m[1]*60+ +m[2], b=+m[3]*60+ +m[4], on=cur>=a&&cur<b;
+      return`<li class="${on?"now":""}"><span class="t">${pad(m[1])}:${m[2]}–${pad(m[3])}:${m[4]}</span><span>${esc(m[5])}${on?' <span class="tag">进行中</span>':""}</span></li>`}).join("")}
+  $("wx").innerHTML=icon("cloud")+`<span>${S.weather?esc(S.weather):"还没设置城市。在“设置”里填一下，她就会关心你那边的天气。"}</span>`;
+}
+function renderThreads(){
+  $("threads").innerHTML=S.threads.length?S.threads.map(t=>`<li><div class="grow"><div>${esc(t.topic)}</div><div class="meta">${ago(t.ts)}</div></div>
+    <button class="btn ghost sm" data-act="closeThread" data-id="${t.id}" title="已经聊完了">${icon("check")}聊完了</button></li>`).join("")
+    :'<li class="empty" style="display:block">暂时没有挂着的话题</li>';
+}
+function dateRow(d,del){
+  const k={birthday:"生日",anniversary:"每年",event:"一次"}[d.kind]||"";
+  const cd=d.days_left===null?`<div class="cd"><b>✓</b><span>已过</span></div>`:d.days_left===0?`<div class="cd today"><b>今天</b></div>`
+    :`<div class="cd ${d.days_left<=7?"soon":""}"><b class="num">${d.days_left}</b><span>天后</span></div>`;
+  return`<li>${cd}<div class="grow"><div class="title">${esc(d.name)}</div><div class="meta">${esc(d.date)} · ${k}</div></div>${del?`<button class="btn ghost sm danger" data-act="delDate" data-id="${d.id}" aria-label="删除">${icon("x")}</button>`:""}</li>`;
+}
+function renderSoon(){
+  const ds=S.dates.filter(d=>d.days_left!==null).slice(0,4);
+  $("soon").innerHTML=ds.length?ds.map(d=>dateRow(d,false)).join(""):'<li class="empty" style="display:block">聊天里提到的生日、纪念日、考试，她会自己记下来</li>';
+}
+function senseRows(){
+  const se=S.sense||{}, now=Date.now()/1000, pc=se.pc, ph=se.phone;
+  return[
+    [icon("laptop"),"电脑",(pc&&now-pc.ts<300?esc(pc.desc):'<span class="muted">没开或不在电脑前</span>')+(pc&&pc.today?`<div class="muted" style="font-size:12px;margin-top:2px">今天：${esc(pc.today)}</div>`:'')],
+    [icon("phone"),"手机",ph?`${esc(ph.event)} <span class="muted">· ${ago(ph.ts)}</span>`:'<span class="muted">还没收到过信号</span>'],
+  ];
+}
+function renderSenseMini(){$("senseMini").innerHTML=senseRows().map(([i,n,v])=>`<li><span class="ink2">${i}</span><div class="grow"><div class="meta" style="margin:0">${n}</div><div>${v}</div></div></li>`).join("")}
+
+/* ---------- 记忆 ---------- */
+function renderMems(){
+  const q=$("memq").value.trim();
+  for(const o of["user","us","self"])$("n-"+o).textContent=S.memories.filter(m=>(m.owner||"user")===o).length;
+  const list=S.memories.filter(m=>(m.owner||"user")===MEMO&&(!q||m.content.includes(q)));
+  $("memlist").innerHTML=list.length?list.map(m=>`<div class="mem"><div class="txt">${esc(m.content)}
+      <div class="foot"><span class="stars" role="group" aria-label="重要度">${[1,2,3,4,5].map(i=>`<button class="${i<=m.importance?"on":""}" data-act="imp" data-id="${m.id}" data-v="${i}" aria-label="重要度 ${i}">★</button>`).join("")}</span><span>${md(m.ts)}</span></div></div>
+      <button class="btn ghost sm danger" data-act="delMem" data-id="${m.id}" title="让她忘掉" aria-label="删除">${icon("x")}</button></div>`).join("")
+    :`<div class="empty" style="grid-column:1/-1">${q?"没有匹配的记忆":MEMO==="self"?"她在聊天里说过的关于自己的设定（室友、社团……）会记在这里，以后不会说前后矛盾的话":"多和她聊聊，她会慢慢记住"}</div>`;
+}
+function renderExprs(){
+  const st={approved:["在用","ok"],pending:["待定","wait"],rejected:["不用","no"]};
+  $("exprs").innerHTML=S.expressions.length?S.expressions.map(e=>`<li><div class="grow"><div class="title">“${esc(e.phrase)}” <span class="tag ${st[e.status][1]}">${st[e.status][0]}</span></div>
+      <div class="meta">${e.meaning?esc(e.meaning)+" · ":""}出现 ${e.seen} 次 · 她用过 ${e.uses} 次</div></div>
+      ${e.status!=="approved"?`<button class="btn sm" data-act="expr" data-id="${e.id}" data-v="approved">启用</button>`:""}
+      ${e.status!=="rejected"?`<button class="btn sm" data-act="expr" data-id="${e.id}" data-v="rejected">别用</button>`:""}
+      <button class="btn ghost sm danger" data-act="delExpr" data-id="${e.id}" aria-label="删除">${icon("x")}</button></li>`).join("")
+    :'<li class="empty" style="display:block">聊多了，她会学会你的口头禅和你们之间的梗</li>';
+}
+
+/* ---------- 日记 / 信 / 照片 ---------- */
+function renderDiaries(){
+  $("diaries").innerHTML=S.diaries.length?S.diaries.map(d=>{const dt=new Date(d.day+"T00:00:00");
+    return`<article class="paper"><div class="d"><b>${dt.getMonth()+1}月${dt.getDate()}日</b><span>星期${WD[(dt.getDay()+6)%7]}</span></div><p>${esc(d.content)}</p></article>`}).join("")
+    :'<div class="empty">第一篇日记会在今晚 0 点后写好</div>';
+}
+function renderLetters(){
+  $("letters").innerHTML=S.letters.length?S.letters.map(l=>`<article class="paper letter"><div class="d"><b>${esc(l.week)}</b><span>${md(l.ts)}</span></div><p>${esc(l.content)}</p></article>`).join("")
+    :'<div class="empty">每周日晚上她会写一封信给你</div>';
+}
+function renderPhotos(){
+  $("photos").innerHTML=S.photos.length?S.photos.map(p=>`<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${p.ts?md(p.ts)+" "+hm(p.ts):""}" style="background-image:url('${esc(p.url)}')"></a>`).join("")
+    :'<div class="empty" style="grid-column:1/-1">她发给你的照片会收进这里</div>';
+}
+
+/* ---------- 留言板 ---------- */
+const lastNoteSeen=()=>{try{return +localStorage.getItem("noteSeen")||0}catch(e){return 0}};
+function renderNotes(){
+  const el=$("notes"), atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<40;
+  el.innerHTML=S.notes.length?S.notes.map(n=>`<div class="msg ${n.author==="user"?"me":"her"}"><div class="b">${esc(n.content)}</div><div class="w">${n.author==="user"?"你":esc(S.name)} · ${md(n.ts)} ${hm(n.ts)}</div></div>`).join("")
+    :'<div class="empty">给她留句话吧，她看到会回</div>';
+  if(atBottom||!el._init){el.scrollTop=el.scrollHeight;el._init=1}
+}
+async function addNote(){const v=$("noteText").value.trim(); if(!v)return;
+  $("noteBtn").disabled=true; const r=await post("api/notes/add",{content:v}); $("noteBtn").disabled=false;
+  if(!r.ok)return toast(r.error); $("noteText").value=""; toast(r.message||"贴好了"); await load(); setTimeout(load,25000);}
+
+/* ---------- 她在想 / 故事线 / 了解 / 音乐 ---------- */
+function renderMind(){
+  const ts=S.thoughts||[];
+  if(!ts.length){$("mind").innerHTML='<div class="empty">她清醒的时候每隔几小时会一个人想想事情，想法会出现在这里</div>';return}
+  const t=ts[0];
+  $("mind").innerHTML=`<div class="thought">${esc(t.thought)}<div class="meta"><span>${ago(t.ts)}</span>${t.mood?`<span class="tag">${esc(t.mood)}</span>`:""}${t.contact?`<span class="tag ${t.sent?"ok":"wait"}">${t.sent?"然后来找你了":"想找你"}</span>`:""}</div></div>`
+   +(ts.length>1?`<ul class="thoughts-old">${ts.slice(1,4).map(x=>`<li><span class="t">${md(x.ts)} ${hm(x.ts)}</span>${esc(x.thought)}</li>`).join("")}</ul>`:"");
+}
+function arcHTML(a,compact){
+  const today=new Date(); const iso=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  const done=a.beats.length, total=a.total||done;
+  const dots=`<span class="prog" title="进展 ${done}/${total}">${Array.from({length:Math.min(total,10)},(_, i)=>`<i class="${i<done?"on":""}"></i>`).join("")}</span>`;
+  const beats=(compact?a.beats.slice(-3):a.beats).map(b=>`<li class="${b.day===iso?"today":""}"><span class="d">${b.day.slice(5)}</span>${esc(b.text)}</li>`).join("");
+  return `<div class="arc"><div class="h"><b>${esc(a.title)}</b><span class="tag ${a.status==="done"?"no":"ok"}">${a.status==="done"?"已结束":"进行中"}</span>${dots}</div>
+    ${beats?`<ul class="beats">${beats}</ul>`:'<div class="small muted">还没开始</div>'}</div>`;
+}
+function renderArcs(){
+  const arcs=S.arcs||[], act=arcs.filter(a=>a.status==="active");
+  $("arcsMini").innerHTML=act.length?act.map(a=>arcHTML(a,true)).join(""):'<div class="empty">她最近没什么特别的事。每天凌晨会安排她自己生活里的新故事</div>';
+  $("arcs").innerHTML=arcs.length?arcs.map(a=>arcHTML(a,false)).join(""):'<div class="empty">还没有故事线</div>';
+}
+function renderProfile(){
+  const p=S.profile;
+  $("profile").innerHTML=p?esc(p.content):'<span class="muted">她对你了解得还不够多。聊上一阵子后，她每周会整理一次对你的整体印象。</span>';
+  $("profTs").textContent=p?`${md(p.ts)} 整理 · 每周更新`:"每周整理一次";
+}
+function renderMusic(){
+  $("artists").innerHTML=(S.top_artists||[]).map(a=>`<span class="tag">${esc(a.artist)} · ${a.n}</span>`).join("");
+  const ms=S.music||[];
+  $("music").innerHTML=ms.length?ms.slice(0,12).map(m=>`<li class="song"><span class="art">${icon("music")}</span><div class="grow"><div class="title">${esc(m.title)}${m.source==="her"?' <span class="tag ok">她推荐的</span>':""}</div>
+      <div class="meta">${esc(m.artist||"")}${m.album?" · "+esc(m.album):""} · ${ago(m.ts)}</div></div>${m.url?`<a class="btn ghost sm" href="${esc(m.url)}" target="_blank" rel="noopener">${icon("link")}网易云</a>`:""}</li>`).join("")
+    :'<li class="empty" style="display:block">在电脑上放歌（网易云、QQ 音乐、Spotify 都行），她就知道你在听什么；也可以发 /song 让她推荐一首</li>';
+}
+
+/* ---------- 打卡 / 纪念册 ---------- */
+function renderHabits(){
+  const hs=S.habits||[];
+  $("habits").innerHTML=hs.length?hs.map(h=>`<div class="habit"><div class="grow"><div class="title">${esc(h.name)}${h.time?` <span class="tag">${esc(h.time)}</span>`:""}</div>
+      <div class="week" title="最近 7 天">${h.week.map(d=>`<i class="${d.done?"on":""}" title="${d.day.slice(5)}${d.done?" 已打卡":""}"></i>`).join("")}</div></div>
+      <div class="streak">连续 <b class="num">${h.streak}</b> 天<br>共 ${h.total} 次</div>
+      ${h.today?`<span class="tag ok">今天已打卡</span>`:`<button class="btn sm" data-act="checkin" data-id="${h.id}">${icon("check")}打卡</button>`}
+      <button class="btn ghost sm danger" data-act="delHabit" data-id="${h.id}" aria-label="删除">${icon("x")}</button></div>`).join("")
+    :'<div class="empty">还没有。加一个目标（早睡、背单词、运动…），她来监督你</div>';
+}
+function renderRecaps(){
+  const rs=S.recaps||[];
+  $("recaps").innerHTML=rs.length?rs.map(r=>{const st=r.stats||{};const chips=["聊天的天数","他发的消息","她发的消息","照片","新记住的事","打卡","完成的愿望"].filter(k=>st[k]).map(k=>`<span class="tag">${k} ${st[k]}</span>`).join(" ");
+    return `<article class="recap"><h3>${esc(r.month.replace("-","年"))}月</h3><div class="chips">${chips}</div><p>${esc(r.content)}</p></article>`}).join("")
+    :'<div class="empty">每月 1 号她会把上个月写成一页纪念册。想先看看这个月的，给她发 /recap 本月</div>';
+}
+
+/* ---------- 愿望清单 / 时间胶囊 / 她的世界 ---------- */
+function renderWishes(){
+  const ws=S.wishes||[]; const open=ws.filter(w=>!w.done), done=ws.filter(w=>w.done);
+  $("wishes").innerHTML=ws.length?[...open.map(w=>`<div class="wish"><span class="ink2">${icon("star")}</span><div class="grow"><div class="title">${esc(w.text)}</div><div class="by">${w.by==="her"?"她提的":"你写的"} · ${md(w.created)}</div></div>
+      <button class="btn sm" data-act="wishDone" data-id="${w.id}">${icon("check")}做到了</button>
+      <button class="btn ghost sm danger" data-act="delWish" data-id="${w.id}" aria-label="删除">${icon("x")}</button></div>`),
+    ...done.slice(0,8).map(w=>`<div class="wish done"><span class="ok">${icon("check")}</span><div class="grow"><div class="title">${esc(w.text)}</div><div class="by">${md(w.done)} 一起做到了${w.note?" · "+esc(w.note):""}</div></div></div>`)].join("")
+    :'<div class="empty">还没有。写下想和她一起做的事；聊天时说“以后想和你一起…”，她也会记进来</div>';
+}
+function renderCapsules(){
+  const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const cs=S.capsules||[]; const today=ymd(new Date());
+  if(!$("cDay").min){$("cDay").min=ymd(new Date(Date.now()+86400000))}
+  $("capsules").innerHTML=cs.length?cs.map(c=>{const who=c.by==="her"?"她写的":"你写的";
+    if(c.opened)return `<div class="cap open"><span class="seal">${icon("mail")}</span><div class="grow"><div class="title">${esc(c.open_day)} 打开 · ${who}<span class="ink3"> · ${esc(c.created)} 埋下</span></div><p>${esc(c.content)}</p>${c.reply?`<p class="reply">${esc(c.reply)}</p>`:""}</div></div>`;
+    const left=Math.max(0,Math.round((new Date(c.open_day+"T00:00")-new Date(today+"T00:00"))/86400000));
+    return `<div class="cap"><span class="seal">${icon("lock")}</span><div class="grow"><div class="title">${esc(c.open_day)} 打开 · ${who}</div>
+      <div class="meta">还有 ${left} 天 · ${esc(c.created)} 埋下</div>${c.content?`<p class="ink2">${esc(c.content)}</p>`:'<p class="ink3">（她写的，到那天才能看）</p>'}</div>
+      ${c.by==="user"?`<button class="btn ghost sm danger" data-act="delCap" data-id="${c.id}" aria-label="删除">${icon("x")}</button>`:""}</div>`}).join("")
+    :'<div class="empty">还没有。给一年后的你们写点什么吧</div>';
+}
+function renderHerWorld(){
+  const hw=S.her_world||{goals:[],people:[]};
+  $("goals").innerHTML=hw.goals.length?hw.goals.map(g=>`<div class="goal ${g.status==="done"?"done":""}"><div class="title">${esc(g.title)} <span class="tag ${g.status==="done"?"ok":""}">${g.status==="done"?"结束了":g.progress+"%"}</span></div>
+      <div class="meta">${esc(g.why||"")}${g.why?" · ":""}${esc(g.start.slice(5))} 开始，打算 ${esc(g.end.slice(5))} 前完成</div>
+      <div class="bar" role="progressbar" aria-valuenow="${g.progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${Math.max(2,g.progress)}%"></span></div>
+      ${g.outcome?`<div class="ink2" style="font-size:13px">${esc(g.outcome)}</div>`:""}
+      <ul class="steps">${g.steps.slice(-3).map(s=>`<li><span class="d">${esc(s.day.slice(5))}</span>${esc(s.text)}</li>`).join("")}</ul></div>`).join("")
+    :'<div class="empty">她还没定下自己的目标（启动后不久会想好）</div>';
+  $("people").innerHTML=hw.people.length?hw.people.map(p=>`<div class="person"><span class="n">${esc(p.name)}</span><span class="r">${esc(p.role)}${p.core?"":" · 后来出现"}</span>${p.desc?`<div class="d">${esc(p.desc)}</div>`:""}</div>`).join("")
+    :'<div class="empty">还没定好</div>';
+}
+
+/* ---------- 人设 ---------- */
+let P_EDIT=null;
+function renderPersona(){
+  const p=S.persona; if(!p)return;
+  if(document.activeElement!==$("pSel")){
+    const cur=$("pSel").value;
+    $("pSel").innerHTML=(p.list||[]).map(x=>`<option value="${esc(x.file)}" ${x.current?"selected":""}>${x.current?"▶ ":""}${esc(x.name)}（${esc(x.identity||"—")}）· ${esc(x.file.replace("persona/",""))}${x.memory?"":" · 新角色"}</option>`).join("");
+    if(cur&&[...$("pSel").options].some(o=>o.value===cur))$("pSel").value=cur;
+  }
+  if(!P_EDIT)$("pWarn").innerHTML=(p.warnings||[]).length?"现在的人设有几处建议：<br>· "+p.warnings.map(esc).join("<br>· "):"";
+}
+async function pLoad(file){
+  const r=await (await fetch(`api/persona/raw?file=${encodeURIComponent(file)}`,{headers:H()})).json();
+  P_EDIT=r.file; $("pFile").textContent=r.file; $("pText").value=r.text; $("pEditor").hidden=false; $("pWarn").innerHTML="";
+}
+function showWarn(w){ $("pWarn").innerHTML=(w&&w.length)?"· "+w.map(esc).join("<br>· "):'<span class="ok">没发现问题</span>' }
+$("pEdit").addEventListener("click",()=>pLoad($("pSel").value));
+$("pCheck").addEventListener("click",async()=>{const r=await post("api/persona/check",{text:$("pText").value}); showWarn(r.warnings)});
+$("pSave").addEventListener("click",async()=>{ if(!P_EDIT)return; const r=await post("api/persona/save",{file:P_EDIT,text:$("pText").value});
+  if(!r.ok)return toast(r.error); toast(r.message); showWarn(r.warnings); load()});
+$("pUse").addEventListener("click",async()=>{ const f=$("pSel").value; const cur=(S.persona.list||[]).find(x=>x.current);
+  if(cur&&cur.file===f)return toast("现在用的就是这个");
+  const share=$("pShare").checked;
+  if(!confirm(share?"换成这个角色，并沿用现在的记忆？程序会重启。":"换成这个角色？TA 会有自己的一份记忆（现在的记忆留着，换回来还在）。程序会重启。"))return;
+  const r=await post("api/persona/use",{file:f,share}); toast(r.message||r.error); if(r.ok)setTimeout(()=>location.reload(),15000)});
+$("pNew").addEventListener("click",async()=>{ const n=prompt("新人设的文件名（比如 xiaoman）"); if(!n)return;
+  const r=await post("api/persona/new",{name:n}); if(!r.ok)return toast(r.error); await load(); $("pSel").value=r.file; pLoad(r.file)});
+
+/* 角色是男生时，界面上的“她”换成“他”（只改按钮、标题、提示这些界面文字，不动聊天内容） */
+function adaptPronoun(){
+  const ta=(S.persona&&S.persona.ta)||"她"; if(ta==="她")return;
+  const sel="h2,.hint,.empty,label,button,.meta,.by,.k,.pill,.foot,.tabs,#greet,option,.note,[placeholder]";
+  document.querySelectorAll(sel).forEach(el=>{
+    if(el.closest("[data-uc]"))return;
+    if(el.placeholder&&el.placeholder.includes("她"))el.placeholder=el.placeholder.replaceAll("她",ta);
+    const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT); let n;
+    while((n=w.nextNode())){ if(n.nodeValue.includes("她"))n.nodeValue=n.nodeValue.replaceAll("她",ta) }
+  });
+  document.title=document.title.replaceAll("她",ta);
+}
+
+/* ---------- 周报 / 避开的说法 / 他的作息 ---------- */
+function renderReport(){
+  const ms=(S.report&&S.report.metrics)||[];
+  const hl=S.her_life||{}; if(hl.school){$("schoolPill").hidden=false;$("school").textContent=`${hl.school} · ${hl.age} 岁`}
+  $("report").innerHTML=ms.length?ms.map(m=>`<div class="rep"><div class="k">${esc(m.k)}</div><div class="v">${esc(m.v)}</div>
+      <div class="t ${m.trend.includes("变差")?"bad":m.trend.includes("好了")?"good":""}">${m.prev!=null?`上周 ${esc(m.prev)} ${esc(m.trend)}`:"&nbsp;"}</div></div>`).join("")
+    :'<div class="empty">这一周还没怎么聊天</div>';
+}
+function renderDisliked(){
+  const ds=S.disliked||[];
+  $("disliked").innerHTML=ds.length?ds.slice().reverse().map(d=>`<li><span class="ink3">${esc(d.emoji||"👎")}</span><div class="grow"><div>${esc(d.text)}</div><div class="meta">${md(d.ts)}</div></div>
+      <button class="btn ghost sm" data-act="undislike" data-v="${esc(d.text)}">不用避开了</button></li>`).join("")
+    :`<li class="empty" style="display:block">还没有。${esc(dislikeHow())}</li>`;
+}
+function renderRoutines(){
+  const rs=S.routines||[], lt=S.learned_times||{};
+  const learned=Object.entries(lt).map(([k,v])=>`<li><span class="ink3">${icon("phone")}</span><div class="grow">工作日一般 ${esc(v)} ${esc(k)}<div class="meta">从手机信号学到的</div></div></li>`).join("");
+  $("routines").innerHTML=(rs.map((r,i)=>`<li><span class="ink3">${icon("clock")}</span><div class="grow">${esc(r.when)} ${esc(r.what)}</div>
+      <button class="btn ghost sm danger" data-act="delRoutine" data-v="${esc(JSON.stringify([r.when,r.what]))}" aria-label="删除">${icon("x")}</button></li>`).join("")+learned)
+    ||'<li class="empty" style="display:block">还没有。聊天里说到“周三晚上有课”“工作日九点上班”，她会自己记下</li>';
+}
+
+/* ---------- 日子 / 追番 / 提醒 ---------- */
+function renderDates(){$("dates").innerHTML=S.dates.length?S.dates.map(d=>dateRow(d,true)).join(""):'<li class="empty" style="display:block">还没有。聊天里提到的生日、纪念日、考试，她会自己记下来</li>'}
+function renderShows(){
+  if(!$("sWd").options.length)$("sWd").innerHTML=[...WD].map((w,i)=>`<option value="${i}">周${w}</option>`).join("");
+  $("shows").innerHTML=S.shows.length?S.shows.map(s=>{const lt=s.latest&&s.latest[0];
+    return `<li><div class="cd"><b class="num">${s.episode}</b><span>${s.total?"/ "+s.total:"集"}</span></div><div class="grow"><div class="title">《${esc(s.name)}》${s.subject_id?` <a class="btn ghost sm" href="https://bgm.tv/subject/${s.subject_id}" target="_blank" rel="noopener" title="在 Bangumi 查看">${icon("link")}</a>`:""}</div>
+      <div class="meta">每周${WD[s.weekday]} ${s.time} 更新${lt&&lt.title?` · 最新：第${lt.ep}集「${esc(lt.title)}」`:""}</div></div>
+      <button class="btn ghost sm danger" data-act="delShow" data-id="${s.id}" aria-label="不追了">${icon("x")}</button></li>`}).join("")
+    :'<li class="empty" style="display:block">还没有。和她约好一起追的番会出现在这里</li>';
+}
+function renderRem(){$("rem").innerHTML=S.reminders.length?S.reminders.map(r=>`<li><span class="ink2">${icon("bell")}</span><div class="grow"><div>${esc(r.content)}</div><div class="meta">${md(r.due)} ${hm(r.due)}</div></div></li>`).join(""):'<li class="empty" style="display:block">没有待提醒的事</li>'}
+
+/* ---------- 设置 ---------- */
+function renderSettings(){
+  const st=S.settings, se=S.sense||{};
+  if(document.activeElement!==$("city"))$("city").value=st.city||"";
+  if(document.activeElement!==$("schedule"))$("schedule").value=st.schedule||"";
+  const rows=senseRows().map(([i,n,v])=>`<dt>${n}</dt><dd>${v}</dd>`).join("");
+  $("senseKv").innerHTML=rows
+    +(se.ntfy?`<dt>手机信号频道</dt><dd><code class="k">${esc(se.ntfy)}</code><button class="btn ghost sm copy" data-copy="${esc(se.ntfy)}">${icon("copy")}复制</button></dd>`:"")
+    +(se.hook?`<dt>备用地址</dt><dd><code class="k">${esc(se.hook)}起床</code></dd>`:"")
+    +`<dt>手机小屋</dt><dd>${se.public_url?`<code class="k">${esc(se.public_url)}</code>`:'<span class="muted">没开起来（看程序窗口里的提示）</span>'}</dd>`;
+}
+async function save(k){const v=$(k).value;
+  const r=await post("api/settings",{[k]:v}); toast(r.message||"已保存"); load()}
+
+/* ============ 事件 ============ */
+function go(p){if(!$("p-"+p))p="home";
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.p===p));
+  document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+p));
+  if(location.hash!=="#"+p)history.replaceState(null,"","#"+p);
+  if(p==="notes"&&S){try{localStorage.setItem("noteSeen",String(Date.now()/1000))}catch(e){} $("nbadge").hidden=true; const el=$("notes"); el.scrollTop=el.scrollHeight}
+  if(p==="home"&&S)drawChart(); window.scrollTo({top:0});}
+document.addEventListener("click",async ev=>{
+  const t=ev.target.closest("[data-p],[data-go],[data-act],[data-save],[data-copy],#memSeg button"); if(!t)return;
+  if(t.dataset.p)return go(t.dataset.p);
+  if(t.dataset.go)return go(t.dataset.go);
+  if(t.dataset.save)return save(t.dataset.save);
+  if(t.dataset.copy){try{await navigator.clipboard.writeText(t.dataset.copy);toast("已复制")}catch(e){toast("复制失败，手动选中复制吧")}return}
+  if(t.closest("#memSeg")){MEMO=t.dataset.o;document.querySelectorAll("#memSeg button").forEach(b=>b.classList.toggle("on",b===t));return renderMems()}
+  const id=+t.dataset.id, v=t.dataset.v;
+  switch(t.dataset.act){
+    case"closeThread": await post("api/threads/close",{id}); toast("好，这件事聊完了"); break;
+    case"imp": await post("api/memory/update",{id,importance:+v}); break;
+    case"delMem": if(!confirm("让她忘掉这件事？"))return; await post("api/memory/delete",{id}); break;
+    case"expr": await post("api/expr/set",{id,status:v}); break;
+    case"delExpr": await post("api/expr/delete",{id}); break;
+    case"delDate": if(!confirm("删掉这个日子？"))return; await post("api/dates/delete",{id}); break;
+    case"checkin": { const r=await post("api/habits/checkin",{id}); toast(r.message||r.error||"好"); break; }
+    case"delHabit": if(!confirm("删掉这个打卡目标？"))return; await post("api/habits/delete",{id}); break;
+    case"undislike": await post("api/disliked/delete",{text:v}); toast("好，她不再刻意避开了"); break;
+    case"delRoutine": { if(!confirm("删掉这条作息？"))return; const [when,what]=JSON.parse(v); const r=await post("api/routine/delete",{when,what}); if(!r.ok)toast(r.error); break; }
+    case"wishDone": { const note=prompt("做到了！想写一句感想吗？（可以不写）")??null; if(note===null)return; const r=await post("api/wishes/done",{id,note}); toast(r.message||r.error||"好"); break; }
+    case"delWish": if(!confirm("从清单里删掉？"))return; await post("api/wishes/delete",{id}); break;
+    case"delCap": if(!confirm("把这个时间胶囊挖出来扔掉？"))return; { const r=await post("api/capsules/delete",{id}); if(!r.ok)toast(r.error); } break;
+    case"delShow": if(!confirm("不追这部了？"))return; await post("api/shows/delete",{id}); break;
+    default: return;
+  }
+  load();
+});
+$("memq").addEventListener("input",renderMems);
+$("noteBtn").addEventListener("click",addNote);
+$("noteText").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();addNote()}});
+$("dAdd").addEventListener("click",async()=>{const r=await post("api/dates/add",{date:$("dDate").value,name:$("dName").value}); if(!r.ok)return toast(r.error); $("dDate").value=$("dName").value=""; toast("记下了"); load()});
+$("sAdd").addEventListener("click",async()=>{const r=await post("api/shows/add",{name:$("sName").value,weekday:$("sWd").value,time:$("sTime").value}); if(!r.ok)return toast(r.error); $("sName").value=""; toast("开追！"); load()});
+$("hAdd").addEventListener("click",async()=>{const r=await post("api/habits/add",{name:$("hName").value,time:$("hTime").value}); if(!r.ok)return toast(r.error); $("hName").value="";$("hTime").value=""; toast("加上了，她会监督你的"); load()});
+$("wAdd").addEventListener("click",async()=>{const r=await post("api/wishes/add",{text:$("wText").value}); if(!r.ok)return toast(r.error); $("wText").value=""; toast("写进去了"); load()});
+$("cAdd").addEventListener("click",async()=>{const b=$("cAdd"); if(b.disabled)return; b.disabled=true; try{const r=await post("api/capsules/add",{content:$("cText").value,day:$("cDay").value}); if(!r.ok)return toast(r.error); $("cText").value=""; $("cDay").value=""; toast(r.message||"埋好了"); load()}finally{b.disabled=false}});
+$("refresh").innerHTML=icon("refresh"); $("refresh").addEventListener("click",()=>{load();toast("已刷新")});
+let rz; window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(()=>S&&drawChart(),150)});
+paintIcons();
+go((location.hash||"#home").slice(1)||"home");
+/* 和 Telegram、桌宠里的她实时同步：页面开着时每 10 秒刷新一次，切回来时马上刷新 */
+let _loading=false;
+async function refresh(){ const ae=document.activeElement; if(_loading||document.hidden||(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)))return; _loading=true; try{await load()}finally{_loading=false} }
+(async()=>{await auth(); await load(); setInterval(refresh,10000)})();
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden)refresh() });
+window.addEventListener("focus",refresh);
+</script>
+</body>
+</html>

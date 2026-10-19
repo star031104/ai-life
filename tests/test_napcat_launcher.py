@@ -4,7 +4,7 @@ import json
 import os
 import time
 
-import ailife.napcat_launcher as L
+import ailife.channels.qq.napcat_launcher as L
 
 
 REAL_BAT = '@echo off\r\nsetlocal\r\ncd /d "%~dp0" || exit /b 1\r\n"%~dp0node.exe" "%~dp0index.js" %*\r\nexit /b %errorlevel%\r\n'

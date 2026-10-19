@@ -41,7 +41,7 @@ def _napcat(tmp_path, port=3001, fmt="array"):
 
 
 def test_find_and_read(tmp_path):
-    from ailife.qq_setup import config_dir_from, find_napcat_configs, read_onebot
+    from ailife.channels.qq.setup import config_dir_from, find_napcat_configs, read_onebot
     d = _napcat(tmp_path)
     assert find_napcat_configs([tmp_path]) == [d]
     assert config_dir_from(f'"{tmp_path / "NapCat.Shell.Windows.Node"}"') == d      # 拖进窗口时带引号
@@ -51,7 +51,7 @@ def test_find_and_read(tmp_path):
 
 
 def test_set_qq_block_and_disable_tg():
-    from ailife.qq_setup import disable_tg, set_qq_block
+    from ailife.channels.qq.setup import disable_tg, set_qq_block
     q = {"enabled": True, "ws_url": "ws://127.0.0.1:3001", "access_token": "${QQ_ACCESS_TOKEN}", "owner_id": 2233445566,
          "groups": [123456789], "aliases": ["小希"]}
     out = set_qq_block(USER_CFG, q)
@@ -67,8 +67,8 @@ def test_set_qq_block_and_disable_tg():
 
 
 def test_full_setup_flow(tmp_path, monkeypatch):
-    import ailife.config as C
-    import ailife.qq_setup as S
+    import ailife.core.config as C
+    import ailife.channels.qq.setup as S
     root = tmp_path / "ai-life"
     root.mkdir()
     shutil.copy(C.ROOT / "config.example.yaml", root / "config.example.yaml")

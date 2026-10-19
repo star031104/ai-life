@@ -17,78 +17,37 @@ proxy: "http://127.0.0.1:7890"
 persona_file: persona/linxi.md       # 自带的人设：linxi.md（林汐，温柔的插画编辑）、shenyan.md（沈言，男友向）
                                      # 自己写：复制 persona/template.md；或者 python run.py persona new / persona import 角色卡.png
 
-# ---------------- API Key（只填一次，下面各处按名字引用） ----------------
-# 直接填就行：第一次启动时程序会把所有密钥（包括下面的 bot_token）自动挪进同目录的 .env 文件，
-# 这里改成 "${ZHIPU_KEY}" 这样的引用。以后要改 key，改 .env 里那一行即可。
-keys:
-  zhipu: ""          # 智谱 open.bigmodel.cn → API Keys
-  siliconflow: ""    # 硅基流动 cloud.siliconflow.cn → API 密钥（备用聊天、记忆检索）
-  groq: ""           # console.groq.com → API Keys（国内需要代理）
-  modelscope: ""     # modelscope.cn → 访问令牌（需绑定阿里云账号）
-
 # ---------------- 大模型 ----------------
-# profiles：每个可用的接口；routes：每种用途按顺序尝试，前一个限流/出错自动换下一个
-# 换了模型后可以跑  python run.py bench  测一下每个接口的速度
+# 程序里不内置任何接口：在电脑上打开小屋“设置 → 大模型”加（或者 python run.py llm / scripts\llm.bat），
+# 填接口地址和 Key → 测连通、列出模型 → 选一个 → 试一下 → 勾上它干什么。加的写进 config.llm.yaml，Key 进 .env。
+# 任何 OpenAI 兼容的接口都行：云上的大模型服务、本机 Ollama（http://127.0.0.1:11434/v1）、LM Studio、vLLM……
+#
+# 也可以在这里手写：
+#   profiles:
+#     my_chat:
+#       base_url: https://你的接口地址/v1
+#       api_key: "${MY_CHAT_KEY}"        # Key 放 .env：MY_CHAT_KEY=sk-...
+#       model: 模型名
+#       extra_body: {}                   # 可选：比如推理模型关掉思考
+#       use_proxy: false                 # 可选：这个接口要走上面的代理
+#   routes:
+#     chat: [my_chat]
+#
+# 用途（routes）：chat 聊天、主动消息 ★ 至少要有一个
+#                 helper 其它小活    memory 整理记忆    night 日记 / 日程 / 来信（这三个不配就用上一级，最后用 chat）
+#                 vision 看你发的图  image 画她的照片  embed 记忆检索的向量（这三个不配就不做）
 llm:
   temperature: 0.9
   max_tokens: 800
-  background_yield_seconds: 25   # 聊天优先：你刚聊完的这么多秒内，后台的整理记忆、写日记先等一等，免得抢免费额度被限流
-  profiles:
-    glm_flash:                     # 智谱 GLM-4.7-Flash：免费，中文角色扮演好，主力
-      base_url: https://open.bigmodel.cn/api/paas/v4
-      key: zhipu
-      model: glm-4.7-flash
-      extra_body: {thinking: {type: disabled}}
-    glm45_flash:                   # 智谱 GLM-4.5-Flash：免费，4.7 挤不进去时的第二选择（比 8B 小模型靠谱）
-      base_url: https://open.bigmodel.cn/api/paas/v4
-      key: zhipu
-      model: glm-4.5-flash
-      extra_body: {thinking: {type: disabled}}
-    groq_qwen:                     # Groq Qwen3.8-27B：极快，但每分钟 8K token，适合兜底
-      base_url: https://api.groq.com/openai/v1
-      key: groq
-      model: qwen/qwen3.8-27b
-      extra_body: {reasoning_effort: none}
-      use_proxy: true
-    sf_qwen3_8b:                   # 硅基流动 Qwen3-8B：免费、限额宽，兜底
-      base_url: https://api.siliconflow.cn/v1
-      key: siliconflow
-      model: Qwen/Qwen3-8B
-      extra_body: {enable_thinking: false}
-    sf_glm4_9b:                    # 硅基流动 GLM-4-9B：免费，用来做记忆整理兜底
-      base_url: https://api.siliconflow.cn/v1
-      key: siliconflow
-      model: THUDM/GLM-4-9B-0414
-    ms_big:                        # 魔搭大模型：每天 250 魔力，只用在“整理记忆/写日记”这种少量高质量的活
-      base_url: https://api-inference.modelscope.cn/v1
-      key: modelscope
-      model: deepseek-ai/DeepSeek-V4-Pro      # 以魔搭页面上实际可用的模型 ID 为准
-    zhipu_vision:                  # 智谱 GLM-4.6V-Flash：免费看图
-      base_url: https://open.bigmodel.cn/api/paas/v4
-      key: zhipu
-      model: glm-4.6v-flash
-      extra_body: {thinking: {type: disabled}}
-    # local_qwen:                  # 本地 Ollama（4060 8G 建议 qwen3:4b / qwen3:8b 的 4bit）
-    #   base_url: http://127.0.0.1:11434/v1
-    #   api_key: ollama
-    #   model: qwen3:8b
-    #   extra_body: {think: false}
-  routes:
-    chat:   [glm_flash, glm45_flash, groq_qwen, sf_qwen3_8b]     # 聊天、主动消息
-    helper: [ms_big, sf_glm4_9b, glm_flash]         # 其它小活（兜底）
-    # memory: [glm_flash, glm45_flash, sf_glm4_9b]   # 整理记忆（要准，用强一点的；不写就用 helper）
-    # night:  [glm_flash, glm45_flash, sf_glm4_9b]   # 每晚写日记、排她的日程、周日写信（不写就用 helper）
-    vision: [zhipu_vision]                          # 看你发的图（留空 [] 就不看图）
+  background_yield_seconds: 25   # 聊天优先：你刚聊完的这么多秒内，后台的整理记忆、写日记先等一等
+  profiles: {}
+  routes: {}
 
 # ---------------- 记忆检索 ----------------
-# 关键词 + 语义向量混合检索。向量用硅基流动的 BAAI/bge-m3（目前免费，以官网为准）；
-# 接口不可用时自动只用关键词，不影响聊天。
+# 关键词 + 语义向量混合检索。向量用 routes.embed 里的模型；没配或者接口不可用时只用关键词，不影响聊天。
 memory:
   embed:
     enabled: true
-    key: siliconflow
-    base_url: https://api.siliconflow.cn/v1
-    model: BAAI/bge-m3
 
 # ---------------- Telegram 聊天 Bot ----------------
 telegram:
@@ -153,14 +112,12 @@ world:
   city: ""                    # 你所在的城市（也可以在 TG 里发 /city 上海）；天气用 Open-Meteo/wttr.in，免费
   schedule: ""                # 你的作息/课表（也可以发 /schedule …）
 
-# ---------------- 她的照片（智谱 cogview-3-flash，免费） ----------------
+# ---------------- 她的照片 ----------------
+# 用 routes.image 里的画图模型（OpenAI 兼容的 /images/generations）；没配就不发照片。长相写在人设的 look 里。
 photo:
   enabled: true
-  key: zhipu
-  model: cogview-3-flash
   size: 768x1344              # 竖屏手机照片
   max_per_day: 3              # 每天最多发几张
-  look: ""                    # 她的长相描述，留空用默认（黑长发、呆毛、深棕色眼睛、娇小）
 
 # ---------------- 小屋网页（电脑上） ----------------
 web:
@@ -206,8 +163,8 @@ pet:
   on_top: true                # 总在最前
   width: 320
   height: 480
-  preset: rice                # 自带的形象：rice（金发小魔法师，默认）/ haru（原来那个）
-  sprite: ""                  # 换成 codex-pets.net 上的像素宠物：写它的 id（比如 claude-chan），第一次用时自动下载；
+  preset: haru                # 自带的形象（Live2D 官方示例模型）：haru（默认）/ rice
+  sprite: ""                  # 换成 codex-pets.net 上的像素宠物：写它的 id 或网址，第一次用时自动下载；
                               # 更方便的是在小屋“设置 → 桌宠的样子”里挑。留空＝用 Live2D
   sprite_scale: 1.0           # 像素宠物的大小
   walk: true                  # 像素宠物闲着时会在屏幕上走几步

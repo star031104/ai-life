@@ -102,7 +102,7 @@ echo [4/4] Setup wizard ...
 if not exist config.yaml (
   python run.py setup
 ) else (
-  echo     config.yaml already exists ^(run setup.bat to redo it, qq_setup.bat for QQ^).
+  echo     config.yaml already exists ^(run setup.bat to redo it, scripts\qq_setup.bat for QQ^).
 )
 
 echo.

@@ -2,11 +2,10 @@
 import asyncio
 from datetime import datetime
 
-from test_flow import env  # noqa: F401
 
 
 def test_recognize_levels():
-    from ailife.sense import recognize
+    from ailife.sense.sensors import recognize
     a = recognize(r"C:\Games\Genshin Impact\YuanShen.exe", "原神")
     assert (a.kind, a.app) == ("打游戏", "原神") and a.text() == "在玩《原神》"
     edge = "【某视频】好看的视频_哔哩哔哩_bilibili - 个人 - Microsoft​ Edge"
@@ -23,8 +22,8 @@ def test_recognize_levels():
 
 def test_pc_sense_day(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife import sense
-    from ailife.sense import PCSense
+    from ailife.sense import sensors as sense
+    from ailife.sense.sensors import PCSense
     cfg["sense"]["pc"]["detail"] = "content"
     pc = PCSense(cfg, brain.db)
     clock = [1_800_000_000.0]
@@ -70,7 +69,7 @@ def test_pc_sense_day(env, monkeypatch):
 
 def test_late_night_topic(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife.sense import Activity, PCSense
+    from ailife.sense.sensors import Activity, PCSense
     pc = PCSense(cfg, brain.db)
     monkeypatch.setattr(pc, "_now", lambda: datetime(2026, 10, 18, 1, 30, tzinfo=cfg.tz))
     pc._on_going(Activity("打游戏", "原神"), 20, 3)
@@ -81,7 +80,7 @@ def test_late_night_topic(env, monkeypatch):
 
 def test_pet_finds_model(env):
     cfg, brain, bot, fake = env
-    from ailife.pet import PetAssets
+    from ailife.pet.server import PetAssets
     d = cfg.root / "data" / "pet" / "model" / "我的角色"
     d.mkdir(parents=True, exist_ok=True)
     (d / "char.model3.json").write_text("{}", encoding="utf-8")

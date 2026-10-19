@@ -1,16 +1,16 @@
 # 功能详解
 
-> 这里是各个功能的详细说明（按加入的先后顺序）。快速上手看 [README](../README.md)，写人设看 [PERSONA.md](../PERSONA.md)。
+> 这里是各个功能的详细说明（按加入的先后顺序）。快速上手看 [README](../README.md)，写人设看 [PERSONA.md](PERSONA.md)。
 
 ## 换人设、主动频率
 
-- **人设**：人设的写法、字段和工具都在 [PERSONA.md](../PERSONA.md)。自带的有 `persona/linxi.md`、`persona/shenyan.md`，模板是 `persona/template.md`。顶部 `name` 是她的名字，`call_name` 是她平时怎么叫你；下面写她是谁、性格、说话方式。写得越具体越像真人。可以写好几个文件，用 `persona_file` 切换。
+- **人设**：人设的写法、字段和工具都在 [PERSONA.md](PERSONA.md)。自带的有 `persona/linxi.md`、`persona/shenyan.md`，模板是 `persona/template.md`。顶部 `name` 是她的名字，`call_name` 是她平时怎么叫你；下面写她是谁、性格、说话方式。写得越具体越像真人。可以写好几个文件，用 `persona_file` 切换。
 - **主动频率**：`proactive` 部分。`base_per_day` 每天大概主动几次，`longing_per_hour` 你越久不来她越想你，`max_unanswered` 连续几次不回她就不再打扰。
-- **本地模型**：笔记本 4060（8G 显存）跑 8B 的 4bit 模型可以，效果不如免费 API。真要本地，装 [Ollama](https://ollama.com) 后取消 `config.example.yaml` 里 `local_qwen` 的注释，加进 routes 当最后兜底。
+- **本地模型**：8G 显存的笔记本跑 8B 的 4bit 模型可以，效果一般不如云上的大模型。装 [Ollama](https://ollama.com) 后，在小屋“设置 → 大模型”里加 `http://127.0.0.1:11434/v1`，放在最后当兜底。
 
 ## 记忆、情绪、感知、小屋、小游戏
 
-**记忆**：不用管，自动的。整理记忆用 `llm.routes.memory`，写日记 / 排日程 / 写信用 `llm.routes.night`。向量检索用硅基流动的 `BAAI/bge-m3`（`memory.embed`），用不了时自动只用关键词。小屋网页的“她的记忆”里分了三栏：关于你、你们俩、她自己的设定，都可以改星级或删掉。
+**记忆**：不用管，自动的。整理记忆用 `llm.routes.memory`，写日记 / 排日程 / 写信用 `llm.routes.night`。向量检索用你放进“记忆检索”用途（`llm.routes.embed`）的向量模型，没配或者用不了时自动只用关键词。小屋网页的“她的记忆”里分了三栏：关于你、你们俩、她自己的设定，都可以改星级或删掉。
 
 **手机上的小屋**：程序启动后会自动开一个免费的临时隧道（第一次会下载 cloudflared，约 60MB），然后在 bot 聊天框左边放一个“小屋”按钮。只有你本人从 Telegram 里打开才能看（每次都校验 Telegram 签名）。临时隧道每次启动地址会变，程序会自动更新按钮。网络不通开不起来也不影响聊天；有自己的固定 https 地址可以填 `miniapp.url`。
 
@@ -66,12 +66,12 @@
 
 **周报**：`/quality` 或每周一上午，用你们真实的聊天统计这一周她的表现（重复率、出戏、回复长度、主动找你几次、你回了多少、你点了几次 👎、大模型限流几次），和上周比。小屋“设置”页也有。
 
-**离线自检**：双击 `selftest.bat`（或 `python run.py selftest`），不联网、不碰你的数据，用假的大模型把核心流程跑一遍，并检查配置、依赖、你的数据库（用副本）能不能被新版本打开。每次更新代码后跑一下，全是 ✅ 就可以放心重启。
+**离线自检**：双击 `scripts\selftest.bat`（或 `python run.py selftest`），不联网、不碰你的数据，用假的大模型把核心流程跑一遍，并检查配置、依赖、你的数据库（用副本）能不能被新版本打开。每次更新代码后跑一下，全是 ✅ 就可以放心重启。
 
 ## 让她一直在
 
 她跑在你的电脑上，只在程序运行时“活着”；手机上用 Telegram 聊天、点“小屋”按钮看她。
-- 双击 `start.bat` 启动（程序意外退出会自动重启）；开机自启：双击 `autostart_on.bat`（或 `/autostart 开`），关掉用 `autostart_off.bat`
+- 双击 `start.bat` 启动（程序意外退出会自动重启）；开机自启：托盘图标右键“开机自动启动”（或 `/autostart 开`）
 - 想让她尽量一直在线：“电源设置”里把插电时的“睡眠”改成“从不”，合上盖子时“不采取任何操作”
 - 电脑关机、睡眠时她不在线（`away` 部分可调）：
   - **道别**：按 Ctrl+C、点 start.bat 窗口的 ×、关机时，她发一句“我先去上课啦 / 先睡了晚安”。每天提前写好两句，关的时候不用等大模型；3 小时内只说一次，半夜你早就不在时不吵你。程序出错自动重启时不会道别。
@@ -86,45 +86,18 @@
 
 ## 文件说明
 
+代码在哪、怎么分层、加功能改哪里，见 [ARCHITECTURE.md](ARCHITECTURE.md)。你自己的东西：
+
 ```
-run.py                 启动入口（run / login / console）
-config.example.yaml    配置模板
-persona/*.md           人设
-ailife/brain.py        拼提示词、时间感、心情、生成回复
-ailife/memory.py       记忆整理（先查再合并）、日记、她自己的日程、每周来信
-ailife/retrieval.py    关键词 + 向量混合检索
-ailife/emotion.py      情绪数值（好感度恒满）
-ailife/sense.py        电脑 / 手机感知
-ailife/games.py        小游戏
-ailife/tunnel.py       手机小屋的隧道
-ailife/web.py          小屋网页（本机 + Mini App 入口）
-ailife/bot.py          Telegram 聊天（分条、贴纸、引用）
-ailife/proactive.py    主动消息、早安晚安、提醒、每日整理
-ailife/quality.py      不重复自己（生成前提醒、生成后检查和重写）
-ailife/together.py     一起打卡、晨间小报、情绪关怀、每月纪念册
-ailife/health.py       日志、出错通知、/diag 自检、开机自启、异地备份
-ailife/evaluate.py     人设评测（python run.py eval）
-ailife/examples.py     按话题挑人设里的对话示例
-ailife/herworld.py     她身边的人、她的长期目标
-ailife/moments.py      愿望清单、时间胶囊、睡前
-ailife/secrets.py      密钥放 .env、日志打码
-ailife/deps.py         版本和依赖自检
-ailife/move.py         备份 / 换电脑（打包、导入）
-ailife/bot_media.py    动图、视频、文件、位置、骰子
-ailife/feedback.py     表情回应分正面 / 负面
-ailife/rhythm.py       她的大学日历、年龄生日；你的作息
-ailife/report.py       真实聊天的质量周报
-ailife/selftest.py     离线自检（selftest.bat）
-ailife/links.py        读他分享的链接（B站、YouTube、网页）
-ailife/persona.py      人设文件的格式（字段、对话示例、代词）
-ailife/personas.py     人设管理：每个角色自己的记忆、角色卡导入、问答生成
-ailife/cli.py          配置向导（run.py setup）、人设命令（run.py persona …）
-ailife/bot_*.py        Telegram 命令、发送、第六批命令（从 bot.py 拆出来的）
+config.yaml            你的设置（只写和默认值不一样的）
+config.llm.yaml        你加的大模型（小屋 / python run.py llm 写的）
 .env                   密钥（别发给别人）
+persona/               人设
 data/ailife.db         她的全部记忆（SQLite，删掉就是重新认识）
-data/backup/           每天自动备份一份数据库，保留 7 天
+data/backup/           每天自动备份一份数据库，保留 7 天；更新前的代码备份也在这里
 data/logs/             运行日志
 data/eval/             人设评测报告
+data/pet/              桌宠的模型、下载的像素宠物
 ```
 
 所有聊天记录和记忆都只存在你电脑上的 `data/` 文件夹里；只有发给大模型的那部分内容会经过对应的服务商。

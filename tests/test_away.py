@@ -3,7 +3,6 @@ import asyncio
 import time
 from datetime import datetime, timedelta
 
-from test_flow import env  # noqa: F401
 
 
 def _back(brain, hours, plan=None):
@@ -44,7 +43,7 @@ def test_reply_mentions_away_once(env):
     assert brain.away.current()["used"]
     asyncio.run(brain.reply())                               # 只说一次
     assert "没看手机" not in brain.llm.calls[-1][-1]["content"]
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     sched = Scheduler(cfg, brain, bot)
     rec = brain.away.current()
     rec["to"] -= 600
@@ -56,7 +55,7 @@ def test_reply_mentions_away_once(env):
 def test_catch_up_proactive_with_missed_reminder(env):
     cfg, brain, bot, fake = env
     cfg["proactive"]["quiet_hours"] = ""
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     sched = Scheduler(cfg, brain, bot)
     _back(brain, 10, plan="00:00-23:59 社团活动")
     brain.db.add_reminder(time.time() - 8 * 3600, "交实验报告")
@@ -81,7 +80,7 @@ def test_catch_up_proactive_with_missed_reminder(env):
 def test_catch_up_waits_for_quiet_hours(env):
     cfg, brain, bot, fake = env
     cfg["proactive"]["quiet_hours"] = "00:00-23:59"
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     sched = Scheduler(cfg, brain, bot)
     _back(brain, 4)
     rec = brain.away.current()

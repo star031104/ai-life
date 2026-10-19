@@ -1,0 +1,29 @@
+[project]
+name = "ai-life"
+dynamic = ["version"]
+description = "一个有自己生活、会主动找你的本地 AI 伴侣（QQ / Telegram）"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+
+[tool.setuptools.dynamic]
+version = { attr = "ailife.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["ailife*"]
+
+[tool.setuptools.package-data]
+ailife = ["web/*.html", "pet/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["data", "napcat", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E501", "E402", "E731", "B008", "B904", "B905", "E741", "B023", "B007"]

@@ -13,7 +13,7 @@
 
 ## 第一步：一键配置（Windows）
 
-双击项目文件夹里的 **`qq_setup.bat`**（第一次用 `install.bat` 时在配置向导里选 QQ 也一样）。它会：
+双击项目文件夹里的 **`scripts\qq_setup.bat`**（第一次用 `install.bat` 时在配置向导里选 QQ 也一样）。它会：
 
 1. **找 NapCat**：程序目录下的 `napcat/`、或者你以前自己装的（桌面、下载、各个盘的根目录）。都没有就**自动下载**官方的
    `NapCat.Shell.Windows.Node.zip`（约 120 MB，自带 QQ 内核，**不用另外装 QQ**）解压到 `napcat/`。

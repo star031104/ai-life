@@ -1,11 +1,10 @@
-"""第八批：读他分享的链接（不联网：用假的网络）。"""
+"""读他分享的链接（不联网：用假的网络）。"""
 import asyncio
 
-from test_flow import env  # noqa: F401
 
 
 def test_find_links_and_public():
-    from ailife.links import find_links, is_public, site_name
+    from ailife.media.links import find_links, is_public, site_name
     assert find_links("看看 https://b23.tv/xyz，还有 BV1GJ411x7h7！") == [
         "https://b23.tv/xyz", "https://www.bilibili.com/video/BV1GJ411x7h7"]
     assert find_links("没有链接") == []
@@ -17,7 +16,7 @@ def test_find_links_and_public():
 
 def test_page_parse_and_describe(env, monkeypatch):
     cfg, brain, bot, fake = env
-    from ailife.links import LinkReader
+    from ailife.media.links import LinkReader
 
     html = ("<html><head><title>T</title><meta property='og:title' content='好吃的番茄炒蛋怎么做'>"
             "<meta name='description' content='三步搞定'></head><body><nav>首页 登录</nav>"
@@ -66,10 +65,10 @@ def test_text_with_link_enriched(env, monkeypatch):
 
 
 def test_ip_ranges():
-    from ailife.links import ip_ok
+    from ailife.media.links import ip_ok
     for bad in ("100.100.100.100", "10.0.0.1", "::1", "::ffff:127.0.0.1", "64:ff9b::7f00:1", "169.254.169.254",
                 "198.18.0.5", "0.0.0.0", "fe80::1"):
         assert not ip_ok(bad), bad
     assert ip_ok("198.18.0.5", fake_ok=True)
     assert ip_ok("1.1.1.1") and ip_ok("2606:4700::1111")
-    assert not asyncio.run(__import__("ailife.links", fromlist=["x"]).is_public("http://198.18.0.1/"))
+    assert not asyncio.run(__import__("ailife.media.links", fromlist=["x"]).is_public("http://198.18.0.1/"))

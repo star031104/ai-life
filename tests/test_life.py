@@ -1,15 +1,15 @@
-"""第六批：示例挑选、密钥搬家、她身边的人、长期目标、愿望清单、时间胶囊、睡前。"""
+"""她的生活：示例挑选、密钥搬家、她身边的人、长期目标、愿望清单、时间胶囊、睡前。"""
 import asyncio
 import json
 from datetime import date, timedelta
 
-from test_flow import FakeLLM, env  # noqa: F401
+from fakes import FakeLLM
 
 
 def test_examples_parsed_and_picked():
-    from ailife.persona import load_persona
-    from ailife import examples as ex
-    from test_flow import FIXTURE
+    from ailife.persona.loader import load_persona
+    from ailife.persona import examples as ex
+    from fakes import FIXTURE
     p = load_persona(FIXTURE)
     assert len(p.examples) >= 10 and "# 对话示例" not in p.body
     got = [e.scene for e in ex.pick(p, "今天被老板骂了", "今天被老板骂了")]
@@ -28,8 +28,8 @@ def test_examples_in_prompt_and_copy_flag(env):
 
 
 def test_secret_migration(tmp_path):
-    from ailife.secrets import migrate, read_env
-    from ailife.config import load_config
+    from ailife.core.secrets import migrate, read_env
+    from ailife.core.config import load_config
     (tmp_path / "config.yaml").write_text(
         'keys:\n  zhipu: "abcdefgh12345678"  # 注释保留\n  groq: ""\ntelegram:\n  bot_token: 123:ABCDEFGHIJ\n',
         encoding="utf-8")
@@ -45,7 +45,7 @@ def test_secret_migration(tmp_path):
 
 def test_redaction():
     import logging
-    from ailife.secrets import Redactor
+    from ailife.core.secrets import Redactor
     r = Redactor(["sk-secret-123456"])
     rec = logging.LogRecord("x", logging.WARNING, "", 0, "bad url %s", ("https://a/sk-secret-123456/x",), None)
     r.filter(rec)
@@ -64,7 +64,7 @@ class WorldLLM(FakeLLM):
                                {"name": "没出现的人", "role": "x", "desc": "y"}], ensure_ascii=False)
         if "长期目标" in last and "plan" in last:
             from datetime import datetime
-            from ailife.config import load_config
+            from ailife.core.config import load_config
             d0 = datetime.now(load_config().tz).date()      # 用她那边的日期（和 brain.now() 一致），不用电脑的 UTC 日期
             plan = [{"day": (d0 + timedelta(days=i * 10)).isoformat(), "text": t, "progress": p}
                     for i, (t, p) in enumerate([("报名了钢琴八级", 5), ("练《月光》第三乐章", 30),
@@ -109,7 +109,7 @@ def test_her_world_cast_and_goals(env):
 def test_wishes_tags_and_capsule(env):
     cfg, brain, bot, fake = env
     brain.llm = WorldLLM()
-    from ailife.output import parse_reply
+    from ailife.mind.output import parse_reply
     p = parse_reply("好呀，那就说定了[愿望:一起去看海]")
     assert p.wishes == ["一起去看海"] and p.bubbles[0].text == "好呀，那就说定了"
     brain.apply_state(p)
@@ -119,7 +119,7 @@ def test_wishes_tags_and_capsule(env):
     assert brain.db.wishes()[0]["done_ts"]
     assert "✓ 一起去看海" in brain.moments.wishes_block()
     # 时间胶囊
-    from ailife.moments import parse_open_day
+    from ailife.mind.moments import parse_open_day
     t = date(2026, 10, 13)
     assert parse_open_day("一年", t) == date(2027, 10, 13)
     assert parse_open_day("3个月", t) == date(2027, 1, 13)
@@ -132,7 +132,7 @@ def test_wishes_tags_and_capsule(env):
     web = brain.moments.capsules_for_web()
     assert [c["content"] for c in web if c["by"] == "her"] == [None]          # 她的没到日子看不到
     # 到日子打开
-    from ailife.proactive import Scheduler
+    from ailife.proactive.scheduler import Scheduler
     s = Scheduler(cfg, brain, bot)
     from datetime import datetime
     when = datetime.combine(today + timedelta(days=1), datetime.min.time()).replace(hour=12, tzinfo=cfg.tz)
@@ -145,7 +145,7 @@ def test_wishes_tags_and_capsule(env):
 def test_bedtime_story(env):
     cfg, brain, bot, fake = env
     brain.llm = WorldLLM()
-    from ailife.output import parse_reply
+    from ailife.mind.output import parse_reply
     p = parse_reply("好啦好啦，就讲一个[睡前故事:萤火虫]")
     assert p.story == "萤火虫"
     asyncio.run(bot._bedtime(p, "讲个故事"))
@@ -155,7 +155,7 @@ def test_bedtime_story(env):
 
 
 def test_secret_migration_with_existing_refs(tmp_path):
-    from ailife.secrets import migrate, write_env
+    from ailife.core.secrets import migrate, write_env
     write_env(tmp_path, {"ZHIPU_KEY": "abcdefgh12345678"})
     (tmp_path / "config.yaml").write_text(
         'keys:\n  zhipu: "${ZHIPU_KEY}"\n  siliconflow: sk-newnewnewnew\n', encoding="utf-8")

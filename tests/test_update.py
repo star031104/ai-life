@@ -5,12 +5,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from ailife import update as up
+from ailife.core import update as up
 
 
 def make_zip(version="99.0", extra=None, drop=None, prefix="ai-life-main/"):
     files = {"run.py": "print('new')\n", "ailife/__init__.py": f'__version__ = "{version}"\n',
-             "ailife/bot.py": "# new bot\n", "requirements.txt": "httpx\n", "ailife/new_mod.py": "x = 1\n",
+             "ailife/bot.py": "# new bot\n", "ailife/cli.py": "# cli\n", "requirements.txt": "httpx\n", "ailife/new_mod.py": "x = 1\n",
              "config.yaml": "SHOULD NOT WRITE\n", "persona/yuki.md": "SHOULD NOT WRITE\n",
              "persona/template.md": "new template\n", "data/x.db": "no\n"}
     files.update(extra or {})
@@ -35,6 +35,9 @@ def tree(tmp_path, monkeypatch):
     (tmp_path / "ailife" / "bot.py").write_text("# old bot\n")
     (tmp_path / "config.yaml").write_text("mine\n")
     (tmp_path / "persona" / "yuki.md").write_text("my persona\n")
+    (tmp_path / "ailife" / "old_mod.py").write_text("# moved away in the new version\n")
+    (tmp_path / "llm.bat").write_text("old root script\n")
+    (tmp_path / "my_notes.txt").write_text("mine\n")
     monkeypatch.setattr(up, "current_version", lambda: "9.6")
     return tmp_path
 
@@ -59,7 +62,7 @@ def test_gitee_first(tree):
     assert [s["name"] for s in up.sources(cfg)] == ["Gitee", "GitHub"]
 
 
-@pytest.mark.parametrize("data,msg", [(b"not a zip", "不是完整的 zip"), (make_zip(drop=["ailife/bot.py"]), "少了"),
+@pytest.mark.parametrize("data,msg", [(b"not a zip", "不是完整的 zip"), (make_zip(drop=["ailife/cli.py"]), "少了"),
                                       (make_zip(extra={"../evil.py": "x"}), "奇怪的路径")])
 def test_bad_zip_refused(tree, data, msg):
     with pytest.raises(up.UpdateError, match=msg):
@@ -81,9 +84,12 @@ def test_apply_and_rollback(tree):
     assert (tree / "persona" / "template.md").read_text() == "new template\n"   # 新的模板照常加
     assert not (tree / "data" / "x.db").exists()
     assert (tree / "data" / "backup" / st["backup"]).exists()
+    assert not (tree / "ailife" / "old_mod.py").exists() and not (tree / "llm.bat").exists()   # 新版里没有的旧代码拿掉
+    assert (tree / "my_notes.txt").exists()                                  # 你自己的文件不碰
     up.rollback(tree)
     assert (tree / "run.py").read_text() == "print('old')\n" and (tree / "ailife" / "bot.py").read_text() == "# old bot\n"
     assert not (tree / "ailife" / "new_mod.py").exists() and not (tree / "persona" / "template.md").exists()
+    assert (tree / "ailife" / "old_mod.py").exists() and (tree / "llm.bat").exists()
     assert up.load_state(tree)["state"] == "rolled_back"
     with pytest.raises(up.UpdateError):
         up.rollback(tree)

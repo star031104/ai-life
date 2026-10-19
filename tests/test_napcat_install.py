@@ -2,7 +2,7 @@
 import json
 import zipfile
 
-import ailife.napcat_install as N
+import ailife.channels.qq.napcat_install as N
 
 
 def _zip(tmp_path, nested: bool):
@@ -37,7 +37,7 @@ def test_ensure_ws_template_then_reuse(tmp_path):
     # 登录后 NapCat 用模板生成了 onebot11_<号>.json：读它的
     (dest / "napcat" / "config" / "onebot11_123456.json").write_text(json.dumps(tpl), encoding="utf-8")
     assert N.ensure_ws(dest) == (port, token)
-    from ailife.qq_setup import read_onebot
+    from ailife.channels.qq.setup import read_onebot
     ob = read_onebot(dest / "napcat" / "config")
     assert ob["uin"] == 123456 and ob["token"] == token and ob["url"] == "ws://127.0.0.1:3001"
 
