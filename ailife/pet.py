@@ -88,6 +88,7 @@ class PetAssets:
         app.router.add_get("/pet/", self.page)
         app.router.add_get("/pet/lib/{name}", self.lib)
         app.router.add_get(r"/pet/model/{path:.+}", self.model_file)
+        app.router.add_get("/pet/sprite/{pid}/spritesheet.webp", self.sprite_file)
 
     # ---------------- 静态文件（带缓存的 CDN 代理） ----------------
     async def page(self, req):
@@ -124,6 +125,14 @@ class PetAssets:
         if name not in LIBS:
             raise web.HTTPNotFound()
         return self._resp(await self._cached(LIBS[name], self.dir / "lib" / name))
+
+    async def sprite_file(self, req):
+        from .pet_sprite import is_id, sprites_dir
+        pid = req.match_info["pid"]
+        f = sprites_dir(self.cfg.root) / pid / "spritesheet.webp"
+        if not is_id(pid) or not f.exists():
+            raise web.HTTPNotFound()
+        return web.FileResponse(f, headers={"Content-Type": "image/webp", "Cache-Control": "no-cache"})
 
     def _local_model_dir(self) -> Path:
         return self.dir / "model"
@@ -166,12 +175,141 @@ class Pet(PetAssets):
         app.router.add_post(f"{prefix}/config", self.set_config)
         app.router.add_post(f"{prefix}/chat", self.chat)
         app.router.add_get(f"{prefix}/poll", self.poll)
+        app.router.add_get(f"{prefix}/prefs", self.prefs_get)
+        app.router.add_post(f"{prefix}/prefs", self.prefs_set)
+        app.router.add_get(f"{prefix}/sprites", self.sprites)
+        app.router.add_get(f"{prefix}/sprite/gallery", self.sprite_gallery)
+        app.router.add_post(f"{prefix}/sprite/use", self.sprite_use)
+        app.router.add_post(f"{prefix}/sprite/remove", self.sprite_remove)
+
+    # ---------------- 她有事告诉你时 ----------------
+    ALERTS = ("bubble", "dot", "none")
+    STAYS = (0, 3, 8, 30, 120)
+
+    def prefs(self) -> dict:
+        """桌宠的提醒方式：bubble＝直接冒气泡，dot＝亮个小点（鼠标经过再说），none＝什么都不做；
+        stay＝气泡停留几秒（0＝看到为止）。小屋里改，存在数据库里。"""
+        c = dict(self.cfg.get("pet") or {})
+        p = {"alert": str(c.get("alert", "bubble")), "stay": int(c.get("stay", 8))}
+        p.update(self.db.get("pet_prefs") or {})
+        if p["alert"] not in self.ALERTS:
+            p["alert"] = "bubble"
+        return p
+
+    async def prefs_get(self, req):
+        return web.json_response(self.prefs())
+
+    async def prefs_set(self, req):
+        try:
+            d = await req.json()
+        except Exception:  # noqa: BLE001
+            d = {}
+        cur = dict(self.db.get("pet_prefs") or {})
+        if d.get("alert") in self.ALERTS:
+            cur["alert"] = d["alert"]
+        try:
+            st = int(d.get("stay"))
+            if 0 <= st <= 600:
+                cur["stay"] = st
+        except (TypeError, ValueError):
+            pass
+        self.db.set("pet_prefs", cur)
+        return web.json_response({"ok": True, **self.prefs()})
+
+    def pc_state(self) -> dict:
+        """电脑感知（开着的话）：他在打游戏 / 看视频（别弹气泡），或者离开电脑了（她安静下来）。"""
+        pc = self.db.get("sense_pc") or {}
+        if time.time() - float(pc.get("ts") or 0) > 180:
+            return {"busy": False, "away": False}
+        return {"busy": pc.get("kind") in ("打游戏", "看视频"), "away": pc.get("kind") == "离开电脑了"}
+
+    # ---------------- 像素宠物（codex-pets.net） ----------------
+    def sprite_id(self) -> str:
+        """现在用哪只像素宠物（空＝用 Live2D）。小屋里选过的优先，其次是 pet.sprite。"""
+        v = self.db.get("pet_sprite")
+        if v is None:
+            v = str((self.cfg.get("pet") or {}).get("sprite") or "")
+        return str(v or "")
+
+    async def sprites(self, req):
+        from .pet_sprite import local_pets
+        cur = self.sprite_id()
+        return web.json_response({"current": cur, "local": local_pets(self.cfg.root),
+                                  "live2d": self.model or self.preset})
+
+    async def sprite_gallery(self, req):
+        from .pet_sprite import PetError, gallery
+        try:
+            page = int(req.query.get("page") or 1)
+        except ValueError:
+            page = 1
+        try:
+            return web.json_response({"ok": True, **await gallery(req.query.get("q") or "", page,
+                                                                    req.query.get("sort") or "popular",
+                                                                    self.cfg.proxy or None)})
+        except PetError as e:
+            return web.json_response({"ok": False, "error": str(e)})
+
+    async def sprite_use(self, req):
+        """换成一只像素宠物（没下载过就先下载）；id 留空＝换回 Live2D。"""
+        from .pet_sprite import PetError, download, find_local, parse_ref
+        try:
+            d = await req.json()
+        except Exception:  # noqa: BLE001
+            d = {}
+        ref = str(d.get("id") or d.get("ref") or "").strip()
+        if not ref:
+            self.db.set("pet_sprite", "")
+            return web.json_response({"ok": True, "current": "", "message": "换回 Live2D 了"})
+        try:
+            pid = parse_ref(ref)
+            pet = find_local(self.cfg.root, pid) if not d.get("refresh") else None
+            if not pet:
+                pet = await download(self.cfg.root, pid, self.cfg.proxy or None)
+        except PetError as e:
+            return web.json_response({"ok": False, "error": str(e)})
+        self.db.set("pet_sprite", pid)
+        return web.json_response({"ok": True, "current": pid, "pet": pet,
+                                  "message": f"换成「{pet.get('name') or pid}」了，桌宠马上会变"})
+
+    async def sprite_remove(self, req):
+        from .pet_sprite import remove_local
+        try:
+            d = await req.json()
+        except Exception:  # noqa: BLE001
+            d = {}
+        pid = str(d.get("id") or "")
+        if pid and pid == self.sprite_id():
+            self.db.set("pet_sprite", "")
+        return web.json_response({"ok": remove_local(self.cfg.root, pid)})
+
+    async def _sprite_config(self) -> dict | None:
+        pid = self.sprite_id()
+        if not pid:
+            return None
+        from .pet_sprite import PetError, download, find_local
+        pet = find_local(self.cfg.root, pid)
+        if not pet:                                   # 设置里写了，但还没下载：现在下
+            try:
+                pet = await download(self.cfg.root, pid, self.cfg.proxy or None)
+            except PetError as e:
+                log.warning("像素宠物 %s 下载失败，先用 Live2D：%s", pid, e)
+                return None
+        c = dict(self.cfg.get("pet") or {})
+        return {"kind": "sprite", "id": pid, "sheet": f"/pet/sprite/{pid}/spritesheet.webp",
+                "version": pet.get("version", 2), "pet_name": pet.get("name"), "author": pet.get("author"),
+                "scale": float(c.get("sprite_scale", 1.0)), "walk": bool(c.get("walk", True)),
+                "look": bool(c.get("look", True))}
 
     # ---------------- 配置 ----------------
     async def get_config(self, req):
+        sp = await self._sprite_config()
+        if sp:
+            return web.json_response({**sp, "skin": sp["id"], "prefs": self.prefs(), "name": self.brain.persona.name,
+                                      "ta": getattr(self.brain.persona, "ta", "她")})
         entry = self.model or self.default_entry
         place = {"scale": 1.0, "offset_x": 0, "offset_y": 0} if self.model else self.place
-        return web.json_response({"model": f"/pet/model/{entry}", "scale": self.scale * place["scale"],
+        return web.json_response({"kind": "live2d", "skin": self.sprite_id(), "prefs": self.prefs(), "model": f"/pet/model/{entry}", "scale": self.scale * place["scale"],
                                   "offset_x": place["offset_x"], "offset_y": self.offset_y + place["offset_y"],
                                   "expr": self.expr(),
                                   "name": self.brain.persona.name, "ta": getattr(self.brain.persona, "ta", "她")})
@@ -195,6 +333,7 @@ class Pet(PetAssets):
             return web.json_response({"error": f"她走神了：{str(e)[:80]}"})
         emo = next((b["emotion"] for b in r.get("bubbles", []) if b.get("emotion")), None)
         r["expr"] = self.expr(emo)
+        r["emotion"] = emo or ""
         return web.json_response(r)
 
     # ---------------- 表情 ----------------
@@ -258,7 +397,8 @@ class Pet(PetAssets):
         desk = [x for x in self.queue if x["qid"] > qsince and time.time() - x["ts"] < 120]
         return web.json_response({"last_id": last, "messages": msgs, "style": self.brain.emotion.mood_style(),
                                   "mood": self.brain.mood, "expr": self.expr(), "desk": desk,
-                                  "qid": self._qid})
+                                  "qid": self._qid, "skin": self.sprite_id(), "prefs": self.prefs(),
+                                  "pc": self.pc_state()})
 
     # ---------------- OpenAI 兼容接口（给别的桌宠程序用） ----------------
     async def oa_models(self, req):
@@ -298,6 +438,46 @@ class Pet(PetAssets):
 
 
 # ---------------- 桌面小窗口 ----------------
+def win_env(own_hwnd: int = 0) -> tuple[bool, float]:
+    """（Windows）有没有程序全屏（游戏、看视频），以及键盘鼠标多久没动了（秒）。别的系统返回 (False, 0)。"""
+    if sys.platform != "win32":
+        return False, 0.0
+    try:
+        import ctypes
+        from ctypes import wintypes
+        u = ctypes.windll.user32
+
+        class LASTINPUTINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+        li = LASTINPUTINFO()
+        li.cbSize = ctypes.sizeof(li)
+        idle = 0.0
+        if u.GetLastInputInfo(ctypes.byref(li)):
+            idle = ((ctypes.windll.kernel32.GetTickCount() - li.dwTime) & 0xFFFFFFFF) / 1000.0
+        hwnd = u.GetForegroundWindow()
+        if not hwnd or hwnd == own_hwnd or hwnd in (u.GetDesktopWindow(), u.GetShellWindow()):
+            return False, idle
+        buf = ctypes.create_unicode_buffer(64)
+        u.GetClassNameW(hwnd, buf, 64)
+        if buf.value in ("Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"):
+            return False, idle
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT), ("rcWork", wintypes.RECT),
+                        ("dwFlags", wintypes.DWORD)]
+        r = wintypes.RECT()
+        u.GetWindowRect(hwnd, ctypes.byref(r))
+        mi = MONITORINFO()
+        mi.cbSize = ctypes.sizeof(mi)
+        u.GetMonitorInfoW(u.MonitorFromWindow(hwnd, 2), ctypes.byref(mi))
+        m = mi.rcMonitor
+        full = r.left <= m.left and r.top <= m.top and r.right >= m.right and r.bottom >= m.bottom
+        return bool(full), idle
+    except Exception:  # noqa: BLE001
+        return False, 0.0
+
+
+
 class _Api:
     """给桌宠页面的 JS 用的接口。属性名以 _ 开头，pywebview 就不会把它们暴露给页面。"""
 
@@ -345,7 +525,8 @@ def _tray_icon_pixmap(size: int = 64):
     return pm
 
 
-def run_qt(url: str, home: str, w: int, h: int, on_top: bool, title: str, icon_path: Path | None = None) -> bool:
+def run_qt(url: str, home: str, w: int, h: int, on_top: bool, title: str, icon_path: Path | None = None,
+           hide_fullscreen: bool = True) -> bool:
     """真正透明（只看得到人物，没有方框）、不占任务栏的小窗口，右下角托盘里有图标。需要 PySide6。"""
     try:
         from PySide6.QtCore import QFile, QIODevice, QObject, Qt, QUrl, Slot
@@ -388,6 +569,25 @@ def run_qt(url: str, home: str, w: int, h: int, on_top: bool, title: str, icon_p
             if wh is not None:
                 wh.startSystemMove()
 
+        @Slot(int, int)
+        def walk(self, dx, ms):
+            """像素宠物空闲时沿着屏幕走几步：窗口在 ms 毫秒里横着挪 dx 像素（不走出屏幕）。"""
+            from PySide6.QtCore import QPoint, QPropertyAnimation
+            g = (view.screen() or QGuiApplication.primaryScreen()).availableGeometry()
+            x = max(g.left(), min(g.right() - view.width(), view.x() + int(dx)))
+            anim = QPropertyAnimation(view, b"pos", view)
+            anim.setDuration(max(100, int(ms)))
+            anim.setStartValue(view.pos())
+            anim.setEndValue(QPoint(x, view.y()))
+            anim.start()
+            self._anim = anim
+
+        @Slot()
+        def walk_stop(self):
+            a = getattr(self, "_anim", None)
+            if a is not None:
+                a.stop()
+
     bridge = Bridge()
     channel = QWebChannel(view.page())
     channel.registerObject("pet", bridge)
@@ -405,6 +605,44 @@ def run_qt(url: str, home: str, w: int, h: int, on_top: bool, title: str, icon_p
         view.page().scripts().insert(sc)
     view.load(QUrl(url))
     view.show()
+
+    # 鼠标在屏幕上的位置告诉页面（像素宠物的眼睛跟着鼠标转）；没动就不发
+    from PySide6.QtCore import QTimer
+    from PySide6.QtGui import QCursor
+    last_cursor = {"p": None}
+
+    def push_cursor():
+        if not view.isVisible():
+            return
+        p = QCursor.pos()
+        if p == last_cursor["p"]:
+            return
+        last_cursor["p"] = p
+        c = view.geometry().center()
+        view.page().runJavaScript(f"window.__petCursor&&window.__petCursor({p.x() - c.x()},{p.y() - c.y()})")
+    cursor_timer = QTimer(view)
+    cursor_timer.timeout.connect(push_cursor)
+    cursor_timer.start(120)
+
+    # 有程序全屏时让开（藏起来，退出全屏再回来）；告诉页面全屏 / 你多久没碰电脑，她好决定要不要说话、要不要安静
+    env = {"hidden_by_fs": False}
+
+    def push_env():
+        try:
+            own = int(view.winId())
+        except Exception:  # noqa: BLE001
+            own = 0
+        fs, idle = win_env(own)
+        if fs and hide_fullscreen and view.isVisible():
+            view.hide()
+            env["hidden_by_fs"] = True
+        elif not fs and env["hidden_by_fs"]:
+            env["hidden_by_fs"] = False
+            view.show()
+        view.page().runJavaScript(f"window.__petEnv&&window.__petEnv({'true' if fs else 'false'},{idle:.0f})")
+    env_timer = QTimer(view)
+    env_timer.timeout.connect(push_env)
+    env_timer.start(2000)
 
     pm = QPixmap(str(icon_path)) if icon_path and icon_path.exists() else _tray_icon_pixmap()
     tray = QSystemTrayIcon(QIcon(pm), app)
@@ -467,7 +705,7 @@ def run_window(cfg, auto: bool = False):
     on_top = bool(c.get("on_top", True))
     root = Path(cfg.get("root") or Path(__file__).resolve().parent.parent)
     if run_qt(url + ("" if transparent else "?solid=1"), home, w, h, on_top, title,
-              root / "data" / "pet" / "icon.png"):
+              root / "data" / "pet" / "icon.png", bool(c.get("hide_fullscreen", True))):
         return
     try:
         import webview  # pywebview

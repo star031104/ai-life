@@ -13,6 +13,18 @@ body.solid{background:linear-gradient(180deg,#f3eefc,#fbe9f1)}
 @media (prefers-color-scheme:dark){body.solid{background:linear-gradient(180deg,#1d1828,#261a22)}}
 #stage{position:absolute;inset:0}
 canvas{display:block}
+#sprite{position:absolute;left:50%;bottom:54px;transform:translateX(-50%);overflow:hidden;cursor:grab;z-index:1}
+#halo{position:absolute;border-radius:50%;pointer-events:none;z-index:0;opacity:0;transition:opacity .6s;
+  background:conic-gradient(from var(--a,0deg),var(--c1),var(--c2),var(--c3),var(--c1));-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));filter:blur(.4px) drop-shadow(0 0 6px var(--c2))}
+#halo.on{opacity:.95}
+#halo.spin{animation:spin 1.4s linear 3}
+@keyframes spin{to{transform:rotate(360deg)}}
+#dot{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--dot,#e86a95);box-shadow:0 0 0 3px rgba(255,255,255,.9),0 2px 6px rgba(0,0,0,.25);z-index:3;opacity:0;transform:scale(.4);transition:all .25s;pointer-events:none}
+#dot.on{opacity:1;transform:none}
+#dot.pop{animation:pop .5s}
+@keyframes pop{40%{transform:scale(1.5)}}
+@media (prefers-reduced-motion:reduce){#halo.spin{animation:none}#dot.pop{animation:none}}
+#film{position:absolute;left:0;top:0;background-repeat:no-repeat;background-size:100% 100%;will-change:transform}
 .bubble{position:absolute;left:12px;right:12px;top:46px;z-index:3;background:var(--bubble);border:1px solid var(--line);border-radius:14px;
   padding:9px 12px;box-shadow:var(--shadow);opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s;pointer-events:none;max-height:45%;overflow:hidden;white-space:pre-wrap;word-break:break-word}
 .bubble.on{opacity:1;transform:none;pointer-events:auto}
@@ -34,6 +46,7 @@ body:hover .ctl{opacity:1}
 </head>
 <body>
 <div id="stage" class="pywebview-drag-region"></div>
+<div id="halo"></div><div id="dot"></div>
 <div class="bubble" id="bubble" role="status" aria-live="polite"></div>
 <div class="status" id="status">正在叫醒她…</div>
 <div class="ctl">
@@ -45,85 +58,220 @@ body:hover .ctl{opacity:1}
   <button type="submit" aria-label="发送"><svg viewBox="0 0 24 24"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4 18-7Z"/></svg></button>
 </form>
 
-<script src="/pet/lib/pixi.min.js"></script>
-<script src="/pet/lib/live2d.min.js"></script>
-<script src="/pet/lib/live2dcubismcore.min.js"></script>
-<script src="/pet/lib/index.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const Q=new URLSearchParams(location.search);
 if(Q.get("solid")==="1")document.body.classList.add("solid");
-let model=null, lastId=0, lastQ=0, busy=false, cfg={}, curExpr=null;
-
-function showBubble(html,ms=9000){const b=$("bubble");b.innerHTML=html;b.classList.add("on");clearTimeout(b._t);b._t=setTimeout(()=>b.classList.remove("on"),ms)}
+let lastId=0, lastQ=0, busy=false, cfg={};
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const linkify=s=>esc(s).replace(/(https?:\/\/[^\s]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+function showBubble(html,ms=9000){const b=$("bubble");b.innerHTML=html;b.classList.add("on");clearTimeout(b._t);b._t=setTimeout(()=>{b.classList.remove("on");Pet.bubbleGone()},ms)}
 
+/* ================= 她有事告诉你时：气泡 / 小点 / 不打扰 =================
+   ENV：Qt 小窗口每 2 秒告诉我们有没有程序全屏、你多久没碰键鼠；poll 告诉我们你是不是在打游戏 / 看视频。
+   全屏或打游戏：只亮小点不弹气泡（窗口本身也会让开）；你不在电脑前：她安静下来，消息攒着，回来再说。 */
+const ENV={fullscreen:false,idle:0,busy:false,away:false};
+let PREFS={alert:"bubble",stay:8}, pending=[];
+const HALO={msg:["#ff7eb3","#7aa2ff","#ffd166"],happy:["#ffd166","#ff7eb3","#ffb86b"],sad:["#ff6b6b","#ff9f43","#ff6b6b"]};
+function calm(){return ENV.fullscreen||ENV.busy}
+function stayMs(text){const st=+PREFS.stay;return st>0?Math.max(st*1000,Math.min(20000,String(text||"").length*300)):3600*1000}
+function halo(kind){const h=$("halo");if(calm()||ENV.away)return;const c=HALO[kind]||HALO.msg;
+  h.style.setProperty("--c1",c[0]);h.style.setProperty("--c2",c[1]);h.style.setProperty("--c3",c[2]);
+  h.classList.remove("spin");void h.offsetWidth;h.classList.add("on","spin");clearTimeout(h._t);
+  h._t=setTimeout(()=>h.classList.remove("on"),PREFS.stay>0?PREFS.stay*1000+4200:3600*1000)}
+function setDot(on,kind){const d=$("dot");d.style.setProperty("--dot",kind==="sad"?"#ff6b6b":kind==="happy"?"#f5a524":"#e86a95");
+  if(on){const was=d.classList.contains("on");d.classList.add("on");if(was){d.classList.remove("pop");void d.offsetWidth;d.classList.add("pop")}}else d.classList.remove("on")}
+const kindOf=e=>/开心|大笑|喜欢|得意|期待|兴奋|高兴/.test(e||"")?"happy":/难过|委屈|哭|生气|哼|失落|伤心/.test(e||"")?"sad":"msg";
+// 她主动说的话都走这里（你打字后的回复不走：那是你在看着的时候）
+function notify(text,emo){
+  const kind=kindOf(emo);
+  if(ENV.away){pending.push({text,emo});setDot(true,kind);return}
+  const mode=calm()?(PREFS.alert==="none"?"none":"dot"):PREFS.alert;
+  if(mode==="bubble"){showBubble(linkify(text),stayMs(text));Pet.said(text,emo);halo(kind);setTimeout(()=>Pet.wait(),4000);return}
+  pending.push({text,emo});
+  if(mode==="dot"){setDot(true,kind);halo(kind);if(!calm())Pet.nudge()}
+}
+// 鼠标经过她：把攒着的话说出来
+function showPending(){if(!pending.length)return;const last=pending.slice(-3);pending=[];setDot(false);
+  const txt=last.map(x=>x.text).join("\n");showBubble(linkify(txt),stayMs(txt));Pet.said(txt,last[last.length-1].emo);setTimeout(()=>Pet.wait(),4000)}
+document.body.addEventListener("mouseenter",()=>{if(!ENV.away)showPending()});
+$("stage").addEventListener("mousemove",()=>{if(pending.length&&!ENV.away)showPending()});
+$("bubble").addEventListener("mouseleave",()=>{if(+PREFS.stay===0){const b=$("bubble");clearTimeout(b._t);b._t=setTimeout(()=>{b.classList.remove("on");Pet.bubbleGone()},4000)}});
+window.__petEnv=(fs,idle)=>{const wasAway=ENV.away;ENV.fullscreen=!!fs;ENV.idle=+idle||0;updAway(wasAway)};
+function updAway(wasAway){ENV.away=ENV.idle>300||ENV.pcAway===true;Pet.rest(ENV.away||ENV.fullscreen);
+  if(wasAway&&!ENV.away){Pet.back();if(pending.length&&!calm())setTimeout(showPending,1200)}}
+
+/* ================= 两种样子共用的“动作”接口 =================
+   think()   她在想怎么回（等大模型）
+   said(t,emo) 她说了一句（带情绪）
+   wait()    她说完在等你回
+   oops()    出错了
+   tap()     你点了她一下                                      */
+let Pet={think(){},said(){},wait(){},oops(){},tap(){},bubbleGone(){},expr(){},nudge(){},rest(){},back(){}};
+
+// 光环和小点放在她头部附近
+let markRect=null;
+function placeMarks(fn){if(fn)markRect=fn;if(!markRect)return;const r=markRect();const d=Math.min(r.width,r.height)*0.8;
+  const h=$("halo");h.style.width=h.style.height=d+"px";h.style.left=(r.left+r.width/2-d/2)+"px";h.style.top=(r.top+r.height*0.42-d/2)+"px";
+  const dt=$("dot");dt.style.left=(r.left+r.width*0.78)+"px";dt.style.top=(r.top+r.height*0.12)+"px"}
+addEventListener("resize",()=>placeMarks());
+
+/* ================= Live2D ================= */
+function loadScript(src){return new Promise((ok,bad)=>{const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=bad;document.head.appendChild(s)})}
+async function initLive2D(){
+  for(const f of ["pixi.min.js","live2d.min.js","live2dcubismcore.min.js","index.min.js"])await loadScript("/pet/lib/"+f);
+  let model=null,curExpr=null;
+  try{ PIXI.live2d.config.sound=false }catch(e){}
+  const app=new PIXI.Application({resizeTo:window,backgroundAlpha:0,antialias:true,autoDensity:true,resolution:window.devicePixelRatio||1});
+  $("stage").appendChild(app.view);
+  model=await PIXI.live2d.Live2DModel.from(cfg.model||"/pet/model/Rice.model3.json",{autoInteract:true});
+  app.stage.addChild(model);
+  const fit=()=>{const s=Math.min(window.innerWidth/model.internalModel.width,(window.innerHeight*0.98)/model.internalModel.height)*(cfg.scale||1);
+    model.scale.set(s); model.x=(window.innerWidth-model.width)/2+(cfg.offset_x||0)*model.width; model.y=window.innerHeight-model.height+(cfg.offset_y||0)};
+  fit(); window.addEventListener("resize",fit);
+  const motion=group=>{try{const defs=model.internalModel.motionManager.definitions||{};
+    const groups=Object.keys(defs).filter(g=>g!=="Idle"&&g!==""&&defs[g]&&defs[g].length);
+    const g=groups.includes(group)?group:groups[Math.floor(Math.random()*groups.length)]; if(g)model.motion(g)}catch(e){}};
+  const expression=name=>{if(!name||name===curExpr)return;try{model.expression(name);curExpr=name}catch(e){}};
+  model.on("hit",()=>motion());
+  Pet={think(){},said(){motion()},wait(){},oops(){},tap(){motion()},bubbleGone(){},expr:expression,nudge(){motion()},rest(){},back(){motion()}};
+  placeMarks(()=>{const r={left:innerWidth*0.25,top:innerHeight*0.12,width:innerWidth*0.5,height:innerHeight*0.6};return r});
+  expression(cfg.expr);
+}
+
+/* ================= 像素宠物（codex-pets.net 的精灵图） =================
+   8 列 × 192×208 的格子。思路参考 Wakuwaku（MIT）的 pet.js：
+   被拖着 > 一次性的反应（挥手 / 跳 / 难过）> 散步 > 看鼠标 > 当前心情的循环；
+   只在要换帧时才画，空闲时眨一轮眼就停几秒，几乎不占 CPU。 */
+const CW=192, CH=208;
+const CLIPS={idle:{row:0,frames:6,ms:260},"running-right":{row:1,frames:8,ms:110},"running-left":{row:2,frames:8,ms:110},
+  waving:{row:3,frames:4,ms:180},jumping:{row:4,frames:5,ms:130},failed:{row:5,frames:8,ms:160},
+  waiting:{row:6,frames:6,ms:200},running:{row:7,frames:6,ms:140},review:{row:8,frames:6,ms:180}};
+const MOOD_CLIP={idle:"idle",thinking:"running",waiting:"waiting",reading:"review",sad:"failed"};
+const REACT={wave:{clip:"waving",times:2},jump:{clip:"jumping",times:1},sad:{clip:"failed",times:1}};
+const HAPPY=/开心|大笑|喜欢|得意|期待|兴奋|高兴|嘿嘿|哈哈/, SAD=/难过|委屈|哭|生气|哼|无语|失落|伤心|累/, SHY=/害羞|撒娇|想你|脸红/;
+function lookCell(dx,dy){const deg=((Math.atan2(dx,-dy)*180)/Math.PI+360)%360;const i=Math.round(deg/22.5)%16;return{row:9+Math.floor(i/8),frame:i%8}}
+
+function initSprite(){
+  const box=document.createElement("div");box.id="sprite";const film=document.createElement("div");film.id="film";box.appendChild(film);$("stage").appendChild(box);
+  const v2=cfg.version!==1, sheetH=v2?2288:1872;
+  let s=1, drawn="", timer=null;
+  let mood="idle", moodUntil=0, reaction=null, dragged=null, walking=null, looking=null, loop={clip:"",start:0}, resting=false;
+  const fit=()=>{s=Math.min((innerWidth-16)/CW,(innerHeight-64)/CH)*(cfg.scale||1);setTimeout(()=>placeMarks(),0);
+    box.style.width=CW*s+"px";box.style.height=CH*s+"px";
+    film.style.width=1536*s+"px";film.style.height=sheetH*s+"px";film.style.backgroundImage=`url("${cfg.sheet}")`;drawn="";kick()};
+  function cell(row,frame){const k=row+":"+frame+":"+s;if(k===drawn)return;drawn=k;film.style.transform=`translate3d(${-frame*CW*s}px,${-row*CH*s}px,0)`}
+  const IDLE_HOLD=4000;
+  function drawLoop(name,at){if(loop.clip!==name)loop={clip:name,start:at};const c=CLIPS[name],t=at-loop.start;
+    if(name==="idle"){const play=c.frames*c.ms,inC=t%(play+IDLE_HOLD);if(inC>=play){cell(c.row,0);return play+IDLE_HOLD-inC}cell(c.row,Math.floor(inC/c.ms));return c.ms-(inC%c.ms)}
+    cell(c.row,Math.floor(t/c.ms)%c.frames);return c.ms-(t%c.ms)}
+  function frame(){const at=performance.now();
+    if(mood!=="idle"&&moodUntil&&Date.now()>moodUntil){mood="idle";moodUntil=0}
+    if(dragged&&at-dragged.at<200)return drawLoop(dragged.dir>0?"running-right":"running-left",at),40;
+    if(resting&&!reaction&&!walking){loop={clip:"",start:0};cell(CLIPS[MOOD_CLIP[mood]||"idle"].row,0);return 3600*1000}
+    if(reaction){const c=CLIPS[reaction.clip],step=Math.floor((at-reaction.start)/c.ms);
+      if(step<c.frames*reaction.times){loop={clip:"",start:0};cell(c.row,step%c.frames);return c.ms-((at-reaction.start)%c.ms)}reaction=null}
+    if(walking)return drawLoop(walking>0?"running-right":"running-left",at);
+    if(looking&&v2&&mood==="idle"&&at<looking.until){loop={clip:"",start:0};cell(looking.row,looking.frame);return looking.until-at}
+    const w=drawLoop(MOOD_CLIP[mood]||"idle",at);return moodUntil?Math.min(w,Math.max(50,moodUntil-Date.now())):w}
+  function kick(){clearTimeout(timer);if(document.hidden)return;timer=setTimeout(kick,Math.max(16,Math.ceil(frame())))}
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden){kick();idleLater()}});
+  function react(name,times){const r=REACT[name];if(!r)return;stopIdle();reaction={...r,...(times?{times}:{}),start:performance.now()};kick();idleLater()}
+  function setMood(m,ms){mood=m;moodUntil=ms?Date.now()+ms:0;if(m!=="idle")stopIdle();else idleLater();kick()}
+  // 闲着的时候：走几步、东张西望
+  let idleT,glanceT;
+  function idleLater(){clearTimeout(idleT);if(mood!=="idle")return;idleT=setTimeout(idleAct,12000+Math.random()*18000)}
+  function free(){return mood==="idle"&&!resting&&!calm()&&!document.hidden&&!reaction&&!walking&&!dragged&&!busy&&!(looking&&performance.now()<looking.until)}
+  async function idleAct(){if(!free())return idleLater();
+    const api=window.pywebview&&pywebview.api;
+    if(cfg.walk!==false&&window.__qtpet&&api&&api.walk&&Math.random()<0.4){const dir=Math.random()<.5?-1:1,dist=Math.round(60+Math.random()*140);
+      walking=dir;kick();try{api.walk(dir*dist,dist*16)}catch(e){};await new Promise(r=>setTimeout(r,dist*16));walking=null;kick()}
+    else glance(2+Math.floor(Math.random()*2));
+    idleLater()}
+  function glance(n){if(n<=0||mood!=="idle"||!v2)return;const i=Math.floor(Math.random()*16);
+    looking={...lookCell(Math.sin(i*Math.PI/8),-Math.cos(i*Math.PI/8)),until:performance.now()+700};kick();glanceT=setTimeout(()=>glance(n-1),700)}
+  function stopIdle(){clearTimeout(idleT);clearTimeout(glanceT);looking=null;if(walking){try{pywebview.api.walk_stop()}catch(e){};walking=null}}
+  // 眼睛跟着鼠标（透明小窗口里由 Qt 把全屏的鼠标位置告诉我们；浏览器里只在窗口内）
+  window.__petCursor=(dx,dy)=>{if(cfg.look===false||!v2||mood!=="idle"||reaction||walking||dragged)return;
+    const r=box.getBoundingClientRect(),cy=r.top+r.height*0.3-innerHeight/2;const d=Math.hypot(dx,dy-cy);if(d<40||d>900)return;
+    clearTimeout(glanceT);looking={...lookCell(dx,dy-cy),until:performance.now()+1800};kick()};
+  window.addEventListener("mousemove",e=>{if(!window.__qtpet)window.__petCursor(e.clientX-innerWidth/2,e.clientY-innerHeight/2)});
+  // 拖动：Qt 窗口在系统那边移动，这边看窗口位置的变化，朝拖动方向跑
+  let down=null,lastX=window.screenX,moved=false;
+  box.addEventListener("mousedown",e=>{if(e.button!==0)return;down={x:e.screenX,y:e.screenY,t:Date.now()};moved=false;lastX=window.screenX});
+  setInterval(()=>{const x=window.screenX;if(x!==lastX){const dx=x-lastX;lastX=x;if(!walking){dragged={dir:Math.sign(dx),at:performance.now()};moved=true;kick()}}
+    else if(dragged&&performance.now()-dragged.at>220){dragged=null;kick();idleLater()}},60);
+  window.addEventListener("mousemove",e=>{if(!down)return;if(Math.abs(e.screenX-down.x)+Math.abs(e.screenY-down.y)>4){down=null;moved=true;
+    if(window.__qtpet&&window.pywebview&&pywebview.api&&pywebview.api.start_drag){stopIdle();pywebview.api.start_drag()}}});
+  window.addEventListener("mouseup",()=>{if(down&&!moved)Pet.tap();down=null});
+  addEventListener("resize",fit);
+  const emoReact=e=>HAPPY.test(e||"")?"jump":SAD.test(e||"")?"sad":"wave";
+  Pet={
+    think(){setMood("thinking")},
+    said(text,emo){setMood(String(text||"").length>60?"reading":"idle",String(text||"").length>60?Math.min(20000,text.length*300):0);react(emoReact(emo),SHY.test(emo||"")?1:undefined)},
+    wait(){setMood("waiting",90000)},
+    oops(){setMood("idle");react("sad")},
+    tap(){react("jump")},
+    bubbleGone(){if(mood==="reading")setMood("idle")},
+    nudge(){react("wave",1)},
+    rest(on){if(on===resting)return;resting=on;if(on)stopIdle();else idleLater();kick()},
+    back(){react("wave",2)},
+    expr(e){if(SAD.test(e||"")&&mood==="idle")setMood("sad",6000)}
+  };
+  box.title=cfg.name||"";              // 样子是像素宠物，但她还是她（人设不变）
+  placeMarks(()=>box.getBoundingClientRect());
+  fit(); react("wave",1); idleLater();
+}
+
+/* ================= 开始 ================= */
 async function init(){
   try{cfg=await (await fetch("/api/pet/config")).json()}catch(e){}
+  if(cfg.prefs)PREFS={...PREFS,...cfg.prefs};
   if(cfg.ta&&cfg.ta!=="她"){ const t=cfg.ta; $("say").placeholder=$("say").placeholder.replaceAll("她",t);
     $("say").setAttribute("aria-label",$("say").getAttribute("aria-label").replaceAll("她",t)); document.title=document.title.replaceAll("她",t) }
   try{
-    try{ PIXI.live2d.config.sound=false }catch(e){}        // 模型自带的动作音效不放（她说话用自己的声音），也免得去找不存在的文件
-    const app=new PIXI.Application({resizeTo:window,backgroundAlpha:0,antialias:true,autoDensity:true,resolution:window.devicePixelRatio||1});
-    $("stage").appendChild(app.view);
-    model=await PIXI.live2d.Live2DModel.from(cfg.model||"/pet/model/Rice.model3.json",{autoInteract:true});
-    app.stage.addChild(model);
-    const fit=()=>{const s=Math.min(window.innerWidth/model.internalModel.width,(window.innerHeight*0.98)/model.internalModel.height)*(cfg.scale||1);
-      model.scale.set(s); model.x=(window.innerWidth-model.width)/2+(cfg.offset_x||0)*model.width; model.y=window.innerHeight-model.height+(cfg.offset_y||0)};
-    fit(); window.addEventListener("resize",fit);
-    model.on("hit",areas=>{ if(areas.includes("body")||areas.includes("Body"))motion(); else motion(); });
+    if(cfg.kind==="sprite")initSprite(); else await initLive2D();
     $("status").textContent="";
-    expression(cfg.expr);
   }catch(e){ console.error(e); $("status").textContent="她的样子没加载出来（网络？）。还是可以打字聊天。"; }
   poll(); setInterval(poll,5000);
 }
-function motion(group){
-  if(!model)return;
-  try{
-    const defs=model.internalModel.motionManager.definitions||{};
-    const groups=Object.keys(defs).filter(g=>g!=="Idle"&&g!==""&&defs[g]&&defs[g].length);
-    const g=groups.includes(group)?group:groups[Math.floor(Math.random()*groups.length)];
-    if(g)model.motion(g);
-  }catch(e){}
-}
-function expression(name){
-  if(!model||!name||name===curExpr)return;
-  try{ model.expression(name); curExpr=name }catch(e){}
-}
 
 async function playReply(r){
-  expression(r.expr);
+  Pet.expr(r.expr);
+  let first=true;
   for(const b of r.bubbles||[]){
-    if(b.text){ showBubble(linkify(b.text), Math.max(4000,b.text.length*350)); motion(); await new Promise(x=>setTimeout(x,Math.min(6000,1200+b.text.length*120))); }
+    if(b.text){ showBubble(linkify(b.text), Math.max(4000,b.text.length*350)); if(first)Pet.said(b.text,r.emotion||b.emotion); first=false;
+      await new Promise(x=>setTimeout(x,Math.min(6000,1200+b.text.length*120))); }
   }
 }
 
 $("form").addEventListener("submit",async e=>{
   e.preventDefault(); const t=$("say").value.trim(); if(!t||busy)return;
-  busy=true; $("say").value=""; showBubble('<span class="dots">在想</span>',30000);
+  busy=true; $("say").value=""; showBubble('<span class="dots">在想</span>',30000); Pet.think();
   try{ const r=await (await fetch("/api/pet/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t})})).json();
     if(r.last_id)lastId=Math.max(lastId,r.last_id);
-    if(r.error)showBubble(esc(r.error)); else await playReply(r);
-  }catch(err){ showBubble("连不上程序了，确认 start.bat 还开着") }
+    if(r.error){showBubble(esc(r.error));Pet.oops()} else await playReply(r);
+  }catch(err){ showBubble("连不上程序了，确认 start.bat 还开着"); Pet.oops() }
   finally{ busy=false }
 });
 
 async function poll(){
   try{ const r=await (await fetch(`/api/pet/poll?since=${lastId}&q=${lastQ}`)).json();
-    if(!lastId){ lastId=r.last_id||0; lastQ=r.qid||0; expression(r.expr); return }
+    if((r.skin||"")!==(cfg.skin||"")){location.reload();return}       // 小屋里换了样子
+    if(!lastId){ lastId=r.last_id||0; lastQ=r.qid||0; Pet.expr(r.expr); return }
     lastId=Math.max(lastId,r.last_id||0);
-    if(!busy)expression(r.expr);
+    if(!busy)Pet.expr(r.expr);
+    if(r.prefs)PREFS={...PREFS,...r.prefs};
+    if(r.pc){const wasAway=ENV.away;ENV.busy=!!r.pc.busy;if(!window.__qtpet)ENV.pcAway=!!r.pc.away;updAway(wasAway)}
     const desk=(r.desk||[]).filter(x=>x.qid>lastQ); if(r.qid)lastQ=Math.max(lastQ,r.qid);
-    if(desk.length&&!busy){ const t=desk[desk.length-1].text; showBubble(linkify(t),10000); motion(); }
-    else if(r.messages&&r.messages.length&&!busy){ const txt=r.messages.map(m=>m.text).join("\n");
-      showBubble(linkify(txt),12000); motion(); }
+    if(desk.length&&!busy){ notify(desk[desk.length-1].text,r.style); }
+    else if(r.messages&&r.messages.length&&!busy){ notify(r.messages.map(m=>m.text).join("\n"),r.style); }
   }catch(e){}
 }
 
-// 透明小窗口（PySide6）里：按住人物拖动就移动窗口（轻点不算，留给点人物的互动）
+// Live2D 时：按住人物拖动就移动窗口（轻点不算，留给点人物的互动）。像素宠物自己处理拖动。
 (function(){let down=null;
-  $("stage").addEventListener("mousedown",e=>{ if(e.button===0)down={x:e.screenX,y:e.screenY}; });
+  $("stage").addEventListener("mousedown",e=>{ if(e.button===0&&cfg.kind!=="sprite")down={x:e.screenX,y:e.screenY}; });
   window.addEventListener("mouseup",()=>{down=null});
   window.addEventListener("mousemove",e=>{
     if(!down||!window.__qtpet||!(window.pywebview&&pywebview.api&&pywebview.api.start_drag))return;

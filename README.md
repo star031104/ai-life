@@ -12,7 +12,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-555)](#部署)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[功能](#功能) · [部署](#部署) · [配置](#配置详解) · [日常使用](#日常使用) · [常见问题](#常见问题) · [功能详解](docs/FEATURES.md) · [写人设](PERSONA.md)
+[功能](#功能) · [部署](#部署) · [配置](#配置详解) · [日常使用](#日常使用) · [常见问题](#常见问题) · [功能详解](docs/FEATURES.md) · [写人设](PERSONA.md) · [设计风格](docs/DESIGN.md)
 
 </div>
 
@@ -37,8 +37,8 @@ ai-life 不是一个“问一句答一句”的聊天机器人。TA 有自己的
 | 🔔 | **主动找你** | 早安晚安、想你了来找你、到点提醒你；会学习你的回复习惯，少打扰你；夜里免打扰 |
 | 🌙 | **关机前后** | 关掉程序时 TA 说一声“先去忙了”；开机后说说这段时间在干嘛，错过的提醒和纪念日一起补上 |
 | 🖥️ | **知道你在干嘛**（可关） | 电脑上在玩哪个游戏、在 B 站看什么、今天各忙了多久，会顺着聊，提醒你歇会儿 |
-| 🏠 | **小屋** | Telegram 里点“小屋”打开，看 TA 的心情、日记、记忆、留言板，还能直接改人设；电脑浏览器也能看 |
-| 🧸 | **桌宠** | Live2D 小人待在桌面上（默认是金发、戴贝雷帽的小魔法师 Rice，Live2D 官方免费示例模型），透明背景、不占任务栏，可以打字聊天，话冒在头顶气泡里、会做动作；也能换成自己的模型 |
+| 🏠 | **小屋** | Telegram 里点“小屋”打开，看 TA 的心情、日记、记忆、留言板，还能直接改人设；电脑浏览器也能看。电脑上还多几样：各个连接的状态（绿 / 蓝 / 黄 / 灰四色一眼看清）、换大模型、换桌宠的样子、软件更新 |
+| 🧸 | **桌宠** | 小人待在桌面上，透明背景、不占任务栏，可以打字聊天，话冒在头顶气泡里。两种样子：Live2D（默认是金发小魔法师 Rice，官方免费示例模型，也能换成自己的模型），或者在小屋里一键换成 [codex-pets.net](https://codex-pets.net) 上的**像素宠物**——她想回复时托腮思考、开心了蹦一下、难过时垂头、说完等你回话，闲着会在屏幕上走几步、眼睛跟着鼠标转，空闲时几乎不占 CPU。**不打扰你**：她主动说话时可以只亮一个小点（光环转三圈），鼠标经过才说；有程序全屏（打游戏、看视频）时先藏起来；你离开电脑时她安静下来，回来再告诉你。换样子只换外表，人设不变 |
 | 🎧 | **一起做的事** | 打卡、追番、听歌、愿望清单、时间胶囊、每月纪念册、睡前故事、小游戏 |
 | 🔗 | **看得懂你发的东西** | 图片、动图、视频、文件、位置，B 站 / YouTube / 公众号 / 网页链接（先点开读完再回你） |
 | 🐧 | **QQ** | 一键自动下载配置 NapCat，扫一次码以后自动登录；私聊和 Telegram 共用记忆、你在哪边说话就在哪边回，也可以只用 QQ |
@@ -173,7 +173,7 @@ python run.py setup                       # 配置向导；或者把 config.exam
 
 ### 可选：桌宠、小屋、开机自启
 
-- **桌宠**：Windows 上启动时自动出现在桌面右下角。背景不透明的话，双击 `pet_setup.bat` 安装 PySide6 后重启。默认形象是 Live2D 官方免费示例模型 Rice（金发、贝雷帽的小魔法师），`pet.preset: haru` 可以换回原来的 Haru。想换成自己的 Live2D 模型，把模型文件夹放进 `data/pet/model/` 就会自动识别（请使用你有权使用的模型）。
+- **桌宠**：Windows 上启动时自动出现在桌面右下角。背景不透明的话，双击 `pet_setup.bat` 安装 PySide6 后重启。默认形象是 Live2D 官方免费示例模型 Rice（金发、贝雷帽的小魔法师），`pet.preset: haru` 可以换回原来的 Haru。**像素宠物**：在电脑上打开小屋 →“设置 → 桌宠的样子”，搜一只（比如 `claude`、`blonde`）点“下载并用她”，桌宠几秒内就换好；也可以在 `config.yaml` 里写 `pet: {sprite: claude-chan}`，第一次启动时自动下载。像素宠物的版权归各自作者（很多是同人二创），程序只把它下载到你自己电脑的 `data/pet/sprites/` 里，不打包、不上传。想换成自己的 Live2D 模型，把模型文件夹放进 `data/pet/model/` 就会自动识别（请使用你有权使用的模型）。
 - **小屋**：手机上在 Telegram bot 聊天框左边点“小屋”按钮，QQ 里给 TA 发 `/小屋`；电脑上浏览器打开 `http://127.0.0.1:8765`。手机小屋通过免费的 Cloudflare 临时隧道访问，程序会自动下载 `cloudflared`。
 - **开机自启**：双击 `autostart_on.bat`，或者发 `/autostart 开`。关闭用 `autostart_off.bat`。
 - **QQ 群**：ai-life 只管私聊。群里的角色是单独的程序 **[ai-life-group](https://github.com/star031104/ai-life-group)**：另一个 QQ 小号、另一个人设，一行命令部署，它会从这里的 NapCat 克隆一份给自己用，两边可以同时开。
@@ -187,7 +187,14 @@ python run.py setup                       # 配置向导；或者把 config.exam
 
 ### 更新
 
-再跑一次一键部署那行 PowerShell 就行：它只覆盖代码，不动 `config.yaml`、`.env`、`data/`、`napcat/`。用 git 的话：
+程序每天自己看一次 GitHub 上有没有新版本，有的话小屋的“连接”里会亮黄点。在电脑上打开小屋 →“设置 → 软件更新”点“更新”（或者双击 `update.bat`、托盘菜单“检查更新”）：
+
+- 下载的代码先检查（zip 完整、版本号确实更新、关键文件都在），不对就不装，一个文件都不动；
+- 换之前把要覆盖的文件备份到 `data/backup/code-<旧版本>-<时间>.zip`；`config.yaml`、`config.llm.yaml`、`.env`、`data/`、`napcat/` 和你已有的人设永远不碰；
+- 换好自动重启。新版连续两次刚启动就退出，托盘会自动换回旧版；也可以随时点“换回上一个版本”（`update.bat rollback`）。
+- 国内连 GitHub 慢：在 Gitee 上导入这个仓库，在 `config.yaml` 里写 `update: {gitee: 你的用户名/ai-life}`，会先从 Gitee 下载。不想自动检查：`update: {auto_check: false}`。
+
+也可以再跑一次一键部署那行 PowerShell：它只覆盖代码，不动 `config.yaml`、`.env`、`data/`、`napcat/`。用 git 的话：
 
 ```bash
 git pull
@@ -399,7 +406,9 @@ ai-life/
 │   ├── story.py · herworld.py · mind.py   TA 的故事线、身边的人、内心独白
 │   ├── sense.py           电脑感知
 │   ├── web*.py · tunnel.py                 小屋网页、Mini App 隧道
-│   ├── pet.py             桌宠窗口
+│   ├── pet.py             桌宠窗口（Live2D 和像素宠物）
+│   ├── pet_sprite.py      像素宠物：从 codex-pets.net 下载、图库
+│   ├── update.py          自动更新：检查、下载、备份、回滚
 │   ├── qq*.py · napcat_*.py                 QQ（NapCat）收发、一键安装、自动登录
 │   └── fftool.py          ffmpeg（动图 / 视频截帧）
 ├── docs/
@@ -408,7 +417,7 @@ ai-life/
 ├── tests/                 自动测试（python -m pytest tests）
 ├── get.ps1                一行命令部署（下载代码 + 运行 install.bat）
 ├── tools/tray.pyw         托盘图标（start.bat 用它在后台运行，不开窗口）
-├── install.bat · start.bat · start_console.bat · selftest.bat · setup.bat · qq_setup.bat · llm.bat · pet_setup.bat   Windows 脚本
+├── install.bat · start.bat · start_console.bat · selftest.bat · setup.bat · qq_setup.bat · llm.bat · update.bat · pet_setup.bat   Windows 脚本
 ├── tools/env.bat          Windows 脚本共用：找到 .venv 或 conda 环境
 └── install.sh · start.sh  Linux / macOS 脚本
 ```
@@ -425,3 +434,8 @@ python -m pytest tests -q        # 不联网，用假的大模型和假的 Teleg
 ## 许可
 
 [MIT](LICENSE)
+
+## 致谢
+
+- 像素宠物的格式和“按状态播动作”的思路参考了 [Wakuwaku](https://github.com/zhoupengjie/Wakuwaku)（MIT），宠物来自 [codex-pets.net](https://codex-pets.net)，版权归各自作者。
+- 默认的 Live2D 模型 Rice 是 Live2D 官方的免费示例模型（Free Material License）。

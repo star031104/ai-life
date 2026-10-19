@@ -27,11 +27,21 @@ APP = {
     "color": (236, 92, 140),
     "letter": "L",
     "startup": "ai-life.cmd",
-    "extra": [("换大模型", "llm.bat")],
+    "extra": [("换大模型", "llm.bat"), ("检查更新", "update.bat")],
 }
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 EXIT_NO_RESTART = 3
+
+
+def after_update_failure() -> str:
+    """刚更新过的新版本连续起不来：换回旧版（ailife/update.py）。"""
+    try:
+        sys.path.insert(0, str(ROOT))
+        from ailife.update import on_quick_exit
+        return on_quick_exit(ROOT)
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def message(text: str, title: str | None = None):
@@ -137,6 +147,12 @@ class Runner:
                 self.restart_now = False
                 continue
             fails = fails + 1 if time.time() - t0 < 60 else 0
+            if fails and rc not in (0, None):
+                msg = after_update_failure()
+                if msg:                              # 刚更新的新版本起不来：已经换回旧版，马上重开
+                    self.set_state("正在重启", msg)
+                    fails = 0
+                    continue
             if rc not in (0, None):
                 self.set_state("出错了，10 秒后重启", "程序意外退出了，10 秒后自动重启" if fails <= 1 else None)
             self.wake.clear()

@@ -207,6 +207,14 @@ pet:
   width: 320
   height: 480
   preset: rice                # 自带的形象：rice（金发小魔法师，默认）/ haru（原来那个）
+  sprite: ""                  # 换成 codex-pets.net 上的像素宠物：写它的 id（比如 claude-chan），第一次用时自动下载；
+                              # 更方便的是在小屋“设置 → 桌宠的样子”里挑。留空＝用 Live2D
+  sprite_scale: 1.0           # 像素宠物的大小
+  walk: true                  # 像素宠物闲着时会在屏幕上走几步
+  look: true                  # 像素宠物的眼睛跟着鼠标
+  alert: bubble               # 她在桌面上有话说时：bubble 直接冒气泡 / dot 亮个小点、鼠标经过再说 / none 不打扰（小屋里也能改）
+  stay: 8                     # 气泡停留几秒（0＝看到为止）
+  hide_fullscreen: true       # 有程序全屏（打游戏、看视频）时桌宠先藏起来，消息攒着，退出全屏再说
   model: ""                   # 换自己的 Live2D 模型：把整个模型文件夹放进 data/pet/model/ 就会自动用（留空即可）；
                               # 里面有好几个模型时，这里写要用的那个，比如 角色名/xxx.model3.json
   scale: 1.0                  # 模型大小
@@ -262,3 +270,9 @@ links:
   enabled: true               # 你发 B站 / 公众号 / 网页 / YouTube 链接，她会先点开看标题、简介和正文开头再回你
   max_chars: 700              # 正文最多读多少字给她
 
+
+# ---------------- 软件更新 ----------------
+update:
+  auto_check: true            # 每天看一次 GitHub 上有没有新版本（只看，不会自己装；在小屋里点“更新”才装）
+  repo: star031104/ai-life    # 从哪个仓库更新
+  gitee: ""                   # 国内连 GitHub 慢：在 Gitee 上导入这个仓库，填 “你的用户名/ai-life”，会先从它下载

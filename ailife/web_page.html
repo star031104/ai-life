@@ -230,6 +230,20 @@ textarea.input{height:auto;padding:9px 12px;width:100%;resize:vertical;line-heig
 .scroll{max-height:560px;overflow:auto;padding-right:4px;scrollbar-width:thin}
 .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
 .photos a{display:block;aspect-ratio:3/4;border-radius:10px;background:var(--surface-2) center/cover no-repeat;border:1px solid var(--line);transition:transform .15s,box-shadow .15s}
+.links{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.link{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);min-width:0}
+.link i{width:10px;height:10px;border-radius:50%;flex:none;margin-top:5px;background:var(--c)}
+.link.green{--c:#1f9d55}.link.blue{--c:#2a78d6}.link.yellow{--c:#e0a100;border-color:color-mix(in srgb,#e0a100 45%,var(--line));background:color-mix(in srgb,#e0a100 7%,transparent)}.link.gray{--c:var(--line-2)}
+.link .n{font-weight:600;font-size:13px}.link .t{font-size:12px;color:var(--ink-3);word-break:break-word}
+.skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.skin{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.skin.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.skin .pic{aspect-ratio:192/208;border-radius:8px;background:var(--surface-2) center/contain no-repeat}
+.skin .nm{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.skin .by{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.skin .btn{width:100%}
+.skin-cur{display:flex;gap:14px;align-items:flex-start}
+.skin-cur .pic{width:96px;flex:none;aspect-ratio:192/208;border-radius:10px;background:var(--surface-2) no-repeat}
 .photos a:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
 
 /* ============ 留言板 ============ */
@@ -362,6 +376,10 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
         </div>
       </div>
 
+      <div class="card c12" id="linksCard" hidden>
+        <div class="card-h"><h2><span data-i="eye"></span>连接</h2><span class="hint">绿：好好的　蓝：装好了，等第一次　黄：要你看一下　灰：没开</span></div>
+        <div class="card-b"><div class="links" id="links"></div></div>
+      </div>
       <div class="card c12">
         <div class="card-h"><h2><span data-i="pulse"></span>她的心情</h2><span class="sp"></span><span class="hint">会随事情起伏，过一阵慢慢回到平常</span></div>
         <div class="card-b">
@@ -618,6 +636,38 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
               <button class="btn" id="llmRestart" hidden>重启生效</button></div></div>
         </div>
       </div>
+      <div class="card c12" id="updCard" hidden>
+        <div class="card-h"><h2><span data-i="gear"></span>软件更新</h2><span class="hint">每天自己看一次；更新前先备份，新版起不来会自动换回去</span></div>
+        <div class="card-b">
+          <dl class="kv"><dt>现在的版本</dt><dd id="updNow"></dd><dt>GitHub 上最新</dt><dd><span id="updLatest"></span> <span class="small muted" id="updWhen"></span></dd></dl>
+          <div class="small muted" id="updLast" style="margin-top:8px"></div>
+          <div class="form"><button class="btn" id="updCheck">现在检查</button><button class="btn pri" id="updApply" hidden>更新</button><button class="btn ghost" id="updBack" hidden>换回上一个版本</button></div>
+          <p class="small muted" style="margin:10px 0 0">国内连 GitHub 慢的话，可以在 Gitee 上导入这个仓库，然后在 config.yaml 里写 <code class="k">update: {gitee: 你的用户名/ai-life}</code>，会先从 Gitee 下载。</p>
+        </div>
+      </div>
+      <div class="card c12" id="skinCard" hidden>
+        <div class="card-h"><h2><span data-i="pet"></span>桌宠的样子</h2><span class="hint">Live2D，或者 codex-pets.net 上的像素宠物（会跑会跳、眼睛跟着鼠标）</span></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:16px">
+          <div class="skin-cur" id="skinCur"></div>
+          <div class="form" style="margin:0;flex-wrap:wrap;align-items:flex-end">
+            <div class="field" style="flex:1;min-width:200px"><label for="petAlert">她在桌面上有话说时</label>
+              <select class="input" id="petAlert" style="flex:none"><option value="bubble">直接冒气泡</option><option value="dot">亮个小点，鼠标经过再说</option><option value="none">不打扰（鼠标经过才说）</option></select></div>
+            <div class="field" style="flex:1;min-width:160px"><label for="petStay">气泡停留多久</label>
+              <select class="input" id="petStay" style="flex:none"><option value="3">3 秒</option><option value="8">8 秒</option><option value="30">30 秒</option><option value="120">2 分钟</option><option value="0">看到为止</option></select></div>
+          </div>
+          <p class="small muted" style="margin:-6px 0 0">有程序全屏（打游戏、看视频）时她会先藏起来，只攒着不说；你离开电脑时她安静下来，回来再告诉你。</p>
+          <div class="field" id="skinLocalWrap" hidden><label>下载过的</label><div class="skins" id="skinLocal"></div></div>
+          <div class="field"><label for="skinQ">从 codex-pets.net 挑一只</label>
+            <div class="form" style="margin:0;flex-wrap:wrap">
+              <input class="input" id="skinQ" placeholder="搜名字，比如 blonde、金发、claude" style="flex:2;min-width:200px">
+              <select class="input" id="skinSort" style="max-width:130px"><option value="popular">最受欢迎</option><option value="new">最新</option></select>
+              <input class="input" id="skinRef" placeholder="或者粘贴宠物页面的地址" style="flex:2;min-width:200px">
+              <button class="btn" id="skinRefGo">用它</button></div></div>
+          <div class="skins" id="skinGallery"></div>
+          <div class="tools" style="justify-content:center"><button class="btn sm" id="skinPrev">上一页</button><span class="small muted" id="skinPage"></span><button class="btn sm" id="skinNext">下一页</button></div>
+          <p class="small muted" style="margin:0">宠物来自 <a href="https://codex-pets.net" target="_blank" rel="noopener">codex-pets.net</a>，版权归各自作者（很多是同人二创）。只会下载到你这台电脑的 data/pet/sprites/ 里，不会放进项目、也不会上传。</p>
+        </div>
+      </div>
       <div class="card c6">
         <div class="card-h"><h2><span data-i="eye"></span>感知</h2></div>
         <div class="card-b"><dl class="kv" id="senseKv"></dl>
@@ -732,6 +782,78 @@ $("llmRestart")&&$("llmRestart").addEventListener("click",async()=>{const r=awai
 document.addEventListener("click",async e=>{const t=e.target.closest("[data-llmdel]");if(!t)return;
   if(!confirm(`删掉 ${t.dataset.llmdel}？`))return; const r=await post("api/llm/remove",{name:t.dataset.llmdel});toast(r.message||r.error);loadLLM()});
 
+/* ============ 连接状态（只在本机网页） ============ */
+async function loadLinks(){
+  try{const r=await fetch("api/links",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("linksCard").hidden=false;
+    $("links").innerHTML=d.links.map(l=>`<div class="link ${l.state}" title="${esc(l.text)}"><i aria-label="${{green:"正常",blue:"等待",yellow:"要处理",gray:"没开"}[l.state]}"></i><div style="min-width:0"><div class="n">${esc(l.name)}</div><div class="t">${esc(l.text)}</div></div></div>`).join("");
+  }catch(e){}
+}
+
+/* ============ 软件更新（只在本机网页） ============ */
+async function loadUpdate(){
+  try{const r=await fetch("api/update",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("updCard").hidden=false;
+    const i=d.info||{}, last=d.last||{};
+    $("updNow").textContent=d.current;
+    $("updLatest").textContent=i.latest?(i.newer?`${i.latest}（有新版本）`:`${i.latest}（已经是最新）`):(i.error?"没查到："+i.error:"还没查过");
+    $("updWhen").textContent=i.ts?md(i.ts)+" "+new Date(i.ts*1000).toTimeString().slice(0,5):"";
+    $("updApply").hidden=!i.newer;
+    $("updBack").hidden=!(last.state==="applied"||last.state==="confirmed");
+    $("updLast").textContent=last.to?`上次更新：${last.from} → ${last.to}（${{applied:"刚换上，正在确认",confirmed:"成功",rolled_back:"已经换回去了"}[last.state]||last.state}）`:"";
+  }catch(e){}
+}
+$("updCheck")&&$("updCheck").addEventListener("click",async()=>{const b=$("updCheck");b.disabled=true;b.textContent="在看…";
+  try{const r=await post("api/update/check",{});toast(r.ok?(r.newer?`有新版本 ${r.latest}`:"已经是最新的了"):"没查到："+r.error);loadUpdate()}finally{b.disabled=false;b.textContent="现在检查"}});
+$("updApply")&&$("updApply").addEventListener("click",async()=>{if(!confirm("下载新版本并换上？会先备份现在的代码，你的配置、数据和人设都不会动。"))return;
+  const b=$("updApply");b.disabled=true;b.textContent="下载中…";const r=await post("api/update/apply",{});toast(r.message||r.error);
+  if(r.ok)setTimeout(()=>location.reload(),30000); else {b.disabled=false;b.textContent="更新"}});
+$("updBack")&&$("updBack").addEventListener("click",async()=>{if(!confirm("换回更新前的版本？"))return;const r=await post("api/update/rollback",{});toast(r.message||r.error);if(r.ok)setTimeout(()=>location.reload(),30000)});
+
+/* ============ 桌宠的样子（只在本机网页） ============ */
+let SK={page:1,total:1,q:"",cur:"",local:[]};
+const skinPic=pid=>`background-image:url('/pet/sprite/${encodeURIComponent(pid)}/spritesheet.webp');background-size:800% auto;background-position:0 0`;
+async function loadSkins(){
+  try{const r=await fetch("api/pet/sprites",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("skinCard").hidden=false;
+    SK.cur=d.current; SK.local=d.local;
+    try{const p=await (await fetch("api/pet/prefs",{headers:H()})).json(); $("petAlert").value=p.alert; $("petStay").value=String(p.stay)}catch(e){}
+    const cur=d.local.find(p=>p.id===d.current);
+    $("skinCur").innerHTML=cur?`<div class="pic" style="${skinPic(cur.id)}"></div><div class="grow" style="min-width:0"><div class="title">现在的样子：${esc(cur.name)}<span class="muted small">（只换样子，她还是${esc(S.name||"她")}）</span></div>
+        <div class="meta small muted">作者 ${esc(cur.author||"?")} · <a href="${esc(cur.source)}" target="_blank" rel="noopener">在 codex-pets.net 上看</a></div>
+        <p class="small ink2" style="margin:6px 0 10px;white-space:pre-wrap">${esc(cur.description).slice(0,300)}</p>
+        <button class="btn sm" data-skin="">换回 Live2D（${esc(d.live2d)}）</button></div>`
+      :`<div class="grow"><div class="title">现在的样子：Live2D（${esc(d.live2d)}）</div><div class="meta small muted">在下面挑一只像素宠物，桌宠马上换成它</div></div>`;
+    $("skinLocalWrap").hidden=!d.local.length;
+    $("skinLocal").innerHTML=d.local.map(p=>`<div class="skin ${p.id===d.current?"on":""}"><div class="pic" style="${skinPic(p.id)}"></div>
+      <div class="nm">${esc(p.name)}</div><div class="by">${esc(p.author||"")}</div>
+      ${p.id===d.current?'<button class="btn sm" disabled>正在用</button>':`<button class="btn sm pri" data-skin="${esc(p.id)}">用她</button>`}
+      <button class="btn ghost sm" data-skindel="${esc(p.id)}">删掉</button></div>`).join("");
+    if(!$("skinGallery").dataset.loaded)skinGallery();
+  }catch(e){}
+}
+async function skinGallery(){
+  $("skinGallery").dataset.loaded=1; $("skinGallery").innerHTML='<div class="empty" style="grid-column:1/-1">正在打开图库…</div>';
+  try{const r=await fetch(`api/pet/sprite/gallery?page=${SK.page}&sort=${$("skinSort").value}&q=${encodeURIComponent(SK.q)}`,{headers:H()}); const d=await r.json();
+    if(!d.ok){$("skinGallery").innerHTML=`<div class="empty" style="grid-column:1/-1">${esc(d.error)}</div>`;return}
+    SK.total=d.totalPages||1; $("skinPage").textContent=`${SK.page} / ${SK.total}（共 ${d.total} 只）`;
+    $("skinPrev").disabled=SK.page<=1; $("skinNext").disabled=SK.page>=SK.total;
+    $("skinGallery").innerHTML=d.items.map(p=>`<div class="skin ${p.id===SK.cur?"on":""}" title="${esc(p.description)}"><div class="pic" style="background-image:url('${esc(p.poster)}')"></div>
+      <div class="nm">${esc(p.name)}</div><div class="by">${esc(p.author)} · ♥ ${p.likes}</div>
+      ${p.id===SK.cur?'<button class="btn sm" disabled>正在用</button>':`<button class="btn sm ${SK.local.some(x=>x.id===p.id)?"pri":""}" data-skin="${esc(p.id)}">${SK.local.some(x=>x.id===p.id)?"用她":"下载并用她"}</button>`}</div>`).join("")
+      ||'<div class="empty" style="grid-column:1/-1">没找到</div>';
+  }catch(e){$("skinGallery").innerHTML='<div class="empty" style="grid-column:1/-1">图库打不开（网络？）</div>'}
+}
+async function useSkin(id,btn){ if(btn){btn.disabled=true;btn.textContent=id?"下载中…":"切换中…"}
+  const r=await post("api/pet/sprite/use",{id}); toast(r.message||r.error); if(r.ok){await loadSkins();skinGallery()} else if(btn){btn.disabled=false;btn.textContent="再试一次"} }
+document.addEventListener("click",async e=>{
+  const u=e.target.closest("[data-skin]"); if(u){useSkin(u.dataset.skin,u);return}
+  const d=e.target.closest("[data-skindel]"); if(d){ if(!confirm("从电脑上删掉这只宠物？"))return; await post("api/pet/sprite/remove",{id:d.dataset.skindel}); loadSkins(); }
+});
+["petAlert","petStay"].forEach(id=>$(id)&&$(id).addEventListener("change",async()=>{const r=await post("api/pet/prefs",{alert:$("petAlert").value,stay:+$("petStay").value});toast(r.ok?"改好了，桌宠马上照这个来":"没改成")}));
+let skT; $("skinQ")&&$("skinQ").addEventListener("input",()=>{clearTimeout(skT);skT=setTimeout(()=>{SK.q=$("skinQ").value.trim();SK.page=1;skinGallery()},400)});
+$("skinSort")&&$("skinSort").addEventListener("change",()=>{SK.page=1;skinGallery()});
+$("skinPrev")&&$("skinPrev").addEventListener("click",()=>{if(SK.page>1){SK.page--;skinGallery()}});
+$("skinNext")&&$("skinNext").addEventListener("click",()=>{if(SK.page<SK.total){SK.page++;skinGallery()}});
+$("skinRefGo")&&$("skinRefGo").addEventListener("click",()=>{const v=$("skinRef").value.trim();if(v)useSkin(v,$("skinRefGo"))});
+
 async function load(retry=true){
   document.body.classList.add("skel-loading");
   try{const r=await fetch("api/state",{headers:H()});
@@ -739,7 +861,7 @@ async function load(retry=true){
       try{sessionStorage.removeItem("ailife_tok")}catch(e){}
       $("sub").textContent="链接过期了：在 QQ 里给她发 /小屋（Telegram 里点“小屋”或发 /home）拿新链接；在运行她的电脑上直接打开 http://127.0.0.1:8765 就行";return }
     S=await r.json()}catch(e){$("sub").textContent="连不上程序，确认 start.bat 还开着";return}
-  render(); loadLLM();
+  render(); loadLLM(); loadLinks(); loadUpdate(); if(S.pet&&!TG)loadSkins();
 }
 
 /* ============ 渲染 ============ */
@@ -757,7 +879,11 @@ function render(){
   {const a=apps(),w=[]; if(a.qq)w.push("在 QQ 里给她发 /小屋"); if(a.tg)w.push("在 Telegram 里点“小屋”");
    $("foot").textContent="只在你自己的设备上运行"+(w.length?" · 手机上"+w.join("或")+"打开":""); $("hintDislike").textContent=dislikeHow()}
   const avatar=S.photos.length?S.photos[0].url:null;
-  for(const id of["ava","ava2"]){const a=$(id); if(avatar){a.style.backgroundImage=`url("${avatar}")`;a.textContent=""}else{a.style.backgroundImage="";a.textContent=name.slice(-1)}}
+  for(const id of["ava","ava2"]){const a=$(id);
+    if(S.skin){const w=a.offsetWidth||40,cw=w/0.5;            // 桌宠换成像素宠物时，头像用她的样子（头部）
+      a.style.backgroundImage=`url("/pet/sprite/${encodeURIComponent(S.skin)}/spritesheet.webp")`;a.style.backgroundSize=`${cw*8}px auto`;
+      a.style.backgroundPosition=`${-(cw-w)/2}px ${-cw*0.1}px`;a.style.backgroundColor="var(--accent-soft)";a.textContent=""}
+    else if(avatar){a.style.backgroundImage=`url("${avatar}")`;a.style.backgroundSize="";a.style.backgroundPosition="";a.textContent=""}else{a.style.backgroundImage="";a.textContent=name.slice(-1)}}
   const h=new Date().getHours();
   const part=h<5?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
   $("greet").textContent=`${part}，${name}在等你`;

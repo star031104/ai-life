@@ -100,6 +100,10 @@ async def main():
     bot.phone = PhoneSense(cfg, brain.db, bot.on_phone)
     bot.phone.start()
 
+    from ailife.update import check_loop, confirm_later
+    confirm_later(cfg.root)                        # 刚更新过：正常跑够 2 分钟才算更新成功
+    update_task = asyncio.create_task(check_loop(cfg, brain.db))  # noqa: F841  每天看一次有没有新版本
+
     from ailife.web import Dashboard
     dash = Dashboard(cfg, brain, bot)
     bot.dash = dash
@@ -325,6 +329,10 @@ if __name__ == "__main__":
             print(f"没做成：{e}")
             sys.exit(1)
         sys.exit(0)
+    if mode == "update":                           # 自动更新：update / update apply / update rollback
+        logging.getLogger().setLevel(logging.INFO)
+        from ailife.update import main as update_main
+        sys.exit(update_main(sys.argv[2:]))
     if mode == "llm":                              # 自定义大模型：填地址和 Key → 测连通 → 选模型
         logging.getLogger().setLevel(logging.WARNING)
         from ailife.llm_custom import main as llm_main
