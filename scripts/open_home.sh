@@ -8,7 +8,7 @@ mkdir -p data
 SRV=$(cat data/server.txt 2>/dev/null)
 [ -z "$SRV" ] && { echo "用法：bash scripts/open_home.sh ubuntu@服务器IP"; exit 1; }
 KEY=(); [ -f data/server_key ] && KEY=(-i data/server_key)
-ssh "${KEY[@]}" -o ServerAliveInterval=30 -f -N \
+ssh "${KEY[@]}" -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -o ServerAliveInterval=30 -f -N \
   -L 8765:127.0.0.1:8765 -L 8767:127.0.0.1:8767 -L 8768:127.0.0.1:8768 \
   -L 5800:127.0.0.1:5800 -L 6099:127.0.0.1:6099 -L 6100:127.0.0.1:6100 "$SRV" || exit 1
 URL="http://127.0.0.1:${2:-8765}"
