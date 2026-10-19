@@ -141,7 +141,7 @@ class Emotion:
         return "平静"
 
     def mood_style(self) -> str:
-        """桌宠挑表情用的语气：开心 / 撒娇 / 难过 / 生气 / 默认。"""
+        """小屋挑表情用的语气：开心 / 撒娇 / 难过 / 生气 / 默认。"""
         st = self.state()
         if st["sulk"] >= 45:
             return "生气"

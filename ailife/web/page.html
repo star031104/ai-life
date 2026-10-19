@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>小屋</title>
-<script>/* 只有在 Telegram 里打开时才加载它的脚本：从 QQ / 浏览器打开时（手机上没开代理）这个地址连不上，会让整页一直白着 */
-if(location.hash.indexOf("tgWebAppData")>=0||/Telegram/i.test(navigator.userAgent))document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
 <style>
 /* ============ 设计令牌 ============ */
 :root{
@@ -235,15 +233,6 @@ textarea.input{height:auto;padding:9px 12px;width:100%;resize:vertical;line-heig
 .link i{width:10px;height:10px;border-radius:50%;flex:none;margin-top:5px;background:var(--c)}
 .link.green{--c:#1f9d55}.link.blue{--c:#2a78d6}.link.yellow{--c:#e0a100;border-color:color-mix(in srgb,#e0a100 45%,var(--line));background:color-mix(in srgb,#e0a100 7%,transparent)}.link.gray{--c:var(--line-2)}
 .link .n{font-weight:600;font-size:13px}.link .t{font-size:12px;color:var(--ink-3);word-break:break-word}
-.skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.skin{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.skin.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-.skin .pic{aspect-ratio:192/208;border-radius:8px;background:var(--surface-2) center/contain no-repeat}
-.skin .nm{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.skin .by{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.skin .btn{width:100%}
-.skin-cur{display:flex;gap:14px;align-items:flex-start}
-.skin-cur .pic{width:96px;flex:none;aspect-ratio:192/208;border-radius:10px;background:var(--surface-2) no-repeat}
 .photos a:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
 
 /* ============ 留言板 ============ */
@@ -334,7 +323,6 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
         <h1 id="name">小屋</h1>
         <div class="sub" id="sub">正在连接…</div>
       </div>
-      <a class="iconbtn" id="petBtn" href="/pet" target="_blank" title="桌面上的她" aria-label="桌宠" hidden></a>
       <button class="iconbtn" id="refresh" title="刷新" aria-label="刷新"></button>
     </div>
     <nav class="tabs" id="tabs" role="tablist">
@@ -646,31 +634,8 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
           <p class="small muted" style="margin:10px 0 0">国内连 GitHub 慢的话，可以在 Gitee 上导入这个仓库，然后在 config.yaml 里写 <code class="k">update: {gitee: 你的用户名/ai-life}</code>，会先从 Gitee 下载。</p>
         </div>
       </div>
-      <div class="card c12" id="skinCard" hidden>
-        <div class="card-h"><h2><span data-i="pet"></span>桌宠的样子</h2><span class="hint">Live2D，或者 codex-pets.net 上的像素宠物（会跑会跳、眼睛跟着鼠标）</span></div>
-        <div class="card-b" style="display:flex;flex-direction:column;gap:16px">
-          <div class="skin-cur" id="skinCur"></div>
-          <div class="form" style="margin:0;flex-wrap:wrap;align-items:flex-end">
-            <div class="field" style="flex:1;min-width:200px"><label for="petAlert">她在桌面上有话说时</label>
-              <select class="input" id="petAlert" style="flex:none"><option value="bubble">直接冒气泡</option><option value="dot">亮个小点，鼠标经过再说</option><option value="none">不打扰（鼠标经过才说）</option></select></div>
-            <div class="field" style="flex:1;min-width:160px"><label for="petStay">气泡停留多久</label>
-              <select class="input" id="petStay" style="flex:none"><option value="3">3 秒</option><option value="8">8 秒</option><option value="30">30 秒</option><option value="120">2 分钟</option><option value="0">看到为止</option></select></div>
-          </div>
-          <p class="small muted" style="margin:-6px 0 0">有程序全屏（打游戏、看视频）时她会先藏起来，只攒着不说；你离开电脑时她安静下来，回来再告诉你。</p>
-          <div class="field" id="skinLocalWrap" hidden><label>下载过的</label><div class="skins" id="skinLocal"></div></div>
-          <div class="field"><label for="skinQ">从 codex-pets.net 挑一只</label>
-            <div class="form" style="margin:0;flex-wrap:wrap">
-              <input class="input" id="skinQ" placeholder="搜名字或者粘贴网址" style="flex:2;min-width:200px">
-              <select class="input" id="skinSort" style="max-width:130px"><option value="popular">最受欢迎</option><option value="new">最新</option></select>
-              <input class="input" id="skinRef" placeholder="或者粘贴宠物页面的地址" style="flex:2;min-width:200px">
-              <button class="btn" id="skinRefGo">用它</button></div></div>
-          <div class="skins" id="skinGallery"></div>
-          <div class="tools" style="justify-content:center"><button class="btn sm" id="skinPrev">上一页</button><span class="small muted" id="skinPage"></span><button class="btn sm" id="skinNext">下一页</button></div>
-          <p class="small muted" style="margin:0">宠物来自 <a href="https://codex-pets.net" target="_blank" rel="noopener">codex-pets.net</a>，版权归各自作者（很多是同人二创）。只会下载到你这台电脑的 data/pet/sprites/ 里，不会放进项目、也不会上传。</p>
-        </div>
-      </div>
       <div class="card c6">
-        <div class="card-h"><h2><span data-i="eye"></span>感知</h2></div>
+        <div class="card-h"><h2><span data-i="eye"></span>手机信号</h2></div>
         <div class="card-b"><dl class="kv" id="senseKv"></dl>
           <p class="small muted" style="margin:14px 0 0">手机快捷指令（iPhone）或 MacroDroid（安卓）在闹钟关掉、到家、开始充电时，向上面的频道 POST 一句“起床 / 到家 / 充电”，她就会知道。具体步骤见 README。</p>
         </div>
@@ -724,29 +689,18 @@ const ICONS={
   spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   route:'<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>',
   music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
-  pet:'<path d="M12 21a7 7 0 0 0 7-7c0-4-3-8-7-8s-7 4-7 8a7 7 0 0 0 7 7Z"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/><path d="M10 16c1.2.8 2.8.8 4 0"/>',
   link:'<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
   copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
 };
 const icon=(n,c="")=>`<svg class="i ${c}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]||""}</svg>`;
 function paintIcons(root=document){root.querySelectorAll("[data-i]").forEach(e=>{e.outerHTML=icon(e.dataset.i)})}
 
-/* ============ 连接（本机 / Telegram Mini App） ============ */
-let S=null, TOK="", MEMO="user", SHOW_TABLE=false;
-(function(){ /* /home 里“用浏览器打开”的链接带着 ?t=令牌：记下来，再从地址栏去掉 */
-  const u=new URL(location.href), t=u.searchParams.get("t");
-  if(t){TOK=t; try{sessionStorage.setItem("ailife_tok",t)}catch(e){} u.searchParams.delete("t"); try{history.replaceState(null,"",u.pathname+(u.search||"")+u.hash)}catch(e){}}
-  else{try{TOK=sessionStorage.getItem("ailife_tok")||""}catch(e){}}
-})();
+/* ============ 连接 ============ */
+let S=null, MEMO="user", SHOW_TABLE=false;
 const LOCAL=["127.0.0.1","localhost","[::1]"].includes(location.hostname);
-const TG=(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)?Telegram.WebApp:null;
-if(TG){try{TG.ready();TG.expand();document.documentElement.dataset.theme=TG.colorScheme==="dark"?"dark":"light"}catch(e){}}
-const H=x=>Object.assign(TOK?{"X-Token":TOK}:{},x||{});
+const H=x=>Object.assign({},x||{});
 function toast(t){const e=$("toast");e.textContent=t;e.classList.add("on");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("on"),2400)}
 async function post(u,b){return (await fetch(u.replace(/^\//,""),{method:"POST",headers:H({"Content-Type":"application/json"}),body:JSON.stringify(b)})).json()}
-async function auth(){ if(!TG)return;
-  const r=await fetch("api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({initData:TG.initData})});
-  if(r.ok)TOK=(await r.json()).token; else toast("只有主人能打开哦"); }
 
 /* ============ 大模型（只在本机网页）：全部是用户自己加的 ============ */
 let LLMP={}, LLMROLES={};
@@ -818,82 +772,24 @@ $("updApply")&&$("updApply").addEventListener("click",async()=>{if(!confirm("下
   if(r.ok)setTimeout(()=>location.reload(),30000); else {b.disabled=false;b.textContent="更新"}});
 $("updBack")&&$("updBack").addEventListener("click",async()=>{if(!confirm("换回更新前的版本？"))return;const r=await post("api/update/rollback",{});toast(r.message||r.error);if(r.ok)setTimeout(()=>location.reload(),30000)});
 
-/* ============ 桌宠的样子（只在本机网页） ============ */
-let SK={page:1,total:1,q:"",cur:"",local:[]};
-const skinPic=pid=>`background-image:url('/pet/sprite/${encodeURIComponent(pid)}/spritesheet.webp');background-size:800% auto;background-position:0 0`;
-async function loadSkins(){
-  try{const r=await fetch("api/pet/sprites",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("skinCard").hidden=false;
-    SK.cur=d.current; SK.local=d.local;
-    try{const p=await (await fetch("api/pet/prefs",{headers:H()})).json(); $("petAlert").value=p.alert; $("petStay").value=String(p.stay)}catch(e){}
-    const cur=d.local.find(p=>p.id===d.current);
-    $("skinCur").innerHTML=cur?`<div class="pic" style="${skinPic(cur.id)}"></div><div class="grow" style="min-width:0"><div class="title">现在的样子：${esc(cur.name)}<span class="muted small">（只换样子，她还是${esc(S.name||"她")}）</span></div>
-        <div class="meta small muted">作者 ${esc(cur.author||"?")} · <a href="${esc(cur.source)}" target="_blank" rel="noopener">在 codex-pets.net 上看</a></div>
-        <p class="small ink2" style="margin:6px 0 10px;white-space:pre-wrap">${esc(cur.description).slice(0,300)}</p>
-        <button class="btn sm" data-skin="">换回 Live2D（${esc(d.live2d)}）</button></div>`
-      :`<div class="grow"><div class="title">现在的样子：Live2D（${esc(d.live2d)}）</div><div class="meta small muted">在下面挑一只像素宠物，桌宠马上换成它</div></div>`;
-    $("skinLocalWrap").hidden=!d.local.length;
-    $("skinLocal").innerHTML=d.local.map(p=>`<div class="skin ${p.id===d.current?"on":""}"><div class="pic" style="${skinPic(p.id)}"></div>
-      <div class="nm">${esc(p.name)}</div><div class="by">${esc(p.author||"")}</div>
-      ${p.id===d.current?'<button class="btn sm" disabled>正在用</button>':`<button class="btn sm pri" data-skin="${esc(p.id)}">用她</button>`}
-      <button class="btn ghost sm" data-skindel="${esc(p.id)}">删掉</button></div>`).join("");
-    if(!$("skinGallery").dataset.loaded)skinGallery();
-  }catch(e){}
-}
-async function skinGallery(){
-  $("skinGallery").dataset.loaded=1; $("skinGallery").innerHTML='<div class="empty" style="grid-column:1/-1">正在打开图库…</div>';
-  try{const r=await fetch(`api/pet/sprite/gallery?page=${SK.page}&sort=${$("skinSort").value}&q=${encodeURIComponent(SK.q)}`,{headers:H()}); const d=await r.json();
-    if(!d.ok){$("skinGallery").innerHTML=`<div class="empty" style="grid-column:1/-1">${esc(d.error)}</div>`;return}
-    SK.total=d.totalPages||1; $("skinPage").textContent=`${SK.page} / ${SK.total}（共 ${d.total} 只）`;
-    $("skinPrev").disabled=SK.page<=1; $("skinNext").disabled=SK.page>=SK.total;
-    $("skinGallery").innerHTML=d.items.map(p=>`<div class="skin ${p.id===SK.cur?"on":""}" title="${esc(p.description)}"><div class="pic" style="background-image:url('${esc(p.poster)}')"></div>
-      <div class="nm">${esc(p.name)}</div><div class="by">${esc(p.author)} · ♥ ${p.likes}</div>
-      ${p.id===SK.cur?'<button class="btn sm" disabled>正在用</button>':`<button class="btn sm ${SK.local.some(x=>x.id===p.id)?"pri":""}" data-skin="${esc(p.id)}">${SK.local.some(x=>x.id===p.id)?"用她":"下载并用她"}</button>`}</div>`).join("")
-      ||'<div class="empty" style="grid-column:1/-1">没找到</div>';
-  }catch(e){$("skinGallery").innerHTML='<div class="empty" style="grid-column:1/-1">图库打不开（网络？）</div>'}
-}
-async function useSkin(id,btn){ if(btn){btn.disabled=true;btn.textContent=id?"下载中…":"切换中…"}
-  const r=await post("api/pet/sprite/use",{id}); toast(r.message||r.error); if(r.ok){await loadSkins();skinGallery()} else if(btn){btn.disabled=false;btn.textContent="再试一次"} }
-document.addEventListener("click",async e=>{
-  const u=e.target.closest("[data-skin]"); if(u){useSkin(u.dataset.skin,u);return}
-  const d=e.target.closest("[data-skindel]"); if(d){ if(!confirm("从电脑上删掉这只宠物？"))return; await post("api/pet/sprite/remove",{id:d.dataset.skindel}); loadSkins(); }
-});
-["petAlert","petStay"].forEach(id=>$(id)&&$(id).addEventListener("change",async()=>{const r=await post("api/pet/prefs",{alert:$("petAlert").value,stay:+$("petStay").value});toast(r.ok?"改好了，桌宠马上照这个来":"没改成")}));
-let skT; $("skinQ")&&$("skinQ").addEventListener("input",()=>{clearTimeout(skT);skT=setTimeout(()=>{SK.q=$("skinQ").value.trim();SK.page=1;skinGallery()},400)});
-$("skinSort")&&$("skinSort").addEventListener("change",()=>{SK.page=1;skinGallery()});
-$("skinPrev")&&$("skinPrev").addEventListener("click",()=>{if(SK.page>1){SK.page--;skinGallery()}});
-$("skinNext")&&$("skinNext").addEventListener("click",()=>{if(SK.page<SK.total){SK.page++;skinGallery()}});
-$("skinRefGo")&&$("skinRefGo").addEventListener("click",()=>{const v=$("skinRef").value.trim();if(v)useSkin(v,$("skinRefGo"))});
-
 async function load(retry=true){
   document.body.classList.add("skel-loading");
   try{const r=await fetch("api/state",{headers:H()});
-    if(r.status===401){ if(retry&&TG){await auth(); if(TOK)return load(false)}
-      try{sessionStorage.removeItem("ailife_tok")}catch(e){}
-      $("sub").textContent="链接过期了：在 QQ 里给她发 /小屋（Telegram 里点“小屋”或发 /home）拿新链接；在运行她的电脑上直接打开 http://127.0.0.1:8765 就行";return }
-    S=await r.json()}catch(e){$("sub").textContent="连不上程序，确认 start.bat 还开着";return}
-  render(); loadLLM(); loadLinks(); loadUpdate(); if(S.pet&&!TG)loadSkins();
+    if(r.status===403){$("sub").textContent="只能从本机打开：她跑在服务器上时，在你电脑上双击“打开小屋”";return}
+    S=await r.json()}catch(e){$("sub").textContent="连不上程序（她没在运行？服务器上看 systemctl status ai-life）";return}
+  render(); loadLLM(); loadLinks(); loadUpdate();
 }
 
 /* ============ 渲染 ============ */
-/* 她现在用的是 QQ 还是 Telegram（或者都有）：提示文字跟着变 */
-function apps(){const a=S&&S.apps||{};return {tg:a.tg!==false,qq:!!a.qq}}
-function dislikeHow(){const a=apps(),w=[];
-  if(a.qq)w.push("在 QQ 里引用她那句话、回一个 👎");
-  if(a.tg)w.push("在 Telegram 里给那条消息点个 👎");
-  return "觉得她哪句话不对味："+w.join("，或者")+"，她就记下不再这样说"}
+function dislikeHow(){return "觉得她哪句话不对味：在 QQ 里引用她那句话、回一个 👎，她就记下不再这样说"}
 function render(){
   const name=S.name||"她";
   document.title=`${name}的小屋`; $("name").textContent=`${name}的小屋`;
-  const pc=S.sense&&S.sense.pc;
-  $("sub").textContent=`此刻${S.mood||"平静"} · 今天聊了 ${S.stats.today} 条`+(S.channel==="qq"?" · 在 QQ":S.apps&&S.apps.qq?" · 在 Telegram":"");
-  {const a=apps(),w=[]; if(a.qq)w.push("在 QQ 里给她发 /小屋"); if(a.tg)w.push("在 Telegram 里点“小屋”");
-   $("foot").textContent="只在你自己的设备上运行"+(w.length?" · 手机上"+w.join("或")+"打开":""); $("hintDislike").textContent=dislikeHow()}
+  $("sub").textContent=`此刻${S.mood||"平静"} · 今天聊了 ${S.stats.today} 条 · 在 QQ`;
+  $("foot").textContent="只有你能打开（只认本机，或者通过你电脑上的“打开小屋”）"; $("hintDislike").textContent=dislikeHow();
   const avatar=S.photos.length?S.photos[0].url:null;
   for(const id of["ava","ava2"]){const a=$(id);
-    if(S.skin){const w=a.offsetWidth||40,cw=w/0.5;            // 桌宠换成像素宠物时，头像用她的样子（头部）
-      a.style.backgroundImage=`url("/pet/sprite/${encodeURIComponent(S.skin)}/spritesheet.webp")`;a.style.backgroundSize=`${cw*8}px auto`;
-      a.style.backgroundPosition=`${-(cw-w)/2}px ${-cw*0.1}px`;a.style.backgroundColor="var(--accent-soft)";a.textContent=""}
-    else if(avatar){a.style.backgroundImage=`url("${avatar}")`;a.style.backgroundSize="";a.style.backgroundPosition="";a.textContent=""}else{a.style.backgroundImage="";a.textContent=name.slice(-1)}}
+    if(avatar){a.style.backgroundImage=`url("${avatar}")`;a.style.backgroundSize="";a.style.backgroundPosition="";a.textContent=""}else{a.style.backgroundImage="";a.textContent=name.slice(-1)}}
   const h=new Date().getHours();
   const part=h<5?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
   $("greet").textContent=`${part}，${name}在等你`;
@@ -908,7 +804,6 @@ function render(){
   renderMems(); renderExprs(); renderDiaries(); renderLetters(); renderPhotos();
   renderNotes(); renderDates(); renderShows(); renderRem(); renderSettings();
   renderMind(); renderArcs(); renderProfile(); renderMusic(); renderHabits(); renderRecaps(); renderWishes(); renderCapsules(); renderHerWorld(); renderReport(); renderDisliked(); renderRoutines(); renderPersona(); adaptPronoun();
-  if(S.pet&&!TG){$("petBtn").hidden=false;$("petBtn").innerHTML=icon("pet")}
   paintIcons();
 }
 
@@ -985,9 +880,8 @@ function renderSoon(){
   $("soon").innerHTML=ds.length?ds.map(d=>dateRow(d,false)).join(""):'<li class="empty" style="display:block">聊天里提到的生日、纪念日、考试，她会自己记下来</li>';
 }
 function senseRows(){
-  const se=S.sense||{}, now=Date.now()/1000, pc=se.pc, ph=se.phone;
+  const se=S.sense||{}, ph=se.phone;
   return[
-    [icon("laptop"),"电脑",(pc&&now-pc.ts<300?esc(pc.desc):'<span class="muted">没开或不在电脑前</span>')+(pc&&pc.today?`<div class="muted" style="font-size:12px;margin-top:2px">今天：${esc(pc.today)}</div>`:'')],
     [icon("phone"),"手机",ph?`${esc(ph.event)} <span class="muted">· ${ago(ph.ts)}</span>`:'<span class="muted">还没收到过信号</span>'],
   ];
 }
@@ -1207,8 +1101,7 @@ function renderSettings(){
   const rows=senseRows().map(([i,n,v])=>`<dt>${n}</dt><dd>${v}</dd>`).join("");
   $("senseKv").innerHTML=rows
     +(se.ntfy?`<dt>手机信号频道</dt><dd><code class="k">${esc(se.ntfy)}</code><button class="btn ghost sm copy" data-copy="${esc(se.ntfy)}">${icon("copy")}复制</button></dd>`:"")
-    +(se.hook?`<dt>备用地址</dt><dd><code class="k">${esc(se.hook)}起床</code></dd>`:"")
-    +`<dt>手机小屋</dt><dd>${se.public_url?`<code class="k">${esc(se.public_url)}</code>`:'<span class="muted">没开起来（看程序窗口里的提示）</span>'}</dd>`;
+    +(se.hook?`<dt>备用地址</dt><dd><code class="k">${esc(se.hook)}起床</code></dd>`:"");
 }
 async function save(k){const v=$(k).value;
   const r=await post("api/settings",{[k]:v}); toast(r.message||"已保存"); load()}
@@ -1259,10 +1152,10 @@ $("refresh").innerHTML=icon("refresh"); $("refresh").addEventListener("click",()
 let rz; window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(()=>S&&drawChart(),150)});
 paintIcons();
 go((location.hash||"#home").slice(1)||"home");
-/* 和 Telegram、桌宠里的她实时同步：页面开着时每 10 秒刷新一次，切回来时马上刷新 */
+/* 和 QQ 里的她实时同步：页面开着时每 10 秒刷新一次，切回来时马上刷新 */
 let _loading=false;
 async function refresh(){ const ae=document.activeElement; if(_loading||document.hidden||(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)))return; _loading=true; try{await load()}finally{_loading=false} }
-(async()=>{await auth(); await load(); setInterval(refresh,10000)})();
+(async()=>{await load(); setInterval(refresh,10000)})();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden)refresh() });
 window.addEventListener("focus",refresh);
 </script>

@@ -174,7 +174,7 @@ class PersonaWebMixin:
         cur = rel == _rel(self.cfg, Path(self.cfg.root) / self.cfg.persona_file)
         warns = self.brain.reload_persona() if cur else p.warnings
         if cur and self.bot:
-            from ailife.channels.telegram.common import install_ui_pronoun
+            from ailife.chat.common import install_ui_pronoun
             install_ui_pronoun(self.brain.persona.ta)
         return web.json_response({"ok": True, "warnings": warns,
                                   "message": "保存好了，已经生效" if cur else "保存好了（这不是现在用的人设）"})

@@ -40,30 +40,6 @@ def test_page_parse_and_describe(env, monkeypatch):
     assert "没打开" in LinkReader.describe(asyncio.run(lr.read("https://www.zhihu.com/q/1")))
 
 
-def test_text_with_link_enriched(env, monkeypatch):
-    cfg, brain, bot, fake = env
-    from types import SimpleNamespace
-
-    async def enrich(text):
-        return "[他分享了一个B站视频：《猫猫合集》]"
-    monkeypatch.setattr(brain.links, "enrich", enrich)
-    calls = []
-
-    async def sched(delay=None):
-        calls.append(delay)
-    bot.schedule_reply = sched
-    msg = SimpleNamespace(text="你看这个 https://b23.tv/abc", message_id=7, reply_to_message=None, quote=None)
-    upd = SimpleNamespace(message=msg, effective_user=SimpleNamespace(id=42), effective_chat=SimpleNamespace(id=42))
-
-    async def go():
-        await bot.on_text(upd, SimpleNamespace())
-        while bot._bg:
-            await asyncio.gather(*list(bot._bg), return_exceptions=True)
-    asyncio.run(go())
-    last = brain.db.last_message("user")["content"]
-    assert "猫猫合集" in last and "正在点开" not in last and calls
-
-
 def test_ip_ranges():
     from ailife.media.links import ip_ok
     for bad in ("100.100.100.100", "10.0.0.1", "::1", "::ffff:127.0.0.1", "64:ff9b::7f00:1", "169.254.169.254",

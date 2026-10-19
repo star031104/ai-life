@@ -9,7 +9,7 @@ keep_awake: true
 # 时区（决定早安晚安、免打扰的时间）
 timezone: Asia/Shanghai
 
-# 访问 Telegram 用的代理（国内一般需要）。不需要就留空 ""
+# 大模型接口需要代理时填（比如 http://127.0.0.1:7890）。不需要就留空 ""
 # 例：http://127.0.0.1:7890  或  socks5://127.0.0.1:7890
 proxy: "http://127.0.0.1:7890"
 
@@ -49,19 +49,9 @@ memory:
   embed:
     enabled: true
 
-# ---------------- Telegram 聊天 Bot ----------------
-telegram:
-  bot_token: "123456:ABC..."      # ★ 找 @BotFather 创建 bot 拿到
-  # 你的 TG 数字 ID。留空：第一个给 bot 发 /start 的人自动成为主人
-  owner_id: 0
-  # 你在她的世界里是谁（一般写在人设的 user_name / call_name 里；这里是没写时的备用）
-  owner_name: ""
-  # 用来挑表情包的贴纸包名（t.me/addstickers/后面那段），可以写多个
-  sticker_sets: []
-
-# ---------------- QQ（可选，需要 NapCat，见 docs/QQ.md） ----------------
+# ---------------- QQ 私聊（需要 NapCat，见 docs/QQ.md） ----------------
 qq:
-  enabled: false
+  enabled: true
   ws_url: "ws://127.0.0.1:3001"   # NapCat 里开的“WebSocket 服务器”地址
   access_token: ""               # NapCat 里设的 token（没设就留空）
   napcat_hidden: true            # NapCat 在后台跑（不开窗口，输出在 data/logs/napcat.log）
@@ -70,8 +60,8 @@ qq:
   napcat_qq: 0                   # 她小号的 QQ 号：启动 NapCat 时用来快速登录，不用每次扫码（qq_setup 会写）
   http_url: ""                   # 可选：NapCat 的 HTTP 服务器（比如 http://127.0.0.1:3000），关程序道别时的备用通道
   owner_id: 0                    # ★ 你自己的 QQ 号（不是她的小号）：私聊只认这个号
-  private: true                  # 私聊：和 Telegram 共用聊天记录，你在哪边说话她就在哪边回
-                                 # 只想用 QQ：把 telegram.bot_token 清空就行（命令、信、纪念册、道别都走 QQ）
+  owner_name: ""                 # 你在她的世界里是谁（一般写在人设的 user_name / call_name 里；这里是没写时的备用）
+  private: true                  # 私聊（命令、信、纪念册、道别都走 QQ）
   poke_back: 0.4                 # 你戳她时，她戳回去的概率
   signature: true                # 她的 QQ 个性签名每天跟着她的安排和心情变（每天一次，心情大变时最多 4 小时一次）
                                  # QQ 群：用单独的程序 ai-life-group（另一个小号），这里只管私聊
@@ -109,7 +99,7 @@ away:
 
 # ---------------- 外面的世界 ----------------
 world:
-  city: ""                    # 你所在的城市（也可以在 TG 里发 /city 上海）；天气用 Open-Meteo/wttr.in，免费
+  city: ""                    # 你所在的城市（也可以私聊发 /city 上海）；天气用 Open-Meteo/wttr.in，免费
   schedule: ""                # 你的作息/课表（也可以发 /schedule …）
 
 # ---------------- 她的照片 ----------------
@@ -119,29 +109,14 @@ photo:
   size: 768x1344              # 竖屏手机照片
   max_per_day: 3              # 每天最多发几张
 
-# ---------------- 小屋网页（电脑上） ----------------
+# ---------------- 小屋网页 ----------------
 web:
   enabled: true
-  host: 127.0.0.1             # 只在本机能打开
+  host: 127.0.0.1             # 只在本机能打开（放在服务器上时用 scripts/open_home 开 SSH 隧道，在自己电脑浏览器看）
   port: 8765                  # 浏览器打开 http://127.0.0.1:8765
-
-# ---------------- 手机上的小屋（Telegram Mini App） ----------------
-miniapp:
-  enabled: true
-  url: ""                     # 有自己的固定 https 地址就填（指向本机 public_port）；留空＝自动开免费临时隧道
-  public_port: 8766           # 给手机用的入口（每个请求都校验 Telegram 签名，只有你能看）
 
 # ---------------- 感知你在做什么 ----------------
 sense:
-  pc:
-    enabled: true             # 只在 Windows 上生效：前台程序 → 打游戏/写代码/看视频/听歌…；多久没碰电脑；正在放的歌
-    # 告诉她多少（都在本机判断，只有这一句描述会发给大模型）：
-    #   app＝只说程序 / 游戏 / 网站名（“在玩《原神》”“在 B站看视频”“在用 VS Code 写代码”）
-    #   content＝再加视频标题、项目名、文档名（“在 B站看《xxx》”“写代码（项目 ai-life）”），聊得更具体
-    #   full＝原始窗口标题（最具体，也最可能带出私人内容）
-    # 无痕 / InPrivate 窗口一律只说“在上网”。/sense 暂停 2 可以临时关两小时
-    detail: app
-    ignore: []                # 这些程序 / 网站永远只说“在用电脑”，比如 [keepass, 网银]
   phone:
     enabled: true             # 手机快捷指令向 ntfy 频道发“起床/到家/充电”，她就知道（频道名用 /sense 查看）
     ntfy_server: https://ntfy.sh
@@ -155,37 +130,12 @@ mind:
   enabled: true               # 内心独白：清醒时每隔几小时在后台想一想，决定要不要找你
   think_every_hours: 3
 
-# ---------------- 桌面上的她（Live2D 桌宠） ----------------
-pet:
-  enabled: true
-  autostart: true             # 启动时自动在桌面右下角打开（只在 Windows 上）；关掉后用 python run.py pet 再打开
-  transparent: true           # 透明背景，只看得到人物（需要 PySide6：双击 pet_setup.bat 装）；想要浅色底就改 false
-  on_top: true                # 总在最前
-  width: 320
-  height: 480
-  preset: haru                # 自带的形象（Live2D 官方示例模型）：haru（默认）/ rice
-  sprite: ""                  # 换成 codex-pets.net 上的像素宠物：写它的 id 或网址，第一次用时自动下载；
-                              # 更方便的是在小屋“设置 → 桌宠的样子”里挑。留空＝用 Live2D
-  sprite_scale: 1.0           # 像素宠物的大小
-  walk: true                  # 像素宠物闲着时会在屏幕上走几步
-  look: true                  # 像素宠物的眼睛跟着鼠标
-  alert: bubble               # 她在桌面上有话说时：bubble 直接冒气泡 / dot 亮个小点、鼠标经过再说 / none 不打扰（小屋里也能改）
-  stay: 8                     # 气泡停留几秒（0＝看到为止）
-  hide_fullscreen: true       # 有程序全屏（打游戏、看视频）时桌宠先藏起来，消息攒着，退出全屏再说
-  model: ""                   # 换自己的 Live2D 模型：把整个模型文件夹放进 data/pet/model/ 就会自动用（留空即可）；
-                              # 里面有好几个模型时，这里写要用的那个，比如 角色名/xxx.model3.json
-  scale: 1.0                  # 模型大小
-  offset_y: 0                 # 模型上下位置
-  chatter: true               # 你刚回到电脑前、刚打完游戏时，她在桌面上搭一句（不发 Telegram）
-  chatter_gap_minutes: 40     # 桌面搭话最短间隔
-  expressions: {}             # 换了自己的模型时：情绪 → 表情名，如 {开心: f01, 生气: f02, 害羞: f03, 默认: f00}
-
 # ---------------- 说话质量 ----------------
 quality:
   enabled: true               # 不重复自己：和最近说过的话太像、开头重复、称呼/口头禅用太多 → 自动重写
   similarity: 0.62            # 多像算重复（0~1，越小越严格）
   catchphrases: []            # 口头禅（最近用过两次就先别用）；一般写在人设文件的 catchphrases 里
-  weekly_report: true         # 每周一上午在 Telegram 里发一份“这一周她的表现”（只是统计，不是她在说话）
+  weekly_report: true         # 每周一上午私聊发一份“这一周她的表现”（只是统计，不是她在说话）
 
 # ---------------- 备份 ----------------
 backup:

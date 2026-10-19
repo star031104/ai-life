@@ -100,7 +100,7 @@ class Health:
             db.set("health_notified", {k: v for k, v in sent.items() if now - v < 86400})
             text = "⚠️ 程序这边出了点问题（不是她在说话）：\n" + "\n".join(msgs[:5]) + \
                    "\n\n发 /diag 看详细情况；日志在 data/logs/ailife.log。"
-            from ailife.channels.telegram.common import ui
+            from ailife.chat.common import ui
             await self.bot.owner_text(ui(text))
 
 
@@ -111,9 +111,7 @@ def friendly(name: str, msg: str) -> str:
     if "1305" in m or "429" in m:
         return "大模型限流（访问量过大），已自动换用备用模型"
     if "发送失败" in m:
-        return "发 Telegram 消息失败（代理断了？）"
-    if "Conflict" in m:
-        return "有另一个程序在用同一个 bot（是不是开了两个 start.bat？）"
+        return "给你发 QQ 消息失败（NapCat 掉线了？）"
     return f"{name.replace('ailife.', '')}：{m[:80]}"
 
 
@@ -198,18 +196,14 @@ async def diagnose(cfg, brain, bot, dash=None) -> str:
                + (brain.weather.city or "没设城市"))
     out.append(f"Bangumi {ok if b[0] and b[2] else warn}　网易云 {ok if n[0] and n[2] else warn}")
 
-    # 感知 / 小屋 / 桌宠
+    # 手机信号 / 小屋
     db = brain.db
-    pc = db.get("sense_pc") or {}
-    pc_ok = pc and time.time() - pc.get("ts", 0) < 120
-    out.append(f"电脑感知 {ok if pc_ok else warn} " + (pc.get("desc", "") if pc_ok else "没在更新（不是 Windows 或被关了）"))
     phone = getattr(bot, "phone", None)
     if phone and phone.enabled:
         alive = phone._task is not None and not phone._task.done()
         out.append(f"手机信号 {ok if alive else warn} 频道 {phone.url}")
     if dash is not None:
         out.append(f"小屋网页 {ok if dash.runner else bad} http://127.0.0.1:{dash.port}")
-        out.append(f"手机小屋 {ok if dash.public_url else warn} " + (dash.public_url or "隧道没开起来"))
     # 数据
     dbp = Path(db.path)
     size = dbp.stat().st_size / 1024 if dbp.exists() else 0

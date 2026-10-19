@@ -83,14 +83,8 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo     Optional packages ^(lunar calendar, now-playing music, desktop pet^). Errors here are OK ...
+echo     Optional packages ^(lunar calendar^). Errors here are OK ...
 pip install lunar_python %MIRROR%
-pip install winrt-runtime winrt-Windows.Foundation winrt-Windows.Media.Control %MIRROR%
-pip install pywebview %MIRROR%
-if /i not "%AILIFE_SKIP_PYSIDE%"=="1" (
-  echo     PySide6 for the transparent desktop pet ^(about 200 MB^) ...
-  pip install PySide6 %MIRROR%
-)
 
 rem ---------- 3. ffmpeg ----------
 echo [3/4] Checking ffmpeg ^(used to look at GIFs / videos you send^) ...

@@ -160,7 +160,7 @@ class EventsMixin:
         self.db.set(f"recap_try_{key}", time.time())
         res = await self.brain.together.monthly_recap(y, m)
         if res and self.bot.owner_id:
-            from ailife.channels.telegram.common import stats_line
+            from ailife.chat.common import stats_line
             text = f"📒 我们的{m}月\n\n{res[0]}\n\n{stats_line(res[1])}"
             msg, ch = await self.bot.owner_text(text)
             if msg:
@@ -219,7 +219,7 @@ class EventsMixin:
         text, cur, _ = await asyncio.to_thread(weekly_report, self.brain, True, True)
         if not cur.get("你发的消息") and not cur.get("主动找你"):
             return
-        from ailife.channels.telegram.common import ui
+        from ailife.chat.common import ui
         m, _ = await self.bot.owner_text(ui(text))
         if not m:
             log.warning("周报没发出去")

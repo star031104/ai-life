@@ -340,16 +340,15 @@ def _mid(d: dict) -> int | None:
         return None
 
 
-# ---------------- 给 deliver() 用的“像 Telegram Bot 一样”的发送器 ----------------
+# ---------------- 给 deliver() 用的发送器 ----------------
 class _Sent:
     def __init__(self, mid):
         self.message_id = mid
 
 
 class QQOut:
-    """bot_delivery.deliver() 原本直接调 Telegram 的 bot.send_xxx(chat, ...)。
-    这里用同样的方法名包一层 OneBot 私聊，让发送逻辑（分条、停顿、照片、撤回）不用改两份。
-    QQ 做不到的（改消息、点表情回应、“正在输入”）由 deliver 按 can_* 跳过。"""
+    """chat/delivery.py 的 deliver() 调 send_message / send_photo / delete_message / typing……(chat, ...)，
+    这里把它们翻译成 OneBot 私聊。QQ 做不到的（改已发的消息、点表情回应）由 can_* 标出来。"""
     can_edit = False
     can_react = False
     can_typing = False

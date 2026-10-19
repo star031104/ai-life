@@ -1,4 +1,4 @@
-"""把各个部分装起来跑：大脑、聊天软件（Telegram / QQ）、主动消息、电脑感知、小屋、桌宠、托盘通信。
+"""把各个部分装起来跑：大脑、QQ 私聊、主动消息、手机感知、小屋、托盘通信。
 
     ailife.cli 解析命令后调这里的 run()；console() 是不连聊天软件、在命令行里和她聊（调人设用）。
 """
@@ -32,7 +32,7 @@ async def run():
         log.info("已把 %d 个密钥从 config.yaml 挪进 .env（config.yaml 里现在写的是 ${名字} 引用）", len(moved))
         cfg = load_config()
     if cfg.proxy and not _proxy_alive(cfg.proxy):
-        log.warning("连不上代理 %s：Telegram 可能连不上，先把 Clash / 代理软件打开（会一直自动重试）", cfg.proxy)
+        log.warning("连不上代理 %s：走代理的大模型会连不上，先把代理软件打开（会一直自动重试）", cfg.proxy)
     from ailife.core.health import Health, setup_file_logging
     from ailife.core import secrets
     from ailife.core.deps import fix_hint, missing, version_line
@@ -50,12 +50,12 @@ async def run():
         log.error("还没加聊天模型，她没法说话：运行 python run.py llm（或者双击 scripts\\llm.bat）加一个，"
                   "用途里勾上“聊天”")
         sys.exit(EXIT_NO_RESTART)
-    from ailife.channels.telegram.bot import ChatBot
+    from ailife.chat.companion import Companion
     from ailife.mind.brain import Brain
     from ailife.proactive.scheduler import Scheduler
 
     brain = Brain(cfg)
-    bot = ChatBot(cfg, brain)
+    bot = Companion(cfg, brain)
     bot.health = Health(cfg, bot)
     secrets.install_redaction(secrets.secret_values(cfg))      # 日志里万一出现密钥，替换成 ***
     brain.away.check()                             # 关机 / 断开了很久：先记下来，他离线时发的消息回复时就能顺便说
@@ -69,11 +69,11 @@ async def run():
     sched.start()
 
     from ailife.channels.qq.bridge import setup as qq_setup
-    qq = qq_setup(cfg, bot)                        # QQ 私聊 / 群聊（config 里 qq.enabled: true 时）
+    qq = qq_setup(cfg, bot)                        # QQ 私聊（config 里 qq.enabled: true 时）
+    if not qq:
+        log.warning("QQ 没开（config.yaml 的 qq.enabled）：她收不到你的消息")
 
-    from ailife.sense.sensors import PCSense, PhoneSense
-    bot.pc = PCSense(cfg, brain.db, on_song=brain.media.on_song)
-    bot.pc.start()
+    from ailife.sense.phone import PhoneSense
     bot.phone = PhoneSense(cfg, brain.db, bot.on_phone)
     bot.phone.start()
 
@@ -84,70 +84,18 @@ async def run():
     from ailife.web.server import Dashboard
     dash = Dashboard(cfg, brain, bot)
     bot.dash = dash
-    if getattr(dash, "pet", None) and dash.pet.enabled:
-        bot.pc.on_event = dash.pet.on_pc_event
     try:
         await dash.start()
-        log.info("电脑上看小屋：浏览器打开 http://127.0.0.1:%d （或者点托盘里桌宠图标 → 打开小屋）", dash.port)
+        log.info("电脑上看小屋：浏览器打开 http://127.0.0.1:%d ", dash.port)
     except Exception as e:  # noqa: BLE001
         log.error("小屋网页没启动（端口被占用？）：%s", e)
 
-    pet_proc = None
-    if (cfg.get("pet") or {}).get("enabled", True) and (cfg.get("pet") or {}).get("autostart", True) \
-            and sys.platform == "win32" and dash.runner is not None:
-        from ailife.pet.window import spawn_window
-        pet_proc = spawn_window(cfg.root)
-
-    tunnel = None
-    if (cfg.get("miniapp") or {}).get("enabled", True) and dash.enabled:
-        from ailife.web.tunnel import Tunnel
-
-        kick = asyncio.Event()
-
-        async def _woke(gap):                      # 睡眠醒来：临时隧道多半已经失效，强制重连
-            kick.set()
-        sched.on_wake.append(_woke)
-
-        async def open_miniapp():
-            nonlocal tunnel
-            # 开机自启时网络可能还没好：第一次失败也会一分钟后再试，直到连上
-            first, fails = True, 0
-            while True:
-                try:
-                    if first or kick.is_set() or tunnel is None or not (
-                            tunnel.fixed_url or (tunnel.proc and tunnel.proc.returncode is None)):
-                        if not first:
-                            log.info("手机小屋的隧道%s，重新连接…", "要刷新（刚醒来）" if kick.is_set() else "断了")
-                        kick.clear()
-                        if dash.public_runner is None:
-                            await dash.start_public()
-                        if tunnel is None:
-                            tunnel = Tunnel(cfg, dash.public_port)
-                        else:
-                            await tunnel.stop()
-                        url = await tunnel.start()
-                        if url:
-                            if url != dash.public_url:
-                                dash.public_url = url
-                                await bot.setup_miniapp(url)
-                            fails = 0
-                        first = False
-                except Exception as e:  # noqa: BLE001
-                    fails += 1
-                    first = False
-                    if fails in (1, 10) or fails % 60 == 0:
-                        log.warning("手机小屋（Mini App）没开起来：%s（会自动重试）", e)
-                try:
-                    await asyncio.wait_for(kick.wait(), 60)
-                except asyncio.TimeoutError:
-                    pass
-        miniapp_task = asyncio.create_task(open_miniapp())  # noqa: F841  （留着引用，免得被回收）
     from ailife.core.health import keep_awake
     if cfg.get("keep_awake", True) and keep_awake(True):
         log.info("运行期间不会让电脑自动睡眠（屏幕照常熄灭；合盖或手动睡眠还是会睡）。不想要就在 config.yaml 里写 keep_awake: false")
     log.info("%s 上线了。按 Ctrl+C 退出。", brain.persona.name)
     if not bot.owner_id:
-        log.info("提示：用你自己的 TG 给 bot 发 /start 完成绑定。")
+        log.info("提示：config.yaml 的 qq.owner_id 还没填（或者 NapCat 还没登录），她暂时收不到你的消息。")
     restart = False
     leaving = False
     tray_stop = asyncio.Event()
@@ -184,12 +132,7 @@ async def run():
             brain.away.goodbye_sync()
         await bot.health.stop()
         await sched.stop()
-        await bot.pc.stop()
         await bot.phone.stop()
-        if tunnel:
-            await tunnel.stop()
-        if pet_proc and pet_proc.poll() is None:
-            pet_proc.terminate()
         await dash.stop()
         if qq:
             await qq.stop()

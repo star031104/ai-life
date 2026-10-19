@@ -151,7 +151,7 @@ def test_web_persona_edit_and_reload(env):
 
 
 def test_ui_pronoun_for_male(env):
-    from ailife.channels.telegram.common import UI, ui
+    from ailife.chat.common import UI, ui
     old = UI["ta"]
     UI["ta"] = "他"
     try:
@@ -161,7 +161,7 @@ def test_ui_pronoun_for_male(env):
 
 
 def test_review_fixes(tmp_path):
-    from ailife.channels.telegram.common import UI, keep, ui
+    from ailife.chat.common import UI, keep, ui
     old = UI["ta"]
     UI["ta"] = "他"
     try:

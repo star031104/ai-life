@@ -282,7 +282,7 @@ class Away:
         return lines["night"] if (now.hour >= 22 or now.hour < 5) else lines["day"]
 
     def goodbye_sync(self, timeout: float = 4.0) -> bool:
-        """同步发一句道别：程序正在退出（事件循环可能已经停了），直接调 Telegram 接口。"""
+        """同步发一句道别：程序正在退出（事件循环可能已经停了），直接走 NapCat 的 HTTP 接口。"""
         try:
             text = self.goodbye_text(self.brain.now())
         except Exception as e:  # noqa: BLE001
@@ -292,27 +292,7 @@ class Away:
             return False
         self._bye_done = True
         try:
-            if getattr(self.bot, "channel", lambda: "tg")() == "qq" and self._goodbye_qq(text, timeout):
-                return True
-            if not getattr(self.bot, "tg", True):
-                return False
-            import httpx
-            kw = {"timeout": timeout}
-            if self.cfg.proxy:
-                kw["proxy"] = self.cfg.proxy
-            with httpx.Client(**kw) as c:
-                r = c.post(f"https://api.telegram.org/bot{self.cfg.telegram.bot_token}/sendMessage",
-                           json={"chat_id": self.bot.owner_id, "text": text})
-            data = r.json()
-            if not data.get("ok"):
-                log.info("道别没发出去：%s", str(data)[:120])
-                return False
-            mid = (data.get("result") or {}).get("message_id")
-            self.db.add_message("assistant", text, "text", mid)
-            self.db.set("bye", {"ts": time.time(), "text": text})
-            self.db.set("last_proactive_ts", time.time())
-            log.info("她说了再见：%s", text)
-            return True
+            return self._goodbye_qq(text, timeout)
         except Exception as e:  # noqa: BLE001
             log.info("道别没发出去：%s", e)
             return False

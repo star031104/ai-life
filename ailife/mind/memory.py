@@ -352,8 +352,6 @@ class Memory:
             for r in rows
         )[-6000:] or "（今天他没有来找我）"
         life = self.db.get(f"life_{key}", "")
-        from ailife.sense.sensors import day_summary
-        pc_day = day_summary(self.db.get(f"pc_day_{key}"))
         selfs = "；".join(m["content"] for m in self.db.all_memories("self")[-15:])
         prompt = f"""{self.persona.body}
 {self.bible()}
@@ -363,7 +361,6 @@ class Memory:
 你自己的设定（要一致）：{selfs or '无'}
 {('你现在的心情：' + mood_desc) if mood_desc else ''}
 {('你自己这阵子在经历的事（今天的进展要写进日记）：' + story) if story else ''}
-{('你今天感觉到的他在电脑上做的事（可以写一两句，比如他打了一下午游戏、写代码到很晚，别像流水账）：' + pc_day) if pc_day else ''}
 今天和他的聊天：
 {convo}
 

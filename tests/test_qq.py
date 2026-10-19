@@ -120,7 +120,6 @@ def test_private_qq_shares_brain_and_routes_back(env):  # noqa: F811
         segs = sent[0]["params"]["message"]
         assert segs[0] == {"type": "reply", "data": {"id": "2"}}       # [引用] → 回复他那条
         assert isinstance(segs, list) and all(isinstance(s, dict) for s in segs)
-        assert not [s for s in fake_tg.sent if s[0] == "text"]          # 一条都没发到 Telegram
         for _ in range(40):                                              # 回复写进数据库比发出去稍晚一点
             rows = brain.db.recent_messages(10)
             if len(rows) >= 3:
@@ -129,22 +128,16 @@ def test_private_qq_shares_brain_and_routes_back(env):  # noqa: F811
         assert [r["channel"] for r in rows] == ["qq", "qq", "qq"]
         assert rows[0]["content"] == "我感觉你好像有点不太开心呢"
         assert any("用 QQ 聊天" in c[0]["content"] for c in brain.llm.calls)
-        # 他回到 Telegram 说话后：发回 Telegram
-        brain.db.set("last_channel", "tg")
+        # NapCat 断了：什么都不发（等它重连）
         from ailife.mind.output import Bubble, Parsed
-        await bot.deliver(Parsed(bubbles=[Bubble(text="在呢")]))
-        assert fake_tg.sent[-1][0] == "text" and fake_tg.sent[-1][1][1] == "在呢"
-        # NapCat 断了：就算他最后在 QQ 说话，也退回 Telegram
-        brain.db.set("last_channel", "qq")
         await q.stop()
         await asyncio.sleep(0.05)
-        await bot.deliver(Parsed(bubbles=[Bubble(text="还在吗")]))
-        assert fake_tg.sent[-1][1][1] == "还在吗"
+        assert not await bot.deliver(Parsed(bubbles=[Bubble(text="还在吗")]))
         await nap.runner.cleanup()
     asyncio.run(go())
 
 
-# ---------------- 只用 QQ（不填 Telegram token） ----------------
+# ---------------- 只用 QQ ----------------
 def _qq_only_bot(tmp_path, port):
     import shutil
     from fakes import FIXTURE, cfg_root
@@ -154,19 +147,17 @@ def _qq_only_bot(tmp_path, port):
     shutil.copytree(cfg_root() / "persona", tmp_path / "persona", dirs_exist_ok=True)
     shutil.copy(FIXTURE, tmp_path / "persona" / "student.md")
     cfg["persona_file"] = "persona/student.md"
-    cfg["telegram"]["bot_token"] = ""
-    cfg["telegram"]["owner_id"] = 0
     cfg["style"]["typing_chars_per_sec"] = 1000
     cfg["style"]["merge_wait_seconds"] = 0.05
     cfg["memory"]["embed"]["enabled"] = False
     cfg["proactive"]["quiet_hours"] = ""
     cfg["qq"] = {**cfg["qq"], "enabled": True, "ws_url": f"ws://127.0.0.1:{port}/", "owner_id": OWNER}
     from ailife.mind.brain import Brain
-    from ailife.channels.telegram.bot import ChatBot
+    from ailife.chat.companion import Companion
     brain = Brain(cfg)
     brain.llm = FakeLLM()
     brain.memory.llm = brain.llm
-    bot = ChatBot(cfg, brain)
+    bot = Companion(cfg, brain)
     return cfg, brain, bot
 
 
@@ -175,8 +166,7 @@ def test_qq_only_mode(tmp_path):
         nap = FakeNapCat()
         await nap.start()
         cfg, brain, bot = _qq_only_bot(tmp_path, nap.port)
-        assert bot.tg is False and bot.app is None
-        await bot.start()                                     # 不连 Telegram
+        await bot.start()
         from ailife.channels.qq.bridge import setup, wait_ready
         q = setup(cfg, bot)
         assert await wait_ready(q)
@@ -194,9 +184,9 @@ def test_qq_only_mode(tmp_path):
         sent = await nap.wait_sent("send_private_msg", n + 1)
         assert sent[-1]["params"]["user_id"] == OWNER
         n = len(nap.sent("send_private_msg"))
-        await nap.push(_private(OWNER, "/game", 13))          # 要按钮的命令：说明一下
+        await nap.push(_private(OWNER, "/没这个", 13))          # 没有的命令：提示 /help
         sent = await nap.wait_sent("send_private_msg", n + 1)
-        assert "用不了" in sent[-1]["params"]["message"][0]["data"]["text"]
+        assert "/help" in sent[-1]["params"]["message"][0]["data"]["text"]
         n = len(nap.sent("send_private_msg"))
         await nap.push(_private(OWNER, "/help", 14))
         sent = await nap.wait_sent("send_private_msg", n + 1)
@@ -333,7 +323,7 @@ def test_private_details(tmp_path, monkeypatch):
         await bot.deliver(Parsed(bubbles=[Bubble(sticker="困")]))
         assert nap.sent("send_private_msg")[-1]["params"]["message"][0] == {"type": "face", "data": {"id": "25"}}
         # 打错字：补一句“*正确的字”
-        from ailife.channels.telegram.common import TYPOS
+        from ailife.chat.common import TYPOS
         k = next(iter(TYPOS))
         cfg["style"]["typo_rate"] = 1.0
         monkeypatch.setattr(qb.random, "uniform", lambda a, b: 0.01)

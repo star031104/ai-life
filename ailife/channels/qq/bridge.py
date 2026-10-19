@@ -1,7 +1,7 @@
 """把 QQ 接到她身上。
 
-- 私聊：只认 qq.owner_id（你自己的 QQ 号）。和 Telegram 共用同一份聊天记录、记忆、心情；
-  你最后在哪边说话，她就在哪边回你、主动找你（见 bot_delivery.channel）
+- 私聊：只认 qq.owner_id（你自己的 QQ 号）。他的话写进聊天记录，再交给 chat/companion.py 回复；
+  “/命令”包成 chat/command.py 的 Command 交给 Companion
 - 群聊不在这里：QQ 群里的角色是单独的程序 ai-life-group（https://github.com/star031104/ai-life-group），
   用另一个 QQ 小号。这里收到的群消息一律不理
 """
@@ -201,7 +201,7 @@ class QQ:
                 return
 
         if f.record:                                  # 语音功能已去掉：她听不了，只知道他发了一条
-            from ailife.channels.telegram.bot import VOICE_IN
+            from ailife.chat.companion import VOICE_IN
             self._user_in(prefix + VOICE_IN, "text", qmid)
             await bot.schedule_reply()
             return
@@ -333,7 +333,7 @@ class QQ:
             return row["emotion"]
         if not self.brain.llm.vision or (row and row["label_tried"] >= 3):
             return ""
-        from ailife.channels.telegram.common import EMOTION_LABELS
+        from ailife.chat.common import EMOTION_LABELS
         try:
             from ailife.media.ffmpeg import ffmpeg
             png = await ffmpeg(["-i", "pipe:0", "-frames:v", "1", "-vf", "scale=256:-1", "-f", "image2",
@@ -366,34 +366,28 @@ class QQ:
 
     DISLIKE = {"👎", "踩", "[表情:踩]", "这句不对味", "不像你", "出戏"}
 
-    # ---------------- 命令（/diary /memory …）：借用 Telegram 那套命令处理 ----------------
+    # ---------------- 命令（/diary /memory …）：交给 Companion 的 cmd_xxx ----------------
     ALIASES = {"日记": "diary", "记忆": "memory", "状态": "status", "心情": "status", "小屋": "home", "帮助": "help",
                "照片": "photo", "信": "letter", "愿望": "wish", "打卡": "habit", "纪念册": "recap", "自检": "diag",
                "她在想什么": "mind", "故事": "story", "身边的人": "people", "目标": "goals", "推歌": "song"}
-    NO_QQ = {"game", "start", "autostart"}     # 要按钮 / 只在 Telegram 上有意义
 
     async def command(self, text: str, qmid=None):
-        parts = text.lstrip("/／").split()
-        if not parts:
+        from ailife.chat.command import Command
+        name, c = Command.parse(text, reply_fn=self._say, message_id=qmid)
+        if not name:
             return
-        name = parts[0].split("@")[0]
-        name = self.ALIASES.get(name, name).lower()
-        uid = self.owner_id
-        handler = getattr(self.bot, f"cmd_{name}", None)
-        if name in ("help", "帮助"):
-            from ailife.channels.telegram.common import HELP
-            lines = [f"/{c}  {d}" for c, d in HELP if c not in self.NO_QQ]
-            await self._say("命令（也可以用中文：/日记 /记忆 /小屋 /心情 …）\n" + "\n".join(lines))
+        name = self.ALIASES.get(name, name)
+        if name == "help":
+            from ailife.chat.common import HELP
+            lines = [f"/{n}  {d}" for n, d in HELP]
+            await self._say("命令（也可以用中文：/日记 /记忆 /小屋 /心情 /打卡 …）\n" + "\n".join(lines))
             return
-        if handler is None or name in self.NO_QQ:
-            await self._say(f"/{name} 在 QQ 上用不了" + ("（要在 Telegram 里点按钮）" if handler else "，发 /help 看看有哪些"))
-            return
-        upd, ctx = _FakeUpdate(self, text, qmid, uid), _FakeCtx(parts[1:])
         try:
-            await handler(upd, ctx)
+            if not await self.bot.run_command(c, name):
+                await self._say(f"没有 /{name} 这个命令，发 /help 看看有哪些")
         except Exception as e:  # noqa: BLE001
-            log.warning("QQ 上的命令 /%s 出错：%s", name, e)
-            await self._say(f"/{name} 在 QQ 上没执行成功（{str(e)[:60]}）")
+            log.warning("命令 /%s 出错：%s", name, e)
+            await self._say(f"/{name} 没执行成功（{str(e)[:60]}）")
 
     async def _say(self, text: str):
         try:
@@ -415,42 +409,6 @@ class QQ:
             await self.bot.schedule_reply()
         self.bot.spawn(job())
         return mid
-
-
-class _FakeCtx:
-    def __init__(self, args):
-        self.args = args
-        self.bot = None
-
-
-class _FakeMsg:
-    """命令处理函数只用到 message.text / message_id / reply_text：在 QQ 上照着实现。"""
-
-    def __init__(self, q: QQ, text: str, mid):
-        self.q, self.text, self.message_id = q, text, mid
-        self.reply_to_message = None
-        self.quote = None
-
-    async def reply_text(self, text: str, reply_markup=None, **_):
-        extra = []
-        for row in getattr(reply_markup, "inline_keyboard", None) or []:
-            for btn in row:
-                if getattr(btn, "url", None):          # 链接按钮：直接把链接写出来
-                    extra.append(f"{btn.text}：{btn.url}")
-        if extra:
-            text = text + "\n" + "\n".join(extra)
-        return await self.q.out.send_message(self.q.owner_id, text)
-
-
-class _FakeUpdate:
-    trusted_owner = True
-
-    def __init__(self, q: QQ, text: str, mid, uid: int):
-        from types import SimpleNamespace
-        self.message = _FakeMsg(q, text, mid)
-        self.effective_message = self.message
-        self.effective_user = SimpleNamespace(id=uid)
-        self.effective_chat = SimpleNamespace(id=uid)
 
 
 def setup(cfg, bot) -> QQ | None:

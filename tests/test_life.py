@@ -31,15 +31,15 @@ def test_secret_migration(tmp_path):
     from ailife.core.secrets import migrate, read_env
     from ailife.core.config import load_config
     (tmp_path / "config.yaml").write_text(
-        'keys:\n  zhipu: "abcdefgh12345678"  # 注释保留\n  groq: ""\ntelegram:\n  bot_token: 123:ABCDEFGHIJ\n',
+        'keys:\n  zhipu: "abcdefgh12345678"  # 注释保留\n  groq: ""\nqq:\n  access_token: ABCDEFGHIJ123\n',
         encoding="utf-8")
     moved = migrate(tmp_path)
-    assert set(moved) == {"ZHIPU_KEY", "TELEGRAM_BOT_TOKEN"}
+    assert set(moved) == {"ZHIPU_KEY", "QQ_ACCESS_TOKEN"}
     txt = (tmp_path / "config.yaml").read_text(encoding="utf-8")
     assert "abcdefgh" not in txt and "# 注释保留" in txt and '"${ZHIPU_KEY}"' in txt
-    assert read_env(tmp_path)["TELEGRAM_BOT_TOKEN"] == "123:ABCDEFGHIJ"
+    assert read_env(tmp_path)["QQ_ACCESS_TOKEN"] == "ABCDEFGHIJ123"
     c = load_config(tmp_path / "config.yaml")
-    assert c["keys"]["zhipu"] == "abcdefgh12345678" and c.telegram.bot_token == "123:ABCDEFGHIJ"
+    assert c["keys"]["zhipu"] == "abcdefgh12345678" and c.qq.access_token == "ABCDEFGHIJ123"
     assert migrate(tmp_path) == []                 # 第二次什么都不做
 
 

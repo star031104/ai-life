@@ -9,14 +9,11 @@ from ailife import __version__
 
 # (模块名, pip 包名, 缺了会怎样, 只在哪个平台需要, 是否必需)
 CHECKS = [
-    ("telegram", "python-telegram-bot", "没法连 Telegram", None, True),
     ("openai", "openai", "没法调用大模型", None, True),
-    ("aiohttp", "aiohttp", "小屋网页、桌宠用不了", None, True),
+    ("aiohttp", "aiohttp", "小屋网页、QQ 连接用不了", None, True),
     ("yaml", "pyyaml", "读不了配置", None, True),
     ("numpy", "numpy", "记忆的向量检索用不了", None, True),
     ("lunar_python", "lunar_python", "农历节日、节气她不知道", None, False),
-    ("winrt.windows.media.control", "winrt-Windows.Media.Control", "她不知道你电脑上在放什么歌", "win32", False),
-    ("PySide6.QtWebEngineWidgets", "PySide6", "桌宠没法真透明（会有浅色方框、占任务栏；双击 scripts\\pet_setup.bat 装上）", "win32", False),
 ]
 
 

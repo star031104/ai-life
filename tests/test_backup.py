@@ -45,23 +45,20 @@ def test_export_import_roundtrip(env, tmp_path):
     assert (other / "config.yaml").exists() and "abcdefgh" in (other / ".env").read_text(encoding="utf-8")
 
 
-def test_browser_token_for_house(env):
+def test_house_local_only(env):
     import asyncio
     import httpx
     cfg, brain, bot, fake = env
-    cfg["miniapp"]["public_port"] = free_port()
+    cfg["web"]["port"] = free_port()
     from ailife.web.server import Dashboard
     dash = Dashboard(cfg, brain, bot)
 
     async def run():
-        await dash.start_public()
-        base = f"http://127.0.0.1:{cfg['miniapp']['public_port']}"
+        await dash.start()
+        base = f"http://127.0.0.1:{cfg['web']['port']}"
         async with httpx.AsyncClient() as c:
-            assert (await c.get(base + "/api/state")).status_code == 401
-            tok = dash.issue_token(1)
-            assert (await c.get(base + "/api/state", headers={"X-Token": tok})).status_code == 200
-            assert (await c.get(base + "/api/state", params={"t": tok})).status_code == 200
-            dash.tokens[tok] = 0
-            assert (await c.get(base + "/api/state", headers={"X-Token": tok})).status_code == 401
+            assert (await c.get(base + "/api/state")).status_code == 200
+            assert (await c.get(base + "/api/state", headers={"Host": "evil.example"})).status_code == 403
+            assert (await c.get(base + "/api/state", headers={"Sec-Fetch-Site": "cross-site"})).status_code == 403
         await dash.stop()
     asyncio.run(run())

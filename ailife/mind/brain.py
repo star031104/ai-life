@@ -288,10 +288,6 @@ class Brain:
         hb = self.together.habits_block()
         if hb:
             lines.append(hb)
-        music = self.db.music(5, "pc")
-        if music and time.time() - music[0]["ts"] < 7 * 86400:
-            lines.append("他最近在电脑上听的歌：" + "、".join(
-                f"《{m['title']}》{('-' + m['artist']) if m['artist'] else ''}" for m in music[:4]))
         arts = self.db.top_artists()
         if arts:
             lines.append("他常听的歌手：" + "、".join(a for a, _ in arts))
@@ -382,19 +378,8 @@ class Brain:
         return "# 你们之间\n" + "\n".join(lines) if lines else ""
 
     def _now_block(self) -> str:
-        """他此刻在干什么（电脑感知、手机信号），有就写，过时的不写。"""
+        """他此刻在干什么（手机信号），有就写，过时的不写。"""
         lines = []
-        pc = self.db.get("sense_pc") or {}
-        if pc and time.time() - pc.get("ts", 0) < 300 and pc.get("desc"):
-            lines.append(f"他的电脑上：{pc['desc']}")
-        if pc and time.time() - pc.get("ts", 0) < 6 * 3600 and pc.get("today"):
-            lines.append(f"他今天在电脑上：{pc['today']}")
-        if lines:
-            lines.append("（可以顺着这些自然地聊：问问玩到哪了、写的什么、看的什么好不好看，熬夜或者连着忙太久就心疼一下；"
-                         "但别像查岗一样报时长，也别每句都提）")
-        lu = self.db.last_message("user")
-        if lu and lu["kind"] == "desk" and time.time() - lu["ts"] < 1800:
-            lines.append("他正在电脑桌面上和你说话（你以桌宠的样子待在他屏幕角落，说的话会冒在你头顶的气泡里，所以多用口语、短一点）")
         ph = self.db.get("sense_phone") or {}
         if ph and time.time() - ph.get("ts", 0) < 3 * 3600:
             t = datetime.fromtimestamp(ph["ts"], self.cfg.tz)
@@ -417,8 +402,8 @@ class Brain:
         diaries = self.db.recent_diary(2)
         diary_txt = "\n".join(f"{d['day']}：{d['content']}" for d in diaries) or "（还没有）"
         life = self.db.get(f"life_{self.now():%Y-%m-%d}", "")
-        owner = p.user_name or self.cfg.telegram.get("owner_name") or p.call_name or "他"
-        app = "QQ" if self.db.get("last_channel") == "qq" else "Telegram"
+        owner = p.user_name or (self.cfg.get("qq") or {}).get("owner_name") or p.call_name or "他"
+        app = "QQ"
         from ailife.persona import examples as ex
         lu_row = self.db.last_message("user")
         chosen = ex.pick(p, query, (lu_row["content"] if lu_row else ""), avoid=self._last_examples)
@@ -487,27 +472,6 @@ class Brain:
         ctx = "\n".join(m["content"] for m in hist[-3:])
         return (last_user + "\n" + ctx[-300:] + extra).strip()
 
-    ASK_DOING = re.compile(r"(猜|知道|看得到|感觉到).{0,6}(我|在)|我(在|刚才|今天|这会儿).{0,4}(干|做|忙)|干了啥|干嘛了|做了什么|"
-                           r"我在干嘛|我在做什么|我忙什么")
-
-    def _pc_hint(self, messages: list[dict], text: str):
-        """把“他电脑上在干嘛”贴到他这句话后面（他问起时一定贴；换了件事后第一次说话时贴一次），
-        系统提示里那一段太靠后，模型常常想不起来用。"""
-        pc = self.db.get("sense_pc") or {}
-        if not pc or time.time() - pc.get("ts", 0) > 300 or not pc.get("desc") or not messages \
-                or messages[-1].get("role") != "user":
-            return
-        asked = bool(self.ASK_DOING.search(text or ""))
-        sig = f"{pc.get('kind')}|{pc.get('app')}"
-        if not asked and (self.db.get("pc_hint_sig") == sig or pc.get("kind") in ("用电脑", "离开电脑了")):
-            return
-        self.db.set("pc_hint_sig", sig)
-        note = f"他电脑上{pc['desc']}"
-        if asked and pc.get("today"):
-            note += f"；今天在电脑上：{pc['today']}"
-        tail = "（他问起来了，可以直接说出你感觉到的）" if asked else "（想提就自然地提一句，不想提就不提）"
-        messages[-1] = {**messages[-1], "content": f"{messages[-1]['content']}\n（你感觉到的：{note}{tail}）"}
-
     async def reply(self) -> Parsed:
         await self.refresh_world()
         hist = self.history()
@@ -519,7 +483,6 @@ class Brain:
         last_user = self.db.last_message("user")
         lu = (last_user["content"] if last_user else "") or ""
         serious = len(lu) > 30 or re.search(r"难过|累|烦|崩溃|压力|哭|不开心|失眠|焦虑|怎么办|为什么|吗？|吗\?", lu)
-        self._pc_hint(messages, lu)
         away = self.away.hint_for_reply() if messages[-1].get("role") == "user" else ""
         if away:                                  # 电脑关着的时候他发过消息：回他时顺便说说刚才在干嘛
             messages[-1] = {**messages[-1], "content": f"{messages[-1]['content']}\n（{away}）"}
@@ -558,23 +521,6 @@ class Brain:
         if not p.skip:
             self.apply_state(p)
         return p
-
-    async def desk_line(self, event: str) -> str:
-        """桌宠在桌面上主动搭一句（很短，不发 Telegram）。"""
-        hist = self.history(20)
-        sys = await self.build_prompt(event)
-        messages = [{"role": "system", "content": sys}] + hist
-        append_user(messages, f"（系统：你以桌宠的样子待在他电脑屏幕角落。{event}。用一句很短的话（20 个字以内）自然地搭话，"
-                              "像随口一说，别问太多问题，不要用标签。不想说就只输出 [跳过]。）")
-        if messages[1]["role"] != "user":
-            messages.insert(1, {"role": "user", "content": "（聊天开始）"})
-        p = await self._generate(messages, proactive=True, max_bubbles=1, tag="桌宠")
-        if p.skip:
-            return ""
-        text = next((b.text for b in p.bubbles if b.text), "")[:40]
-        if text:
-            self.db.add_message("assistant", text, "desk")
-        return text
 
     @staticmethod
     def _cap_bubbles(p: Parsed, n: int):

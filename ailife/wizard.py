@@ -76,33 +76,19 @@ def setup(root: Path = ROOT):
     text = (root / "config.example.yaml").read_text(encoding="utf-8")
     env: dict[str, str] = {}
 
-    print("① 在哪里和她聊？")
-    print("  1. QQ（推荐，国内不用代理；会自动下载、配置 NapCat，你只要用她的 QQ 小号扫一次码）")
-    print("  2. Telegram（要代理）")
-    print("  3. 两个都要")
-    where = ask("选哪个", "1" if sys.platform == "win32" else "2")
-    use_qq = where in ("1", "3")
-    use_tg = where in ("2", "3")
-    if use_tg:
-        print("\n  Telegram：在 Telegram 里找 @BotFather，发 /newbot 创建一个 bot，把它给你的 token 粘贴过来。")
-        while True:
-            tok = ask("bot token", secret=False)
-            if re.fullmatch(r"\d{6,12}:[\w-]{30,}", tok):
-                break
-            print("  看起来不对（格式像 123456789:AAH...），再试一次")
-        env["TELEGRAM_BOT_TOKEN"] = tok
-        text = _set_line(text, r'^(\s*bot_token:\s*).*$', r'\1"${TELEGRAM_BOT_TOKEN}"')
-    else:
-        text = _set_line(text, r'^(\s*bot_token:\s*).*$', r'\1""   # 只用 QQ；想加 Telegram 就重新运行 setup')
-
-    print("\n② 代理：国内访问 Telegram 需要代理（Clash 一般是 http://127.0.0.1:7890）。只用 QQ 可以不要。")
+    use_qq = True                                  # 只走 QQ（Telegram 已经去掉）
+    print("① 代理：只有你的大模型接口需要代理时才填（Clash 一般是 http://127.0.0.1:7890）。")
     found = detect_proxy()
     if found:
         print(f"  检测到本机有代理：{found}")
-    proxy = ask("代理地址（不需要就输入 无）", found or ("http://127.0.0.1:7890" if use_tg else "无"))
+    proxy = ask("代理地址（不需要就输入 无）", found or "无")
     proxy = "" if proxy in ("无", "no", "none", "-") else proxy
     text = _set_line(text, r'^proxy:.*$', f'proxy: "{proxy}"')
 
+    print("\n② 你自己的 QQ 号（不是她的小号）：私聊只认这个号")
+    me = ask("你的 QQ 号", "")
+    if me.isdigit():
+        text = _set_line(text, r'^(\s*owner_id:\s*)0(.*)$', rf'\g<1>{me}\2')
     print("\n③ 你在哪个城市（她会关心你那边的天气，可以跳过）")
     city = ask("城市", "")
     if city:
@@ -151,7 +137,7 @@ def setup(root: Path = ROOT):
         if napcat_main([]) != 0:
             print("QQ 这一步没做完：弄好后双击 scripts\\qq_setup.bat 再来一次（已经下好的不会重新下载）。")
     print("\n下一步：双击 start.bat（Linux / macOS：bash start.sh）启动"
-          + ("，在 Telegram 里给你的 bot 发 /start" if use_tg else "，用你的 QQ 给她的小号发句话") + "。")
+          + "，用你的 QQ 给她的小号发句话。")
 
 
 # ================= 人设 =================

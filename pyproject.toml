@@ -1,7 +1,7 @@
 [project]
 name = "ai-life"
 dynamic = ["version"]
-description = "一个有自己生活、会主动找你的本地 AI 伴侣（QQ / Telegram）"
+description = "一个有自己生活、会主动找你的本地 AI 伴侣（QQ 私聊）"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -13,7 +13,7 @@ version = { attr = "ailife.__version__" }
 include = ["ailife*"]
 
 [tool.setuptools.package-data]
-ailife = ["web/*.html", "pet/*.html"]
+ailife = ["web/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

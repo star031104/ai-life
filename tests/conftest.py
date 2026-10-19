@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ailife.core.config import load_config  # noqa: E402
-from fakes import FIXTURE, FakeLLM, FakeTGBot, cfg_root  # noqa: E402
+from fakes import FIXTURE, FakeLLM, FakeQQ, cfg_root  # noqa: E402
 
 
 @pytest.fixture
@@ -18,8 +18,7 @@ def env(tmp_path, monkeypatch):
     shutil.copytree(cfg_root() / "persona", tmp_path / "persona")
     shutil.copy(FIXTURE, tmp_path / "persona" / "student.md")
     cfg["persona_file"] = "persona/student.md"
-    cfg["telegram"]["bot_token"] = "1:x"
-    cfg["telegram"]["owner_id"] = 42
+    cfg["qq"] = {**dict(cfg.get("qq") or {}), "enabled": True, "owner_id": 42}
     cfg["style"]["typing_chars_per_sec"] = 1000
     cfg["proactive"]["morning"] = ""      # 早安晚安和真实时间有关，这里关掉免得测试不稳定
     cfg["proactive"]["night"] = ""
@@ -31,8 +30,8 @@ def env(tmp_path, monkeypatch):
     brain = Brain(cfg)
     brain.llm = FakeLLM()
     brain.memory.llm = brain.llm
-    from ailife.channels.telegram.bot import ChatBot
-    bot = ChatBot(cfg, brain)
-    fake = FakeTGBot()
-    monkeypatch.setattr(type(bot.app), "bot", property(lambda self: fake))
+    from ailife.chat.companion import Companion
+    bot = Companion(cfg, brain)
+    bot.qq = FakeQQ(bot)
+    fake = bot.qq.out
     return cfg, brain, bot, fake

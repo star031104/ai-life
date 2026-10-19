@@ -1,4 +1,4 @@
-"""只在电脑上的小屋里有的：管理大模型、看各个连接的状态、软件更新。手机小屋（公开入口）里没有这些接口。"""
+"""小屋里的系统页：管理大模型、看各个连接的状态、软件更新。"""
 from __future__ import annotations
 
 import time
@@ -91,10 +91,8 @@ class SystemMixin:
         out = []
         db, bot, now = self.db, self.bot, time.time()
 
-        def last_from(channel: str | None):
-            q = "SELECT MAX(ts) t FROM messages WHERE role='user'" + (
-                " AND channel=?" if channel == "qq" else " AND (channel IS NULL OR channel='tg')")
-            r = db.conn.execute(q, (channel,) if channel == "qq" else ()).fetchone()
+        def last_from(channel: str):
+            r = db.conn.execute("SELECT MAX(ts) t FROM messages WHERE role='user' AND channel=?", (channel,)).fetchone()
             return (r["t"] if r else None) or 0
 
         def ago(ts):
@@ -105,7 +103,7 @@ class SystemMixin:
                 f"{int(m // 60)} 小时前收到过" if m < 1440 else f"{int(m // 1440)} 天前收到过"
         qq = getattr(bot, "qq", None)
         if qq is None:
-            out.append({"key": "qq", "name": "QQ", "state": "gray", "text": "没开（scripts\\qq_setup.bat 可以接上）"})
+            out.append({"key": "qq", "name": "QQ", "state": "gray", "text": "没开（config.yaml 的 qq.enabled）"})
         elif not qq.ob.ready:
             out.append({"key": "qq", "name": "QQ（NapCat）", "state": "yellow",
                         "text": "NapCat 没连上：程序会自己再拉起它；一直不行就看日志或者重跑 scripts\\qq_setup.bat"})
@@ -113,19 +111,6 @@ class SystemMixin:
             t = last_from("qq")
             out.append({"key": "qq", "name": "QQ（NapCat）", "state": "green" if t else "blue",
                         "text": f"连上了，{ago(t)}你的消息" if t else "连上了，等你第一条消息"})
-        if not getattr(bot, "tg", False) or getattr(bot, "app", None) is None:
-            out.append({"key": "tg", "name": "Telegram", "state": "gray", "text": "没开"})
-        else:
-            upd = getattr(bot.app, "updater", None)
-            running = bool(upd and getattr(upd, "running", False))
-            t = last_from("tg")
-            if not running:
-                out.append({"key": "tg", "name": "Telegram", "state": "yellow", "text": "没连上：检查代理和 bot token"})
-            elif not bot.owner_id:
-                out.append({"key": "tg", "name": "Telegram", "state": "blue", "text": "连上了，用你的 TG 给它发 /start 绑定"})
-            else:
-                out.append({"key": "tg", "name": "Telegram", "state": "green" if t else "blue",
-                            "text": f"连上了，{ago(t)}你的消息" if t else "连上了，等你第一条消息"})
         st = self.brain.llm.stats() if hasattr(self.brain.llm, "stats") else {}
         calls, ok = int(st.get("calls", 0)), int(st.get("ok", 0))
         if not calls:
@@ -137,22 +122,6 @@ class SystemMixin:
             lim = int(st.get("limited", 0))
             out.append({"key": "llm", "name": "大模型", "state": "green",
                         "text": f"今天 {ok}/{calls} 次成功" + (f"，限流 {lim} 次" if lim else "")})
-        pet = getattr(self, "pet", None)
-        if not (pet and pet.enabled):
-            out.append({"key": "pet", "name": "桌宠", "state": "gray", "text": "没开"})
-        else:
-            out.append({"key": "pet", "name": "桌宠", "state": "green" if pet.active() else "blue",
-                        "text": "在桌面上" if pet.active() else "没打开（python run.py pet，或者开机自动出来）"})
-        sense_on = bool((self.cfg.get("sense") or {}).get("enabled", True))
-        pc = db.get("sense_pc") or {}
-        if not sense_on:
-            out.append({"key": "sense", "name": "电脑感知", "state": "gray", "text": "没开"})
-        elif getattr(bot, "pc", None) and getattr(bot.pc, "paused", lambda: False)():
-            out.append({"key": "sense", "name": "电脑感知", "state": "yellow", "text": "暂停中（/sense on 恢复）"})
-        elif now - float(pc.get("ts") or 0) < 300:
-            out.append({"key": "sense", "name": "电脑感知", "state": "green", "text": pc.get("desc") or "在看"})
-        else:
-            out.append({"key": "sense", "name": "电脑感知", "state": "blue", "text": "开着，还没看到什么"})
         up = db.get("update_info") or {}
         if up.get("newer"):
             out.append({"key": "update", "name": "软件更新", "state": "yellow",

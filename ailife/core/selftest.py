@@ -1,6 +1,6 @@
 """离线自检：python run.py selftest（或双击 scripts\\selftest.bat）
 
-不联网、不连 Telegram、不碰你的数据：在一个临时文件夹里用“假的大模型”把核心流程跑一遍，
+不联网、不连 QQ、不碰你的数据：在一个临时文件夹里用“假的大模型”把核心流程跑一遍，
 再检查你这台电脑上的配置、依赖、数据库能不能被新版本正常打开（用数据库的一份副本）。
 每次更新完代码跑一下，全是 ✅ 就可以放心重启。
 """
@@ -81,9 +81,9 @@ async def _run(cfg, log) -> bool:
     def config():
         if not cfg.get("has_user_config"):
             raise RuntimeError("没有 config.yaml")
-        tok = str(cfg.telegram.get("bot_token") or "")
-        if ":" not in tok or tok.startswith("123456:"):
-            raise RuntimeError("telegram.bot_token 没填（或 .env 里没有）")
+        qq = cfg.get("qq") or {}
+        if not qq.get("enabled") or not int(qq.get("owner_id") or 0):
+            raise RuntimeError("qq.enabled 没开或者 qq.owner_id（你自己的 QQ 号）没填")
         from ailife.llm.client import LLM
         llm = LLM(cfg)                                  # 只检查配置能不能解析，不发请求
         if not llm.ready:

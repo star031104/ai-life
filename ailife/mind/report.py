@@ -78,7 +78,7 @@ def week_metrics(brain, end: float | None = None, days: int = 7, db=None) -> dic
 
 
 def _hold_lines(brain=None):
-    from ailife.channels.telegram.common import HOLD_LINES
+    from ailife.chat.common import HOLD_LINES
     extra = getattr(getattr(brain, "persona", None), "hold_lines", None) or []
     return set(HOLD_LINES) | set(extra)
 

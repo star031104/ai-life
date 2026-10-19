@@ -207,7 +207,7 @@ MIGRATIONS = [
     ("mood_log", "longing", "ALTER TABLE mood_log ADD COLUMN longing REAL"),
     ("mood_log", "sulk", "ALTER TABLE mood_log ADD COLUMN sulk REAL"),
     ("mood_log", "tired", "ALTER TABLE mood_log ADD COLUMN tired REAL"),
-    ("messages", "channel", "ALTER TABLE messages ADD COLUMN channel TEXT"),   # tg / qq（旧记录为空＝tg）
+    ("messages", "channel", "ALTER TABLE messages ADD COLUMN channel TEXT"),   # qq（旧版本的记录可能是 tg 或空）
 ]
 
 
@@ -378,7 +378,7 @@ class DB(LifeDBMixin):
         )
         self.conn.commit()
 
-    # 贴纸表里同时有 Telegram 的贴纸和从 QQ 学来的表情包（file_id 以 "qq:" 开头），各用各的
+    # 贴纸表：从 QQ 学来的表情包 file_id 以 "qq:" 开头（旧版本留下的 Telegram 贴纸不再使用）
     @staticmethod
     def _plat(qq: bool) -> str:
         return "file_id LIKE 'qq:%'" if qq else "file_id NOT LIKE 'qq:%'"

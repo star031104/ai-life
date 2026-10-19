@@ -1,32 +1,11 @@
-"""小屋的门卫：Telegram Mini App 的签名校验，本机入口只认本机地址、拒绝跨站调用。"""
+"""小屋的门卫：只认本机地址、拒绝跨站调用（服务器上用 SSH 隧道在自己电脑打开）。"""
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
-import time
-from urllib.parse import parse_qsl, urlparse
+from urllib.parse import urlparse
 
 from aiohttp import web
 
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]", "::1")
-
-
-def verify_init_data(init_data: str, bot_token: str, max_age: int = 7 * 86400) -> int | None:
-    """校验 Telegram Mini App 的 initData，返回用户 id；不合法返回 None。"""
-    try:
-        pairs = dict(parse_qsl(init_data, keep_blank_values=True))
-        got = pairs.pop("hash", "")
-        check = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
-        secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-        calc = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
-        if not got or not hmac.compare_digest(calc, got):
-            return None
-        if time.time() - int(pairs.get("auth_date", 0)) > max_age:
-            return None
-        return int(json.loads(pairs.get("user") or "{}").get("id") or 0) or None
-    except Exception:  # noqa: BLE001
-        return None
 
 
 @web.middleware

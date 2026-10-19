@@ -15,7 +15,7 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "  没找到 ffmpeg：Ubuntu/Debian 运行 sudo apt install ffmpeg；macOS 运行 brew install ffmpeg"
 fi
 if [ ! -f config.yaml ]; then
-  echo; echo "第一次用：回答几个问题（Telegram bot token、大模型 key、选人设）"
+  echo; echo "第一次用：回答几个问题（你的 QQ 号、大模型、选人设）"
   python run.py setup
 fi
 echo; echo "装好了。先跑一次 python run.py selftest，然后 bash start.sh 启动。"

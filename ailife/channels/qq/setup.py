@@ -2,8 +2,7 @@
 
 1. 找到 NapCat，读它自己的配置：WebSocket 端口、token（不用你手抄 token）
 2. 连上去试一下：她的小号是谁、好友里哪个是你（列出来让你选）
-3. 问一句：Telegram 还要不要
-4. 写 config.yaml 的 qq 一节（token 放进 .env），先备份，写完重新读一遍核对，不对就恢复
+3. 写 config.yaml 的 qq 一节（token 放进 .env），先备份，写完重新读一遍核对，不对就恢复
 """
 from __future__ import annotations
 
@@ -86,7 +85,7 @@ def napcat_root_of(cfg_dir: Path) -> Path:
     return cfg_dir.parent.parent if cfg_dir.parent.name.lower() == "napcat" else cfg_dir.parent
 
 
-# ---------------- 改 config.yaml（只动 qq 一节和 telegram.bot_token 那一行） ----------------
+# ---------------- 改 config.yaml（只动 qq 一节） ----------------
 def set_qq_block(text: str, qq: dict) -> str:
     """把顶层的 qq: 一节换成新的（没有就加到末尾）。别的内容和注释原样保留。"""
     import yaml
@@ -103,26 +102,6 @@ def set_qq_block(text: str, qq: dict) -> str:
     while end > start + 1 and not lines[end - 1].strip():       # 一节后面的空行留着
         end -= 1
     return "\n".join(lines[:start] + block.splitlines() + lines[end:]) + "\n"
-
-
-def disable_tg(text: str) -> str:
-    """telegram.bot_token 改成空（原来的值留在注释里，想恢复就改回去）。"""
-    lines = text.splitlines()
-    in_tg = False
-    for i, ln in enumerate(lines):
-        if re.match(r"^telegram:\s*(#.*)?$", ln):
-            in_tg = True
-            continue
-        if in_tg and ln[:1] not in (" ", "\t", "") and ln.strip():
-            break
-        m = re.match(r"^(\s+)bot_token:\s*(.*?)\s*(#.*)?$", ln) if in_tg else None
-        if m:
-            old = m.group(2)
-            if old in ('""', "''", ""):
-                return text
-            lines[i] = f'{m.group(1)}bot_token: ""   # 只用 QQ（原来是 {old}，想恢复 Telegram 就改回去）'
-            return "\n".join(lines) + "\n"
-    return text
 
 
 # ---------------- 交互 ----------------
@@ -193,9 +172,9 @@ def main(argv: list[str]) -> int:
     # 3. 你是哪个
     from ailife.core.config import load_config
     try:
-        old_cfg = load_config()
+        load_config()
     except Exception:  # noqa: BLE001
-        old_cfg = {}
+        pass
     try:                                         # 你 config.yaml 里自己写过的 qq 设置（不是默认值）原样保留
         import yaml
         raw = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8")) or {}
@@ -228,14 +207,7 @@ def main(argv: list[str]) -> int:
         say(False, "这是她的小号自己的号，要填你自己的 QQ")
         return 1
 
-    # 4. Telegram
-    from ailife.channels.telegram.bot import tg_configured
-    keep_tg = True
-    if old_cfg and tg_configured(old_cfg):
-        print()
-        keep_tg = yes("Telegram 也继续用吗？选 n 就只用 QQ（随时可以改回来）", True)
-
-    # 5. 写配置
+    # 4. 写配置
     cfg_path = ROOT / "config.yaml"
     if not cfg_path.exists():
         say(False, "还没有 config.yaml：先运行 setup.bat 做完基本配置")
@@ -255,8 +227,6 @@ def main(argv: list[str]) -> int:
             v = old_q[k]
             qq[k] = dict(v) if isinstance(v, dict) else v
     new = set_qq_block(text, qq)
-    if not keep_tg:
-        new = disable_tg(new)
     from ailife.core.secrets import read_env, write_env
     env_old = read_env(ROOT)
     if ob["token"]:
@@ -269,7 +239,6 @@ def main(argv: list[str]) -> int:
         q = c.get("qq") or {}
         assert q.get("enabled") and q.get("ws_url") == ob["url"] and int(q.get("owner_id")) == owner
         assert (q.get("access_token") or "") == ob["token"]
-        assert keep_tg == tg_configured(c) or not tg_configured(old_cfg)
     except Exception as e:  # noqa: BLE001
         shutil.copy2(backup, cfg_path)
         if ob["token"] and "QQ_ACCESS_TOKEN" not in env_old:
@@ -279,9 +248,8 @@ def main(argv: list[str]) -> int:
     say(True, f"config.yaml 写好了（原来的备份在 {backup.relative_to(ROOT)}）")
     if ob["token"]:
         say(True, "token 放进了 .env（config.yaml 里只写引用）")
-    say(True, "只用 QQ（Telegram 不启动）" if not keep_tg else "QQ 和 Telegram 都用：你在哪边说话她就在哪边回")
 
-    # 6. 还差什么
+    # 5. 还差什么
     print()
     if is_friend is False:
         say(False, f"你（{owner}）还不是她的小号（{bot_uin}）的好友：用你的 QQ 搜 {bot_uin} 加好友，程序开着时会自动同意。")

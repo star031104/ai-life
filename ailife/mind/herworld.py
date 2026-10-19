@@ -40,7 +40,7 @@ class HerWorld:
 
     def _forbidden(self) -> set[str]:
         p = self.persona
-        return {x for x in (p.call_name, p.name, self.cfg.telegram.get("owner_name"), "哥哥", "哥哥大人", "他") if x}
+        return {x for x in (p.call_name, p.name, (self.cfg.get("qq") or {}).get("owner_name"), "哥哥", "哥哥大人", "他") if x}
 
     # ================= 身边的人 =================
     def bible(self, query: str = "") -> str:

@@ -77,7 +77,6 @@ def secret_paths(cfg: dict) -> list[tuple[tuple[str, ...], str]]:
     out: list[tuple[tuple[str, ...], str]] = []
     for k in (cfg.get("keys") or {}):
         out.append((("keys", k), f"{re.sub(r'[^A-Za-z0-9]', '_', k).upper()}_KEY"))
-    out.append((("telegram", "bot_token"), "TELEGRAM_BOT_TOKEN"))
     out.append((("qq", "access_token"), "QQ_ACCESS_TOKEN"))
     for name, p in ((cfg.get("llm") or {}).get("profiles") or {}).items():
         if isinstance(p, dict) and "api_key" in p:

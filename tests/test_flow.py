@@ -1,4 +1,4 @@
-"""用假的大模型和假的 Telegram 跑一遍完整流程（不联网）。"""
+"""用假的大模型和假的 QQ 发送器跑一遍完整流程（不联网）。"""
 import asyncio
 import time
 
@@ -31,10 +31,10 @@ def test_sticker_fallback_and_library(env):
     cfg, brain, bot, fake = env
     from ailife.mind.output import Parsed, Bubble
     asyncio.run(bot.deliver(Parsed(bubbles=[Bubble(sticker="难过")])))
-    assert fake.sent[-1][0] == "text" and fake.sent[-1][1][1] == "😢"
-    brain.db.add_sticker("FILEID", "u1", "😭", "set", "user")
+    assert fake.sent[-1][0] in ("face", "text")                 # 没学到表情包：QQ 小黄脸 / emoji
+    bot.qq.stickers["难过"] = b"IMG"
     asyncio.run(bot.deliver(Parsed(bubbles=[Bubble(sticker="难过")])))
-    assert fake.sent[-1][0] == "sticker" and fake.sent[-1][1][1] == "FILEID"
+    assert fake.sent[-1][0] == "sticker" and fake.sent[-1][1][1] == b"IMG"
 
 
 def test_scheduler_proactive_and_housekeeping(env, monkeypatch):
@@ -97,23 +97,22 @@ def test_consolidate_merge_self_threads_phrases(env):
     assert "小林" in sys and "你自己说过的事" in sys and "面试结果" in sys
 
 
-def test_reaction_recall_typo(env, monkeypatch):
+def test_recall_typo(env, monkeypatch):
     cfg, brain, bot, fake = env
     from ailife.mind.output import parse_reply
-    bot._last_user_msg_id = 9
-    p = parse_reply("[回应:😊]哼|||[撤回]其实我好想你|||没、没什么！")
-    import ailife.channels.telegram.bot as B
-    monkeypatch.setattr(B.asyncio, "sleep", _nosleep)
-    asyncio.run(bot.deliver(p))
+    import ailife.chat.delivery as D
+    monkeypatch.setattr(D.asyncio, "sleep", _nosleep)
+    asyncio.run(bot.deliver(parse_reply("哼|||[撤回]其实我好想你|||没、没什么！")))
     kinds = [s[0] for s in fake.sent]
-    assert kinds[0] == "reaction" and fake.sent[0][1][2] == "🥰"
     assert "delete" in kinds
     assert any("撤回" in r["content"] for r in brain.db.recent_messages(10) if r["role"] == "event")
     cfg["style"]["typo_rate"] = 1
     fake.sent.clear()
-    asyncio.run(bot.deliver(parse_reply("我已经在路上了哦")))
-    assert [s[0] for s in fake.sent] == ["text", "edit"]
-    assert fake.sent[1][1][0] == "我已经在路上了哦"
+    from ailife.chat.common import TYPOS
+    k = next(iter(TYPOS))
+    asyncio.run(bot.deliver(parse_reply(f"我今天{k}了好多事情")))
+    assert [s[0] for s in fake.sent] == ["text", "text"]
+    assert fake.sent[1][1][1] == "*" + k                       # 发错了补一句“*正确的字”
 
 
 async def _nosleep(*a, **k):
@@ -194,7 +193,7 @@ def test_story_mind_profile(env, monkeypatch):
     assert "你对他的整体了解" in sys and "期中考试周" in sys and "心里在想" in sys
 
 
-def test_songs_and_desk_chat(env, monkeypatch):
+def test_songs(env, monkeypatch):
     cfg, brain, bot, fake = env
     from ailife.mind.output import parse_reply
     p = parse_reply("给你推这首|||[推歌:夜に駆ける|YOASOBI]")
@@ -205,9 +204,6 @@ def test_songs_and_desk_chat(env, monkeypatch):
     monkeypatch.setattr(brain.media, "recommend_link", fake_link)
     asyncio.run(bot.deliver(p))
     assert any("music.163.com" in str(x[1]) for x in fake.sent)
-    r = asyncio.run(bot.desk_chat("在干嘛"))
-    assert r["bubbles"] and brain.db.last_message("user")["kind"] == "desk"
-    assert int(brain.db.get("unanswered", 0)) == 0
 
 
 def test_clean_desc():
@@ -314,21 +310,6 @@ def test_responsiveness_and_daily_cap(env):
     f, rate, n = sched.responsiveness()
     assert n == 8 and rate < 0.2 and f < 0.5
     assert sched.max_unanswered() <= 2
-
-
-def test_desk_line_and_pet_expr(env):
-    cfg, brain, bot, fake = env
-    from ailife.pet.server import Pet
-    cfg["pet"] = {**dict(cfg.get("pet") or {}), "preset": "rice"}
-    assert Pet(cfg, brain, bot).preset == "rice" and Pet(cfg, brain, bot).default_entry == "Rice.model3.json"
-    cfg["pet"] = {**dict(cfg.get("pet") or {}), "preset": "haru"}
-    pet = Pet(cfg, brain, bot)
-    brain.db.set("mood", "有点害羞")
-    assert pet.expr() == "f06"
-    assert pet.expr("生气") == "f02"
-    pet.last_poll = time.time()
-    asyncio.run(pet.on_pc_event("他离开电脑 1.5 小时后刚回来"))
-    assert pet.queue and brain.db.last_message("assistant")["kind"] == "desk"
 
 
 def test_health_notify(env):

@@ -16,17 +16,14 @@ ONEBOT = {"network": {"httpServers": [], "websocketServers": [
 USER_CFG = """# 我自己的配置
 llm:
   temperature: 0.8   # 别动
-telegram:
-  bot_token: "${TELEGRAM_BOT_TOKEN}"
-  owner_id: 1234567890
 qq:
   enabled: false
   groups: [123456789]
   aliases: ["小希"]
 
 sense:
-  pc:
-    detail: content
+  phone:
+    ntfy_topic: mytopic
 """
 
 
@@ -50,20 +47,17 @@ def test_find_and_read(tmp_path):
     assert ob["token"] == "OVz7D-.zC.7oe8T3" and ob["format"] == "array"
 
 
-def test_set_qq_block_and_disable_tg():
-    from ailife.channels.qq.setup import disable_tg, set_qq_block
+def test_set_qq_block():
+    from ailife.channels.qq.setup import set_qq_block
     q = {"enabled": True, "ws_url": "ws://127.0.0.1:3001", "access_token": "${QQ_ACCESS_TOKEN}", "owner_id": 2233445566,
          "groups": [123456789], "aliases": ["小希"]}
     out = set_qq_block(USER_CFG, q)
     data = yaml.safe_load(out)
-    assert data["qq"] == q and data["sense"]["pc"]["detail"] == "content" and data["llm"]["temperature"] == 0.8
+    assert data["qq"] == q and data["sense"]["phone"]["ntfy_topic"] == "mytopic" and data["llm"]["temperature"] == 0.8
     assert "# 别动" in out and out.count("qq:") == 1
     # 没有 qq 一节：加到末尾
     out2 = set_qq_block("llm:\n  temperature: 0.8\n", q)
     assert yaml.safe_load(out2)["qq"]["owner_id"] == 2233445566
-    off = disable_tg(out)
-    assert yaml.safe_load(off)["telegram"]["bot_token"] == "" and "${TELEGRAM_BOT_TOKEN}" in off
-    assert disable_tg(off) == off
 
 
 def test_full_setup_flow(tmp_path, monkeypatch):
@@ -73,7 +67,6 @@ def test_full_setup_flow(tmp_path, monkeypatch):
     root.mkdir()
     shutil.copy(C.ROOT / "config.example.yaml", root / "config.example.yaml")
     (root / "config.yaml").write_text(USER_CFG, encoding="utf-8")
-    (root / ".env").write_text("TELEGRAM_BOT_TOKEN=123:abcdefgh\n", encoding="utf-8")
     monkeypatch.setattr(C, "ROOT", root)
     monkeypatch.setattr(S, "ROOT", root)
     monkeypatch.delenv("AILIFE_CONFIG", raising=False)
@@ -92,7 +85,7 @@ def test_full_setup_flow(tmp_path, monkeypatch):
     nap.friends = [OWNER, 99999999]
     _napcat(tmp_path / "disk", port=nap.port)
     monkeypatch.setattr(S, "candidate_roots", lambda: [tmp_path / "disk"])
-    answers = iter(["1", "n"])                      # 我是第 1 个好友；不要 Telegram 了
+    answers = iter(["1", "n", "n"])                 # 我是第 1 个好友
     monkeypatch.setattr("builtins.input", lambda *_: next(answers))
     try:
         assert S.main([]) == 0
@@ -101,7 +94,7 @@ def test_full_setup_flow(tmp_path, monkeypatch):
     c = C.load_config()
     assert c.qq.enabled and c.qq.owner_id == OWNER and c.qq.access_token == "OVz7D-.zC.7oe8T3"
     assert c.qq.ws_url == f"ws://127.0.0.1:{nap.port}" and c.qq.groups == [123456789] and c.qq.aliases == ["小希"]
-    assert c.telegram.bot_token == "" and c.sense.pc.detail == "content"
+    assert c.sense.phone.ntfy_topic == "mytopic"
     text = (root / "config.yaml").read_text(encoding="utf-8")
     assert "OVz7D" not in text                       # token 只在 .env 里
     assert "QQ_ACCESS_TOKEN=OVz7D-.zC.7oe8T3" in (root / ".env").read_text(encoding="utf-8")

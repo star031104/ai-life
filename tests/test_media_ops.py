@@ -26,110 +26,16 @@ def make_mp4(path, seconds=2, audio=True):
 
 
 def test_video_frames(tmp_path):
-    from ailife.channels.telegram.media import video_frames
+    from ailife.media.ffmpeg import video_frames
     data = make_mp4(tmp_path / "v.mp4")
     frames = asyncio.run(video_frames(data, 2))
     assert len(frames) == 2 and all(f[:2] == b"\xff\xd8" for f in frames)
-
-
-class FakeFile:
-    def __init__(self, data):
-        self.data = data
-
-    async def download_as_bytearray(self):
-        return bytearray(self.data)
-
-
-def fake_update(owner=42, **msg):
-    m = SimpleNamespace(message_id=500, caption=None, reply_to_message=None, quote=None, text=None,
-                        animation=None, video=None, video_note=None, document=None, location=None, venue=None,
-                        dice=None, contact=None, poll=None, game=None, story=None)
-    for k, v in msg.items():
-        setattr(m, k, v)
-    return SimpleNamespace(message=m, effective_user=SimpleNamespace(id=owner), effective_chat=SimpleNamespace(id=owner))
-
-
-def test_media_handlers(env, tmp_path, monkeypatch):
-    cfg, brain, bot, fake = env
-    data = make_mp4(tmp_path / "v.mp4")
-    looked = []
-
-    async def describe(b64, hint=""):
-        looked.append(hint)
-        return "一只猫在跳舞"
-    monkeypatch.setattr(type(brain.llm), "vision", True, raising=False)
-    brain.llm.describe_image = describe
-
-    async def get_file(fid):
-        return FakeFile(data if fid != "txt" else "第一行\n第二行".encode())
-    ctx = SimpleNamespace(bot=SimpleNamespace(get_file=get_file))
-    replies = []
-
-    async def sched(delay=None):
-        replies.append(delay)
-    bot.schedule_reply = sched
-    drain(bot, bot.on_animation(fake_update(animation=SimpleNamespace(file_id="a", file_size=1000)), ctx))
-    drain(bot, bot.on_video(fake_update(video_note=SimpleNamespace(file_id="v", file_size=5000, duration=2)), ctx))
-    drain(bot, bot.on_document(fake_update(document=SimpleNamespace(file_id="txt", file_size=20, file_name="笔记.txt",
-                                                                     mime_type="text/plain")), ctx))
-    drain(bot, bot.on_document(fake_update(document=SimpleNamespace(file_id="z", file_size=10 ** 9, file_name="大.zip",
-                                                                     mime_type="application/zip")), ctx))
-    drain(bot, bot.on_dice(fake_update(dice=SimpleNamespace(emoji="🎲", value=6)), ctx))
-    drain(bot, bot.on_other(fake_update(poll=object()), ctx))
-    msgs = [r["content"] for r in brain.db.recent_messages(20) if r["role"] == "user"]
-    assert any("动图：一只猫在跳舞" in m for m in msgs)
-    assert any("圆形视频" in m and "一只猫在跳舞" in m and "声音你听不了" in m for m in msgs)
-    assert any("笔记.txt" in m and "第一行" in m for m in msgs)
-    assert any("大.zip" in m and "打不开" in m for m in msgs)
-    assert any("骰子" in m and "满分" in m for m in msgs)
-    assert any("投票" in m for m in msgs)
-    assert len(replies) == 6
-
-
-def test_location_sets_weather(env, monkeypatch):
-    cfg, brain, bot, fake = env
-
-    async def fake_get(url, params):
-        return {"address": {"city": "广州市", "suburb": "天河区"}}
-    brain.weather._get = fake_get
-    called = []
-
-    async def sched(delay=None):
-        called.append(1)
-    bot.schedule_reply = sched
-    upd = fake_update(location=SimpleNamespace(latitude=23.1, longitude=113.3, live_period=None))
-    drain(bot, bot.on_location(upd, SimpleNamespace()))
-    assert brain.db.get("city") == "广州市" and brain.db.get("geo")["lat"] == 23.1
-    assert "广州市天河区" in brain.db.last_message("user")["content"]
-
-
-def test_quote_context(env):
-    cfg, brain, bot, fake = env
-    her = SimpleNamespace(text="今天钢琴课好难", caption=None, sticker=None, voice=None, photo=None, message_id=9,
-                          from_user=SimpleNamespace(id=999))
-    msg = SimpleNamespace(reply_to_message=her, quote=None)
-    assert "引用了你说的「今天钢琴课好难」" in bot._quote_ctx(msg)
-    mine = SimpleNamespace(text="我明天考试", caption=None, sticker=None, voice=None, photo=None, message_id=10,
-                           from_user=SimpleNamespace(id=42))
-    assert "他自己之前说的" in bot._quote_ctx(SimpleNamespace(reply_to_message=mine, quote=SimpleNamespace(text="考试")))
-    assert bot._quote_ctx(SimpleNamespace(reply_to_message=None, quote=None)) == ""
 
 
 def test_reaction_feedback(env):
     cfg, brain, bot, fake = env
     from ailife.mind.feedback import classify_reaction
     assert classify_reaction(["👍"]) == "pos" and classify_reaction(["👎"]) == "neg" and classify_reaction(["😢"]) == "sad"
-    mid = brain.db.add_message("assistant", "哥哥大人是不是又在打游戏？", "text", 77)
-    joy0 = brain.emotion.state()["joy"]
-    upd = SimpleNamespace(message_reaction=SimpleNamespace(user=SimpleNamespace(id=42), message_id=77,
-                                                           new_reaction=[SimpleNamespace(emoji="👎")]))
-    asyncio.run(bot.on_reaction(upd, None))
-    assert brain.emotion.state()["joy"] <= joy0
-    assert brain.quality.disliked()[0]["text"].startswith("哥哥大人是不是又在打游戏")
-    assert "不喜欢" in brain.db.last_message("event")["content"]
-    assert "他不喜欢你这样说" in brain.quality.block()
-    assert any("不喜欢" in p for p in brain.quality.problems(["哥哥大人是不是又在打游戏呀？"]))
-    assert mid
 
 
 def test_llm_priority_and_stats(env):

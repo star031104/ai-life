@@ -110,43 +110,26 @@ def test_missed_letter(env):
     assert brain.away._missed_letter(sun.timestamp(), (sun + timedelta(hours=5)).timestamp()) == ""
 
 
-class _Resp:
-    def __init__(self, data):
-        self._d = data
+def _fake_send(monkeypatch, posted):
+    import ailife.channels.qq.onebot as ob
 
-    def json(self):
-        return self._d
-
-
-def _fake_httpx(monkeypatch, posted):
-    import httpx
-
-    class C:
-        def __init__(self, **kw):
-            posted.append(("init", kw))
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def post(self, url, json=None):
-            posted.append((url, json))
-            return _Resp({"ok": True, "result": {"message_id": 99}})
-    monkeypatch.setattr(httpx, "Client", C)
+    def send_once_sync(url, tok, action, params, timeout):
+        posted.append((action, params))
+        return {"message_id": 99}
+    monkeypatch.setattr(ob, "send_once_sync", send_once_sync)
 
 
 def test_goodbye_sync(env, monkeypatch):
     cfg, brain, bot, fake = env
     cfg["proactive"]["quiet_hours"] = ""
     posted = []
-    _fake_httpx(monkeypatch, posted)
+    _fake_send(monkeypatch, posted)
     brain.db.set("bye_lines", {"day": "我去上课啦，下课找你", "night": "我先睡啦，晚安"})
     assert brain.away.goodbye_sync()
-    url, body = posted[-1]
-    assert url.endswith("/sendMessage") and body["chat_id"] == 42 and body["text"] in ("我去上课啦，下课找你", "我先睡啦，晚安")
-    assert brain.db.last_message("assistant")["content"] == body["text"]
+    action, body = posted[-1]
+    text = body["message"][0]["data"]["text"]
+    assert action == "send_private_msg" and body["user_id"] == 42 and text in ("我去上课啦，下课找你", "我先睡啦，晚安")
+    assert brain.db.last_message("assistant")["content"] == text
     assert not brain.away.goodbye_sync()                     # 同一次退出只说一次
     brain.away._bye_done = False
     assert not brain.away.goodbye_sync()                     # 3 小时内不再道别
@@ -156,14 +139,14 @@ def test_goodbye_sync(env, monkeypatch):
     bye["ts"] = time.time() - 5 * 3600 - 30
     brain.db.set("bye", bye)
     rec = brain.away.check()
-    assert rec["bye"] == body["text"]
+    assert rec["bye"] == text
     assert "走之前你跟他说过" in brain.away.note(rec, replying=False)
 
 
 def test_goodbye_quiet_hours_and_disabled(env, monkeypatch):
     cfg, brain, bot, fake = env
     posted = []
-    _fake_httpx(monkeypatch, posted)
+    _fake_send(monkeypatch, posted)
     cfg["proactive"]["quiet_hours"] = "00:00-23:59"
     brain.db.set("last_user_ts", time.time() - 3600)
     assert not brain.away.goodbye_sync()                     # 半夜他早不在了：不吵他
@@ -172,7 +155,7 @@ def test_goodbye_quiet_hours_and_disabled(env, monkeypatch):
     assert not brain.away.goodbye_sync()
     cfg["away"]["goodbye"] = True
     assert brain.away.goodbye_sync()                         # 他刚刚还在聊：说一声
-    assert len([p for p in posted if p[0] != "init"]) == 1
+    assert len(posted) == 1
 
 
 def test_bye_lines_default_and_refresh(env):

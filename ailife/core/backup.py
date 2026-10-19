@@ -3,7 +3,7 @@
     python run.py export          打包一份（这台电脑照常运行，可以当备份）
     python run.py import 包.zip   在新电脑装好程序后，把包里的记忆和设置导进来（会先备份现在的）
 
-两台电脑不要同时运行她：会抢 Telegram 消息，记忆也会分叉。换好电脑后，旧电脑上就别再启动了。
+两台电脑不要同时运行她：会抢 QQ 消息，记忆也会分叉。换好电脑后，旧电脑上就别再启动了。
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from ailife.core import secrets
 
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", "node_modules", ".venv", "venv", ".idea", ".vscode"}
 SKIP_SUFFIX = (".pyc", ".part", ".tmp", ".zip", ".session", ".session-journal", ".log")
-DATA_KEEP = ("photos", "pet/model", "personas.json")          # data/ 里要带走的（缓存会在新电脑上重新下载）
+DATA_KEEP = ("photos", "personas.json")          # data/ 里要带走的（缓存会在新电脑上重新下载）
 
 
 def host_running(cfg) -> bool:
@@ -122,7 +122,7 @@ def import_(cfg, zip_path: str, log=print) -> None:
             if not rel or rel.endswith("/"):
                 continue
             take = rel in ("data/ailife.db", "data/personas.json") or rel.startswith(
-                ("data/photos/", "data/pet/model/", "persona/", "data/chars/"))
+                ("data/photos/", "persona/", "data/chars/"))
             if rel == "config.yaml" and not (root / "config.yaml").exists():
                 take = True
             if not take:

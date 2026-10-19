@@ -157,8 +157,6 @@ class Scheduler(EventsMixin):
         for sh in self.db.active_shows():              # 刷新番剧信息（集数、每集简介）
             await self.brain.media.enrich_show(sh)
         self.db.expire_threads(14)
-        if hasattr(self.bot, "label_stickers"):
-            self.bot.spawn(self.bot.label_stickers(30))
         # 为今天随机抽早安/晚安的时间点
         for key in ("morning", "night"):
             r = parse_range(self.cfg.proactive.get(key), now)
@@ -234,8 +232,6 @@ class Scheduler(EventsMixin):
         factor = self.brain.emotion.longing_factor() * hf * self.responsiveness()[0]
         if self.brain.mind.enabled:
             factor *= 0.5                       # 大部分主动找他交给“内心独白”，随机的少一点
-        if getattr(self.bot, "pc", None) and self.bot.pc.busy():
-            factor *= 0.3                       # 他在专心打游戏/看视频，少打扰
         if getattr(self.brain, "rhythm", None) and self.brain.rhythm.busy_now(now):
             factor *= 0.3                       # 按他的固定安排，这会儿在上课/上班
         prob = fire_probability(p, hours, step, factor) * (0.5 ** unanswered)
@@ -287,11 +283,6 @@ class Scheduler(EventsMixin):
         if self.db.get(f"life_{now:%Y-%m-%d}") and not self.db.get(lkey):     # 今天的小插曲只分享一次
             pool.append((2.0, "分享你今天安排里正在发生或刚发生的一个小插曲（挑一件，之前没提过的）",
                          (lambda: self.db.set(lkey, True))))
-        pc = getattr(self.bot, "pc", None)
-        for tp in (pc.topics if pc else [])[-2:]:
-            if time.time() - tp["ts"] < 1800:
-                pool.append((float(tp.get("w", 3.0)), f"{tp['text']}，借这个自然地找他聊两句（问问、关心一下或者吐槽一句，"
-                             "像你自己注意到的，别说是程序告诉你的）", None))
         w = self.brain.weather_info
         if w and w.get("text"):
             pool.append((1.0, f"聊聊他那边的天气（{w['text'][:40]}）", None))
@@ -423,8 +414,6 @@ class Scheduler(EventsMixin):
         if int(self.db.get("unanswered", 0)) >= self.max_unanswered():
             return
         if self.today_count(now) >= int(p.get("max_per_day", 8)):
-            return
-        if getattr(self.bot, "pc", None) and self.bot.pc.busy():
             return
         reason = (f"你刚才心里在想：{th['thought'][:150]}。你决定主动找他（{th.get('why', '')[:60]}）"
                   f"，想说的大意：{str(th.get('say') or '')[:80]}")

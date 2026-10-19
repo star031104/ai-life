@@ -1,10 +1,6 @@
-"""她的“脑子”里的小零件：检索、情绪、钟点习惯、小游戏、Mini App 签名、节日、旧库升级、感知、天气。"""
-import hashlib
-import hmac
-import json
+"""她的“脑子”里的小零件：检索、情绪、钟点习惯、小游戏、节日、旧库升级、天气。"""
 import shutil
 import time
-from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -84,19 +80,6 @@ def test_games(tmp_path):
     assert g.state is None
 
 
-def test_verify_init_data():
-    from ailife.web.server import verify_init_data
-    token = "123:ABC"
-    fields = {"auth_date": str(int(time.time())), "query_id": "x", "user": json.dumps({"id": 42})}
-    check = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
-    secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
-    fields["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
-    data = urlencode(fields)
-    assert verify_init_data(data, token) == 42
-    assert verify_init_data(data, "999:other") is None
-    assert verify_init_data(data.replace("42", "43"), token) is None
-
-
 def test_festival():
     from datetime import date
     from ailife.proactive.scheduler import festival_today
@@ -119,15 +102,6 @@ def test_old_db_upgrade(tmp_path):
     assert db.all_memories("self")
     p = db.backup(tmp_path / "bk")
     assert p.exists()
-
-
-def test_sense_helpers():
-    from ailife.sense.sensors import classify, normalize_phone
-    assert classify(r"C:\Games\Genshin Impact\YuanShen.exe", "原神") == "打游戏"
-    assert classify(r"C:\x\Code.exe", "bot.py - ai-life") == "写代码"
-    assert classify(r"C:\x\msedge.exe", "【某视频】- 哔哩哔哩") == "看视频"
-    assert normalize_phone("闹钟关了") == "刚起床"
-    assert normalize_phone("到家啦") == "刚到家"
 
 
 def test_parse_new_tags():

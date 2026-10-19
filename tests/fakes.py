@@ -1,4 +1,4 @@
-"""测试用的假东西：假的大模型、假的 Telegram，以及测试人设的位置。（不联网）"""
+"""测试用的假东西：假的大模型、假的 QQ 发送器，以及测试人设的位置。（不联网）"""
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -47,36 +47,59 @@ class FakeLLM:
         return parse_json(await self.chat(messages, helper=True), default)
 
 
-class FakeTGBot:
+class FakeOut:
+    """假的 QQ 发送器：和 channels/qq/onebot.py 的 QQOut 方法一样，发出去的都记在 sent 里。
+    每条是 (种类, (对方, 内容), 其它参数)。"""
     def __init__(self):
         self.sent = []
         self._id = 100
 
-    async def _m(self, kind, *a, **k):
+    def _m(self, kind, *a, **k):
         self._id += 1
         self.sent.append((kind, a, k))
         return SimpleNamespace(message_id=self._id)
 
-    async def send_message(self, *a, **k):
-        return await self._m("text", *a, **k)
+    async def send_message(self, chat, text, reply_to_message_id=None, **k):
+        return self._m("text", chat, text, reply_to_message_id=reply_to_message_id)
 
-    async def send_sticker(self, *a, **k):
-        return await self._m("sticker", *a, **k)
+    async def send_photo(self, chat, photo, reply_to_message_id=None, **k):
+        return self._m("photo", chat, photo, reply_to_message_id=reply_to_message_id)
 
-    async def send_voice(self, *a, **k):
-        return await self._m("voice", *a, **k)
+    async def send_sticker_image(self, chat, data, reply_to_message_id=None):
+        return self._m("sticker", chat, data, reply_to_message_id=reply_to_message_id)
 
-    async def send_chat_action(self, *a, **k):
+    async def send_face(self, chat, fid, reply_to_message_id=None):
+        return self._m("face", chat, fid, reply_to_message_id=reply_to_message_id)
+
+    async def typing(self, chat, speaking=False):
         return None
 
-    async def set_message_reaction(self, *a, **k):
-        self.sent.append(("reaction", a, k))
+    async def delete_message(self, chat, message_id):
+        self.sent.append(("delete", (chat, message_id), {}))
 
-    async def delete_message(self, *a, **k):
-        self.sent.append(("delete", a, k))
 
-    async def edit_message_text(self, *a, **k):
-        self.sent.append(("edit", a, k))
+class FakeQQ:
+    """假的 QQ 私聊桥（channels/qq/bridge.py 里 Companion 用到的那几样）。"""
+    def __init__(self, bot, owner_id=42):
+        self.bot, self.db, self.owner_id = bot, bot.db, owner_id
+        self.out = FakeOut()
+        self.ob = SimpleNamespace(ready=True, self_id=10001)
+        self.stickers = {}
+
+    def private_ready(self):
+        return True
+
+    def _user_in(self, content, kind, qq_mid):
+        mid = self.db.add_message("user", content, kind, qq_mid, channel="qq")
+        self.bot._last_user_msg_id = qq_mid
+        self.bot._user_active()
+        return mid
+
+    def pick_sticker(self, emotion):
+        return self.stickers.get(emotion)
+
+    async def stop(self):
+        return None
 
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "student.md"
