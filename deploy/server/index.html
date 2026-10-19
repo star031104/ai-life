@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>小屋</title>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f4f4f2; --surface:#fcfcfb; --surface-2:#efefec; --surface-3:#e4e4e0;
+  --ink:#1a1a18; --ink-2:#4f4f4b; --ink-3:#878783;
+  --line:#e2e2de; --line-2:#d2d2cd; --grid:#e9e9e5;
+  --accent:#7a4fd1; --accent-soft:#f1ecfb;
+  --c-yuki:#7a4fd1; --c-qq:#17855a; --c-wx:#2a78d6;
+  --good:#1f7a3f; --good-soft:#e5f3ea; --warn:#a65d00; --bad:#c23a3a; --bad-soft:#fbeaea;
+  --shadow:0 1px 0 rgba(20,18,14,.03),0 1px 3px rgba(20,18,14,.06);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#121212; --surface:#1a1a1a; --surface-2:#232323; --surface-3:#2c2c2c;
+  --ink:#efefed; --ink-2:#c3c3bf; --ink-3:#8c8c88;
+  --line:#2b2b2b; --line-2:#3a3a3a; --grid:#282828;
+  --accent:#a48bf0; --accent-soft:#272236;
+  --c-yuki:#a68bf0; --c-qq:#4cc68c; --c-wx:#5b9ff0;
+  --good:#4cc77a; --good-soft:#18291e; --warn:#e7a23c; --bad:#ef6b6b; --bad-soft:#341c1c;
+  --shadow:none;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121212; --surface:#1a1a1a; --surface-2:#232323; --surface-3:#2c2c2c;
+  --ink:#efefed; --ink-2:#c3c3bf; --ink-3:#8c8c88;
+  --line:#2b2b2b; --line-2:#3a3a3a; --grid:#282828;
+  --accent:#a48bf0; --accent-soft:#272236;
+  --c-yuki:#a68bf0; --c-qq:#4cc68c; --c-wx:#5b9ff0;
+  --good:#4cc77a; --good-soft:#18291e; --warn:#e7a23c; --bad:#ef6b6b; --bad-soft:#341c1c;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.6 var(--font);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+header{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+header h1{margin:0;font-size:22px;font-weight:700;letter-spacing:.3px}
+header .sub{color:var(--ink-3);font-size:13px}
+header .sp{flex:1}
+.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer;color:var(--ink-2)}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bots{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.bot{display:flex;flex-direction:column;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);text-decoration:none;transition:border-color .15s,transform .15s}
+.bot:hover{border-color:var(--line-2);transform:translateY(-1px)}
+.bot .top{display:flex;gap:12px;align-items:center}
+.ava{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:18px;flex:none;position:relative}
+.ava::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--surface);background:var(--ink-3)}
+.ava.on::after{background:var(--good)} .ava.off::after{background:var(--bad)}
+.bot .name{font-weight:650;font-size:16px} .bot .kind{color:var(--ink-3);font-size:12.5px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:12px;font-size:12px;font-weight:600}
+.pill.on{background:var(--good-soft);color:var(--good)} .pill.off{background:var(--bad-soft);color:var(--bad)} .pill.wait{background:var(--surface-2);color:var(--ink-3)}
+.bot .why{font-size:12.5px;color:var(--bad);min-height:18px}
+.bot .nums{display:flex;gap:18px} .bot .nums b{font-size:20px;font-variant-numeric:tabular-nums;display:block;line-height:1.2}
+.bot .nums span{color:var(--ink-3);font-size:12px}
+.bot .go{margin-top:auto;color:var(--ink-2);font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px}
+h2{font-size:15px;margin:30px 0 12px;font-weight:650;display:flex;align-items:center;gap:8px}
+h2 .hint{font-weight:400;color:var(--ink-3);font-size:12.5px;margin-left:auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow)}
+.minis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.mini .l{color:var(--ink-3);font-size:12px} .mini .v{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
+.mini .s{color:var(--ink-3);font-size:12px}
+.meter{height:6px;border-radius:4px;background:var(--surface-3);overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+.meter i.hi{background:var(--warn)} .meter i.vhi{background:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 8px;text-align:right;border-top:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+th{color:var(--ink-3);font-weight:550;font-size:12px;border-top:0}
+th:first-child,td:first-child{text-align:left}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.tblwrap{overflow-x:auto}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.chart h3{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--ink-2);margin-top:4px;flex-wrap:wrap}
+.alerts{list-style:none;margin:0;padding:0}
+.alerts li{padding:9px 0;border-top:1px solid var(--line);font-size:13px;display:flex;gap:10px}
+.alerts li:first-child{border-top:0}
+.alerts .t{color:var(--ink-3);font:12px var(--mono);white-space:nowrap;padding-top:1px}
+.empty{color:var(--ink-3);text-align:center;padding:14px 0;font-size:13px}
+#tip{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);display:none;z-index:9;min-width:120px}
+#tip .r{display:flex;justify-content:space-between;gap:12px}
+@media (max-width:800px){.bots{grid-template-columns:1fr}.minis{grid-template-columns:1fr 1fr}.charts{grid-template-columns:1fr}}
+@media (max-width:480px){.wrap{padding:20px 16px 48px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>小屋</h1><div class="sub" id="upd">正在看大家在不在…</div></div>
+    <span class="sp"></span>
+    <button class="iconbtn" id="theme" title="切换深浅色" aria-label="切换深浅色"></button>
+    <button class="iconbtn" id="refresh" title="刷新" aria-label="刷新"></button>
+  </header>
+
+  <div class="bots" id="bots"></div>
+
+  <h2>服务器<span class="hint" id="bk"></span></h2>
+  <div class="card"><div class="minis" id="machine"></div></div>
+
+  <h2>这一周的体检<span class="hint" id="rpTs">每天凌晨算一次</span></h2>
+  <div class="card">
+    <div class="tblwrap"><table id="rpTable"></table></div>
+    <div class="charts">
+      <div class="chart"><h3>每天的花费（美元，估算）</h3><div id="chUsd"></div></div>
+      <div class="chart"><h3>每天大家说了多少话</h3><div id="chMsgs"></div></div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <h2>最近的提醒<span class="hint">掉线超过 10 分钟会在 QQ 上告诉你</span></h2>
+  <div class="card"><ul class="alerts" id="alerts"></ul></div>
+</div>
+<div id="tip"></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const IC={sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+ moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>',refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>'};
+const icon=n=>`<svg class="i" viewBox="0 0 24 24">${IC[n]}</svg>`;
+const COL={yuki:"var(--c-yuki)",qq:"var(--c-qq)",wx:"var(--c-wx)"};
+const pad=n=>String(n).padStart(2,"0");
+const hm=ts=>{const d=new Date(ts*1000);return `${d.getMonth()+1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+function ago(ts){const s=Date.now()/1000-ts;if(s<90)return "刚刚";if(s<3600)return Math.floor(s/60)+" 分钟前";if(s<86400)return Math.floor(s/3600)+" 小时前";return Math.floor(s/86400)+" 天前"}
+function theme(t){if(t)document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;
+  const dark=t?t==="dark":matchMedia("(prefers-color-scheme:dark)").matches;$("theme").innerHTML=icon(dark?"sun":"moon")}
+let TH=null;try{TH=localStorage.getItem("hubtheme")}catch(e){}
+theme(TH);
+$("theme").onclick=()=>{const cur=document.documentElement.dataset.theme||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");
+  TH=cur==="dark"?"light":"dark";try{localStorage.setItem("hubtheme",TH)}catch(e){}theme(TH)};
+$("refresh").innerHTML=icon("refresh");$("refresh").onclick=()=>load();
+async function get(u){const r=await fetch(u+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw new Error(r.status);return r.json()}
+const DEF=[{key:"yuki",label:"有希",kind:"QQ 私聊",path:"/yuki/"},{key:"qq",label:"QQ 群的小满",kind:"QQ 群",path:"/qq/"},{key:"wx",label:"微信群的小满",kind:"微信群",path:"/wx/"}];
+function renderBots(st){const bots=(st&&st.bots)||DEF;
+  $("bots").innerHTML=bots.map(b=>{const known=st&&"ok" in b;const cls=!known?"wait":b.ok?"on":"off";
+    const ch=String(b.name||b.label).trim().slice(-1);
+    return `<a class="bot" href="${esc(b.path)}"><div class="top"><div class="ava ${cls==="wait"?"":cls}" style="background:${COL[b.key]}">${esc(ch)}</div>
+      <div><div class="name">${esc(b.label)}</div><div class="kind">${esc(b.kind)}</div></div></div>
+      <div><span class="pill ${cls}">${!known?"还不知道":b.ok?"在线":"掉线了"}</span></div>
+      <div class="why">${b.ok||!known?"":esc(b.why)+(b.down_since?`（${ago(b.down_since)}开始）`:"")}</div>
+      <div class="nums"><div><b>${b.today??"-"}</b><span>${b.key==="yuki"?"今天聊了":"今天群里"}</span></div>${b.key==="yuki"?"":`<div><b>${b.her_today??"-"}</b><span>她说了</span></div>`}</div>
+      <div class="go">进她的小屋 ${icon("arrow")}</div></a>`}).join("")}
+function meter(v){return `<div class="meter"><i class="${v>90?"vhi":v>75?"hi":""}" style="width:${Math.min(100,v)}%"></i></div>`}
+function renderMachine(st){const m=(st&&st.machine)||{};const b=(st&&st.backup)||{};
+  $("machine").innerHTML=`<div class="mini"><div class="l">硬盘</div><div class="v">${m.disk_used??"-"}%</div>${meter(m.disk_used||0)}<div class="s">还剩 ${m.disk_free_gb??"-"} GB</div></div>
+    <div class="mini"><div class="l">内存</div><div class="v">${m.mem_used??"-"}%</div>${meter(m.mem_used||0)}<div class="s">共 ${m.mem_total_gb??"-"} GB</div></div>
+    <div class="mini"><div class="l">负载</div><div class="v">${m.load??"-"}</div>${meter(((m.load||0)/(m.cpus||1))*100)}<div class="s">${m.cpus??"-"} 核</div></div>
+    <div class="mini"><div class="l">备份</div><div class="v">${b.count??0} 份</div><div class="s" style="margin-top:6px">${b.last?esc(b.last.replace(/^ailife-|\.tar\.gz$/g,""))+" · "+b.size_mb+" MB":"还没备份过"}</div><div class="s">每天凌晨一份，留 30 天</div></div>`;
+  $("upd").textContent=st?`${ago(st.ts)}看过一眼 · 每 5 分钟看一次`:"还没开始看（装好 ops.py 的定时任务后会有）";
+  $("bk").textContent=b.last?`最近一次备份：${b.last.replace(/^ailife-|\.tar\.gz$/g,"")}`:"";
+  const al=(st&&st.alerts)||[];
+  $("alerts").innerHTML=al.length?al.map(a=>`<li><span class="t">${hm(a.ts)}</span><span>${esc(a.text).replace(/\n/g,"<br>")}${a.sent?"":' <span style="color:var(--bad)">（没发出去）</span>'}</span></li>`).join(""):'<li class="empty">最近都好好的</li>'}
+const sum=a=>(a||[]).reduce((x,y)=>x+y,0);
+const fmtTok=n=>n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"k":String(n);
+function renderReport(r){if(!r){$("rpTable").innerHTML='<tr><td class="empty">还没有体检（每天凌晨算一次）</td></tr>';return}
+  $("rpTs").textContent=`${ago(r.ts)}算的 · 最近 7 天合计约 $${r.total_usd}`;
+  const rows=r.bots.map(b=>{const calls=sum(b.calls),fail=sum(b.fail);
+    const extra=b.key==="yuki"?`语音 ${b.voice||0} 条`:`分享 ${b.shares||0} · 提醒 ${b.plans||0}`;
+    return `<tr><td><span class="dot" style="background:${COL[b.key]}"></span>${esc(b.label)}</td><td>${sum(b.msgs)}</td><td>${sum(b.her)}</td>
+      <td>${calls}</td><td style="color:${calls&&fail/calls>.1?"var(--bad)":"inherit"}">${calls?Math.round(fail/calls*1000)/10:0}%</td>
+      <td>${fmtTok(sum(b.tok_in))} / ${fmtTok(sum(b.tok_out))}</td><td>$${sum(b.usd).toFixed(3)}</td>
+      <td style="color:${b.errors>20?"var(--bad)":"inherit"}">${b.errors<0?"-":b.errors}</td><td>${b.learned||0}</td><td>${extra}</td></tr>`});
+  $("rpTable").innerHTML=`<tr><th></th><th>对方说的</th><th>她说的</th><th>大模型调用</th><th>失败</th><th>token 进 / 出</th><th>花费</th><th>报错</th><th>学到</th><th>其他</th></tr>`+rows.join("");
+  const lab=r.days.map(d=>d.slice(5).replace("-","/"));
+  bars($("chUsd"),lab,r.bots.map(b=>({name:b.label,color:COL[b.key],data:b.usd})),v=>"$"+v.toFixed(3));
+  bars($("chMsgs"),lab,r.bots.map(b=>({name:b.label,color:COL[b.key],data:b.msgs.map((x,i)=>x+b.her[i])})),v=>String(v));
+  $("legend").innerHTML=r.bots.map(b=>`<span><span class="dot" style="background:${COL[b.key]}"></span>${esc(b.label)}</span>`).join("")}
+function bars(el,labels,series,fmt){const W=480,H=180,pl=40,pb=22,pt=8,n=labels.length;
+  const tot=labels.map((_,i)=>series.reduce((a,s)=>a+(s.data[i]||0),0));const max=Math.max(...tot,0)||1;
+  const nice=v=>{const p=Math.pow(10,Math.floor(Math.log10(v)));const m=v/p;return (m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*p};
+  const step=nice(max/4),top=step*4,bw=(W-pl)/n;let g="";
+  for(let i=0;i<=4;i++){const y=pt+(H-pt-pb)*(1-i/4);g+=`<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--grid)"/><text x="${pl-6}" y="${y+4}" text-anchor="end" font-size="10.5" fill="var(--ink-3)">${+(step*i).toFixed(3)}</text>`}
+  labels.forEach((l,i)=>{let y=H-pb;const x=pl+i*bw+bw*.18,w=bw*.64;
+    series.forEach(s=>{const h=(H-pt-pb)*(s.data[i]||0)/top;if(h>0){g+=`<rect x="${x}" y="${y-h}" width="${w}" height="${h}" fill="${s.color}" stroke="var(--surface)" stroke-width="1"/>`;y-=h}});
+    g+=`<text x="${pl+i*bw+bw/2}" y="${H-6}" text-anchor="middle" font-size="10.5" fill="var(--ink-3)">${l}</text><rect class="hit" data-i="${i}" x="${pl+i*bw}" y="${pt}" width="${bw}" height="${H-pt-pb}" fill="transparent"/>`});
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+  el.querySelectorAll(".hit").forEach(r=>{r.onmousemove=ev=>{const i=+r.dataset.i,t=$("tip");
+    t.innerHTML=`<b>${labels[i]}</b>`+series.map(s=>`<div class="r"><span><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</span><b>${fmt(s.data[i]||0)}</b></div>`).join("");
+    t.style.display="block";t.style.left=Math.min(innerWidth-200,ev.clientX+14)+"px";t.style.top=ev.clientY+14+"px"};r.onmouseleave=()=>$("tip").style.display="none"})}
+async function load(){let st=null,r=null;try{st=await get("status.json")}catch(e){}try{r=await get("report.json")}catch(e){}
+  renderBots(st);renderMachine(st);renderReport(r)}
+load();setInterval(()=>{if(!document.hidden)load()},60000);
+</script>
+</body>
+</html>

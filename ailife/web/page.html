@@ -311,6 +311,21 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
 .toast.on{opacity:1;transform:translate(-50%,0)}
 .foot{margin-top:28px;text-align:center;color:var(--ink-3);font-size:12px}
 .skel{opacity:.55}
+
+/* ============ 11.2 她的日子 / 管理 ============ */
+nav.tabs button.adm{display:none}
+body.admin nav.tabs button.adm{display:flex}
+nav.tabs .tsep{flex:1}
+nav.tabs button.admbtn{color:var(--ink-3)}
+body.admin nav.tabs button.admbtn{color:var(--accent-ink)}
+.pref{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:13px}
+.pref b{font-weight:600} .pref button{border:0;background:none;color:var(--ink-3);cursor:pointer;padding:0 4px;font-size:15px;line-height:1}
+.pref button:hover{color:var(--bad)}
+.frow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px} .frow .input{flex:1;min-width:120px}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.kcard{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--surface);display:flex;gap:8px;align-items:flex-start}
+.kcard p{margin:0;color:var(--ink-2);font-size:13px;flex:1} .kcard b{display:block;color:var(--ink);font-size:13.5px;margin-bottom:2px}
+@media (max-width:640px){.frow .input{min-width:100%}}
 </style>
 </head>
 <body>
@@ -323,15 +338,18 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
         <h1 id="name">小屋</h1>
         <div class="sub" id="sub">正在连接…</div>
       </div>
+      <a class="iconbtn" id="hub" href="../" title="回小屋首页" aria-label="回小屋首页" hidden></a>
       <button class="iconbtn" id="refresh" title="刷新" aria-label="刷新"></button>
     </div>
     <nav class="tabs" id="tabs" role="tablist">
       <button data-p="home" class="on"><span data-i="home"></span>概览</button>
       <button data-p="mem"><span data-i="brain"></span>记忆</button>
-      <button data-p="days"><span data-i="book"></span>日记与来信</button>
+      <button data-p="days"><span data-i="book"></span>她的日子</button>
       <button data-p="notes"><span data-i="chat"></span>留言板 <span class="badge" id="nbadge" hidden></span></button>
       <button data-p="life"><span data-i="calendar"></span>一起做的事</button>
-      <button data-p="set"><span data-i="gear"></span>设置</button>
+      <span class="tsep"></span>
+      <button class="admbtn" id="admbtn" type="button"><span data-i="gear"></span>管理</button>
+      <button class="adm" data-p="set"><span data-i="gear"></span>设置</button>
     </nav>
   </div>
 </header>
@@ -446,6 +464,21 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
   <!-- ================= 日记与来信 ================= -->
   <section class="page" id="p-days">
     <div class="grid">
+      <div class="card c7">
+        <div class="card-h"><h2><span data-i="heart"></span>她说过的喜好</h2><span class="sp"></span><span class="hint">亲口说过的就一直这样，不会改口</span></div>
+        <div class="card-b"><div class="chips" id="gPrefs"></div>
+          <div class="frow"><input class="input" id="gPT" placeholder="话题，比如：香菜" maxlength="12">
+            <input class="input" id="gPV" placeholder="她的态度，比如：讨厌" maxlength="24" style="flex:2">
+            <button class="btn sm" id="gPAdd">加一条</button></div></div>
+      </div>
+      <div class="card c5">
+        <div class="card-h"><h2><span data-i="spark"></span>这周的她</h2><span class="sp"></span><span class="hint">语音、随手拍、整理自己</span></div>
+        <div class="card-b"><dl class="kv" id="gStat"></dl></div>
+      </div>
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="search"></span>她最近查过、知道的事</h2><span class="sp"></span><span class="hint">你问到她不知道的事时她先搜一下；你纠正过的会改掉</span></div>
+        <div class="card-b"><div class="kgrid" id="gLearned"></div></div>
+      </div>
       <div class="card c12">
         <div class="card-h"><h2><span data-i="route"></span>她的故事线</h2><span class="sp"></span><span class="hint">她自己生活里一段一段的事，只显示到今天</span></div>
         <div class="card-b" id="arcs"></div>
@@ -1007,6 +1040,7 @@ function renderCapsules(){
     :'<div class="empty">还没有。给一年后的你们写点什么吧</div>';
 }
 function renderHerWorld(){
+  try{renderGrow()}catch(e){console.error(e)}
   const hw=S.her_world||{goals:[],people:[]};
   $("goals").innerHTML=hw.goals.length?hw.goals.map(g=>`<div class="goal ${g.status==="done"?"done":""}"><div class="title">${esc(g.title)} <span class="tag ${g.status==="done"?"ok":""}">${g.status==="done"?"结束了":g.progress+"%"}</span></div>
       <div class="meta">${esc(g.why||"")}${g.why?" · ":""}${esc(g.start.slice(5))} 开始，打算 ${esc(g.end.slice(5))} 前完成</div>
@@ -1105,6 +1139,26 @@ function renderSettings(){
 }
 async function save(k){const v=$(k).value;
   const r=await post("api/settings",{[k]:v}); toast(r.message||"已保存"); load()}
+
+
+/* ============ 11.2 她的日子 ============ */
+function renderGrow(){const G=S.grow;if(!G)return;
+  $("gPrefs").innerHTML=(G.prefs||[]).map(p=>`<span class="pref"><b>${esc(p.topic)}</b>${esc(p.v)}<button data-pdel="${esc(p.topic)}" title="删掉">×</button></span>`).join("")||'<div class="empty" style="padding:6px 0">她还没说过自己喜欢什么、讨厌什么（每天会把昨天说过的整理一遍）</div>';
+  $("gPrefs").querySelectorAll("[data-pdel]").forEach(b=>b.onclick=async()=>{const r=await post("api/self/pref",{topic:b.dataset.pdel,delete:true});toast(r.message||r.error);load()});
+  const t=G.tidy||{};
+  $("gStat").innerHTML=`<dt>今天的语音</dt><dd>${G.voice_today} 条${G.voice_ready?"":"（没开：config.yaml 的 voice）"}</dd>
+    <dt>这周随手拍</dt><dd>${G.photos_week} 张${G.photo_ready?"":"（没配画图接口）"}</dd>
+    <dt>上次整理自己</dt><dd>${t.month?`${esc(t.month)}：合并 ${t.merged} 组、删掉 ${t.removed} 条`:"还没整理过（每月初，攒够十几条后）"}</dd>`;
+  $("gLearned").innerHTML=(G.learned||[]).map(m=>{const mm=String(m.content).match(/^我查过「([^」]+)」：?(.*)$/);
+    return `<div class="kcard"><p><b>${esc(mm?mm[1]:"")}</b>${esc(mm?mm[2]:m.content)}</p><button class="btn ghost sm danger" data-act="delMem" data-id="${m.id}" aria-label="删除">${icon("x")}</button></div>`}).join("")||'<div class="empty">还没查过什么</div>';
+}
+$("gPAdd").onclick=async()=>{const r=await post("api/self/pref",{topic:$("gPT").value,v:$("gPV").value});toast(r.message||r.error);if(r.ok){$("gPT").value=$("gPV").value="";load()}};
+function setAdmin(on){document.body.classList.toggle("admin",on);try{localStorage.setItem("admin",on?"1":"")}catch(e){}}
+let ADM=false;try{ADM=!!localStorage.getItem("admin")}catch(e){}
+if((location.hash||"")==="#set")ADM=true;
+setAdmin(ADM);
+$("admbtn").onclick=()=>{ADM=!document.body.classList.contains("admin");setAdmin(ADM);if(ADM)go("set");else if(location.hash==="#set")go("home")};
+if(/^\/(yuki|qq|wx)\//.test(location.pathname)){$("hub").hidden=false;$("hub").innerHTML=icon("home")}
 
 /* ============ 事件 ============ */
 function go(p){if(!$("p-"+p))p="home";

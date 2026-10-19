@@ -174,6 +174,12 @@ class Companion(CommandsMixin, LifeCommandsMixin, DeliveryMixin):
             await self._maybe_search()
         except Exception as e:  # noqa: BLE001
             log.info("搜一搜没成功：%s", e)
+        sg = getattr(self.brain, "selfgrow", None)
+        lu = self.db.last_message("user")
+        if sg is not None and lu is not None:
+            co = sg.maybe_fix(lu["content"])                 # 11.2 他在纠正她查过的东西：后台对一下，对的就改
+            if co is not None:
+                self.spawn(co)
         async with self._lock:
             # 排队期间上一轮已经看到了他最新的消息，就不用再回一次
             last_user = self.db.last_message("user")

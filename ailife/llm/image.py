@@ -28,10 +28,11 @@ class ImageGen:
                                              proxy=self.proxy if p.get("use_proxy") else None) as cli:
                     r = await cli.post(f"{str(p['base_url']).rstrip('/')}/images/generations",
                                        headers={"Authorization": f"Bearer {p.get('api_key') or 'none'}"},
-                                       json={"model": p["model"], "prompt": prompt, "size": size,
+                                       json={"model": p["model"], "prompt": prompt, "size": size, "image_size": size,
                                              **dict(p.get("extra_body") or {})})
                     r.raise_for_status()
-                    item = r.json()["data"][0]
+                    d = r.json()
+                    item = (d.get("data") or d.get("images") or [{}])[0]      # OpenAI 是 data，硅基流动是 images
                     if item.get("b64_json"):
                         return base64.b64decode(item["b64_json"])
                     img = await cli.get(item["url"])

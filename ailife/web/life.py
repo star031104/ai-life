@@ -21,6 +21,7 @@ class LifeWebMixin:
         a.router.add_post("/api/persona/use", self.persona_use)
         a.router.add_post("/api/persona/new", self.persona_new)
         a.router.add_post("/api/routine/delete", self.routine_delete)
+        a.router.add_post("/api/self/pref", self.self_pref)             # 11.2 她说过的喜好
 
     def life_state(self) -> dict:
         b = self.brain
@@ -53,6 +54,13 @@ class LifeWebMixin:
                  "disliked": [{"text": x["text"], "emoji": x.get("emoji", ""), "ts": x["ts"]} for x in b.quality.disliked()],
                  "routines": rh.routines(), "learned_times": rh.learned_times(),
                  "her_life": her_life}
+        sg = getattr(b, "selfgrow", None)
+        if sg is not None:
+            try:
+                extra["grow"] = {**sg.snapshot(), "voice_ready": bool(getattr(b, "voice", None) and b.voice.ready),
+                                 "photo_ready": bool(b.photos.enabled and b.photos.gen.ready)}
+            except Exception:  # noqa: BLE001
+                pass
         from ailife.persona.library import list_personas
         p = b.persona
         extra["persona"] = {"name": p.name, "ta": p.ta, "file": str(self.cfg.persona_file), "identity": p.identity,
@@ -112,6 +120,18 @@ class LifeWebMixin:
         text = str(d.get("text") or "")
         self.db.set("disliked", [x for x in (self.db.get("disliked") or []) if x.get("text") != text])
         return web.json_response({"ok": True})
+
+    async def self_pref(self, req):
+        d = await req.json()
+        sg = self.brain.selfgrow
+        topic = str(d.get("topic") or "").strip()
+        if not topic:
+            return web.json_response({"ok": False, "error": "话题要写"})
+        if d.get("delete"):
+            sg.delete_pref(topic)
+            return web.json_response({"ok": True, "message": "删掉了"})
+        ok = sg.add_pref(topic, str(d.get("v") or ""), force=True)
+        return web.json_response({"ok": ok, "message": "存好了：她以后都这么说" if ok else "", "error": "" if ok else "态度要写"})
 
     async def routine_delete(self, req):
         d = await self._json(req)

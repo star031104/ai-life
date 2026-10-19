@@ -98,6 +98,15 @@ class DeliveryMixin:
                     self.db.add_message("assistant", f"[表情:{b.sticker}]", "sticker", channel=ch)
                     sent_any = True
                     continue
+                if b.voice and b.text and not b.recall:     # 11.2 这条用语音发（念不了就照样发文字）
+                    vo = getattr(self.brain, "voice", None)
+                    audio = await vo.speak(b.text) if vo is not None and hasattr(out, "send_voice") else None
+                    if audio:
+                        await asyncio.sleep(min(6.0, len(b.text) / 4) * random.uniform(0.8, 1.2))   # “按住说话”的时间
+                        m = await out.send_voice(chat, audio)
+                        self.db.add_message("assistant", b.text, "voice", m.message_id, channel=ch)
+                        sent_any = True
+                        continue
                 await self._typing_pause(b.text, first=(i == 0))
                 if b.recall:                        # 说出口又后悔了：发出去几秒后撤回
                     m = await out.send_message(chat, b.text, reply_to_message_id=reply_to)

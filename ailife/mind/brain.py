@@ -83,6 +83,7 @@ PROTO_TAIL = """- 不要用 markdown、列表、括号里的动作描写（比�
 - 聊到真实的番、游戏、歌、明星时，拿不准的细节（谁做的、剧情、结局）别编，说感受就好。"""
 PROTO_OPT = {
     "photo": "  [照片:画面描述] 发一张你拍的照片（他想看、或你想分享生活时；今天还能发 {photos_left} 张）",
+    "voice": "  [语音] 放在某条开头：这条用语音发，他能听到你的声音（很短的一句才用：撒娇、哄他、早安晚安、想他的时候；今天还能发 {voices_left} 条，别每轮都用）",
     "date": "  [纪念日:日期|名称] 他提到具体日期的重要日子时记下：每年的写 MM-DD，一次性的可以照他的说法写“下周二”",
     "show": "  [追番:番名|周几 HH:MM] 他明确说要和你一起追某部番时记下（不知道时间就只写番名）",
     "song": "  [推歌:歌名|歌手] 想给他推荐一首真实存在的歌时用，程序会附上链接",
@@ -93,6 +94,7 @@ PROTO_OPT = {
 }
 TOPIC_RE = {
     "photo": re.compile(r"照片|自拍|看看你|发张|拍|长什么样|穿什么"),
+    "voice": re.compile(r"语音|声音|听听|听你|想听|念给|唱|晚安|早安|早上好|睡了|想你|哄|抱抱|撒娇"),
     "date": re.compile(r"\d{1,2}\s*[月/.-]\s*\d{1,2}|明天|后天|下周|下个月|周[一二三四五六日天]|生日|纪念|考试|面试|出差|答辩|号"),
     "show": re.compile(r"番|动画|追|更新|一集|新番|第.{1,3}集"),
     "song": re.compile(r"歌|音乐|听|推荐|旋律|专辑|歌手"),
@@ -152,6 +154,10 @@ class Brain:
         self.weather = Weather(cfg, self.db)
         self.photos = PhotoMaker(cfg, self.db)
         self.photos.persona = self.persona
+        from ailife.media.voice import Voice
+        self.voice = Voice(cfg, self.db, self.persona)          # 11.2 偶尔发语音
+        from ailife.mind.selfgrow import SelfGrow
+        self.selfgrow = SelfGrow(self)                          # 11.2 喜好不改口、每月整理自己、被纠正了就改
         self.weather_info: dict | None = None
         self.db.log_mood(self.mood, self.affection, self.emotion.snapshot())   # 每次启动记一个点
 
@@ -333,6 +339,10 @@ class Brain:
         photos_left = self.photos.remaining_today()
         if photos_left > 0 and (TOPIC_RE["photo"].search(recent) or random.random() < 0.25):
             lines.append(PROTO_OPT["photo"].format(photos_left=photos_left))
+        voice = getattr(self, "voice", None)
+        voices_left = voice.remaining_today() if voice is not None else 0
+        if voices_left > 0 and (TOPIC_RE["voice"].search(recent) or random.random() < 0.12):
+            lines.append(PROTO_OPT["voice"].format(voices_left=voices_left))
         if TOPIC_RE["date"].search(recent):
             lines.append(PROTO_OPT["date"])
         if TOPIC_RE["show"].search(recent):
@@ -420,6 +430,7 @@ class Brain:
             "对他的好感：永远是满的，不会因为任何事减少（你最喜欢他了，只是嘴上不承认）。",
             f"# 你记得的关于他的事\n{mem_txt}",
             (f"# 你自己说过的事（要和这些保持一致，别自相矛盾）\n{self_txt}" if self_txt else ""),
+            self.selfgrow.prefs_block() if getattr(self, "selfgrow", None) else "",
             f"# 你最近的日记\n{diary_txt}",
             self._world_block(),
             self.mind.profile_block(),

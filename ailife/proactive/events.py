@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import time
 from datetime import datetime, timedelta
 
@@ -83,6 +84,28 @@ class EventsMixin:
                     reason = f"《{sh['name']}》第 {ep} 集更新了，你想找他一起看/讨论{last}{about}"
                 await self._send_proactive(reason)
                 return
+
+    # ---------------- 11.2 随手拍：让他看看她在干嘛 ----------------
+    async def _life_photo(self, now: datetime):
+        ph = self.brain.photos
+        per_week = int((self.cfg.get("photo") or {}).get("proactive_per_week", 3))
+        if per_week <= 0 or not ph.enabled or not ph.gen.ready or ph.remaining_today() <= 0 or not (11 <= now.hour <= 21):
+            return
+        wk, day = f"life_photo_{now:%G-W%V}", f"life_photo_day_{now:%Y-%m-%d}"
+        n = int(self.db.get(wk, 0) or 0)
+        if n >= per_week or self.db.get(day) or int(self.db.get("unanswered", 0) or 0) >= 2:
+            return
+        if time.time() - float(self.db.get("last_proactive_ts", 0) or 0) < 90 * 60:
+            return
+        if time.time() - float(self.db.get("last_user_ts", 0) or 0) < 10 * 60:    # 正聊着：别插一张照片进来
+            return
+        if random.random() >= (per_week / 7) / (11 * 60):                    # 每分钟看一次：一周大约 per_week 次
+            return
+        self.db.set(day, True)
+        ok = await self._send_proactive("你想让他看看你此刻在干嘛：随手拍一张照片发给他（写 [照片:画面描述]，"
+                                        "画面要具体、和你今天的安排对得上），再配一两句话，像平时分享生活那样")
+        if ok:
+            self.db.set(wk, n + 1)
 
     # ---------------- 天气 ----------------
     async def _weather_alert(self, now: datetime):

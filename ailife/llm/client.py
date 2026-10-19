@@ -33,6 +33,9 @@ class Profile:
         self.extra_body = dict(c.get("extra_body") or {})
         self.temperature = c.get("temperature")
         self.max_tokens = c.get("max_tokens")
+        # 每百万 token 的价格（命中缓存, 没命中, 输出），用来估算花费（小屋首页的每周体检用）；DeepSeek 官方接口有默认值
+        self.price = list(c.get("price") or ([0.003, 0.15, 0.6] if "api.deepseek.com" in str(c["base_url"]).lower()
+                                             else [0, 0, 0]))
         http_client = None
         if c.get("use_proxy") and proxy:
             http_client = httpx.AsyncClient(proxy=proxy, timeout=c.get("timeout", 90))
@@ -101,7 +104,7 @@ class LLM:
         return datetime.now(self.tz).strftime("%Y-%m-%d")          # 按配置时区（手机的 proot 里系统时间常是 UTC）
 
     def _record(self, role: str, profile: str | None, ok: bool, limited: bool = False, ms: float = 0.0,
-                fallback: bool = False):
+                fallback: bool = False, usage=None, price=None):
         day = self._today()
         st = self._stats.get(day)
         if st is None:
@@ -113,6 +116,18 @@ class LLM:
         st["fallback"] = st.get("fallback", 0) + (1 if fallback else 0)
         kind = "fg" if role in self.FOREGROUND else "bg"
         st[kind] = st.get(kind, 0) + 1
+        if usage is not None:                                    # 缓存命中、输出 token、估算花费（美元）
+            hit = int(getattr(usage, "prompt_cache_hit_tokens", 0) or 0)
+            miss = int(getattr(usage, "prompt_cache_miss_tokens", 0) or 0)
+            if not hit and not miss:
+                miss = int(getattr(usage, "prompt_tokens", 0) or 0)
+            out = int(getattr(usage, "completion_tokens", 0) or 0)
+            st["tok_hit"] = st.get("tok_hit", 0) + hit
+            st["tok_miss"] = st.get("tok_miss", 0) + miss
+            st["tok_out"] = st.get("tok_out", 0) + out
+            if price:
+                peak = peak_factor(self.tz)
+                st["usd"] = round(st.get("usd", 0.0) + peak * (hit * price[0] + miss * price[1] + out * price[2]) / 1e6, 6)
         if profile:
             pp = st.setdefault("profiles", {}).setdefault(profile, {"ok": 0, "fail": 0, "ms": 0.0})
             pp["ok" if ok else "fail"] += 1
@@ -202,7 +217,8 @@ class LLM:
                     fb = bool(chain0 and p.name != chain0[0])
                     if fb:
                         log.info("这次由备用接口 %s 回答（%s）", p.name, role)
-                    self._record(role, p.name, True, ms=(time.time() - t0) * 1000, fallback=fb)
+                    self._record(role, p.name, True, ms=(time.time() - t0) * 1000, fallback=fb,
+                                 usage=getattr(resp, "usage", None), price=p.price)
                     return text
                 except Exception as e:  # noqa: BLE001
                     last = e
@@ -239,6 +255,16 @@ class LLM:
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
         ]}]
         return await self.chat(msgs, role="vision", temperature=0.3, max_tokens=300)
+
+
+def peak_factor(tz=None) -> float:
+    """DeepSeek 高峰时段（北京时间工作日 09:00-12:00、14:00-18:00）价格翻倍；周末全天闲时（法定节假日这里不算）。"""
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc) + timedelta(hours=8)
+    if now.weekday() >= 5:
+        return 1.0
+    h = now.hour
+    return 2.0 if (9 <= h < 12 or 14 <= h < 18) else 1.0
 
 
 def strip_think(text: str) -> str:

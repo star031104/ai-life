@@ -75,6 +75,11 @@ def image_seg(data: bytes, sticker: bool = False) -> dict:
     return {"type": "image", "data": d}
 
 
+def record_seg(data: bytes) -> dict:
+    """语音（mp3 / wav 都行，NapCat 会转成 QQ 的格式）。"""
+    return {"type": "record", "data": {"file": "base64://" + base64.b64encode(data).decode()}}
+
+
 def face_seg(fid: int) -> dict:
     return {"type": "face", "data": {"id": str(fid)}}
 
@@ -380,6 +385,9 @@ class QQOut:
 
     async def send_photo(self, chat, photo: bytes, reply_to_message_id=None, **_):
         return await self._send(chat, self._segs([image_seg(photo)], reply_to_message_id))
+
+    async def send_voice(self, chat, data: bytes, **_):
+        return await self._send(chat, [record_seg(data)])          # 语音不能带引用
 
     async def send_sticker_image(self, chat, data: bytes, reply_to_message_id=None):
         return await self._send(chat, self._segs([image_seg(data, sticker=True)], reply_to_message_id))

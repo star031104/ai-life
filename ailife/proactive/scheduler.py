@@ -90,7 +90,8 @@ class Scheduler(EventsMixin):
         if in_quiet(now, p.quiet_hours):
             return
         await self._greetings(now)
-        for fn in (self._special_dates, self._festival, self._weekly_letter, self._shows, self._weather_alert):
+        for fn in (self._special_dates, self._festival, self._weekly_letter, self._shows, self._weather_alert,
+                   self._life_photo):
             try:
                 await fn(now)
             except Exception as e:  # noqa: BLE001
@@ -130,6 +131,14 @@ class Scheduler(EventsMixin):
         except Exception as e:  # noqa: BLE001
             log.warning("整理记忆失败：%s", e)
         yesterday = now - timedelta(days=1)
+        sg = getattr(self.brain, "selfgrow", None)
+        if sg is not None:
+            try:
+                await sg.learn_prefs(yesterday)                   # 11.2 昨天亲口说的喜好：定下来，以后不改口
+                if now.day <= 3:
+                    await sg.monthly_tidy(now)                    # 11.2 每月初整理一遍“她自己说过的事”
+            except Exception as e:  # noqa: BLE001
+                log.warning("整理她自己的事出错：%s", e)
         story = self.brain.story
         await self.brain.memory.write_diary(yesterday, self.brain.emotion.describe(),
                                             "；".join(story.today_lines(yesterday.date())))
