@@ -2,7 +2,7 @@
 
 - 网页 http://127.0.0.1:8765/pet ，由 `python run.py pet` 打开成一个真透明、置顶、无边框、不占任务栏的小窗口
   （PySide6；右下角托盘有图标可以显示 / 收起 / 关掉），没装 PySide6 就退回 pywebview（Windows 上有浅色底）或浏览器。
-- 在桌宠里打字和她聊，她会说出来（本地语音 + 口型）；她在 Telegram 上主动找你时，桌宠头上也会冒气泡。
+- 在桌宠里打字和她聊，她的话冒在头顶的气泡里；她在 Telegram 上主动找你时，桌宠头上也会冒气泡。
 - Live2D 的运行库和模型第一次用时从 CDN 下载并缓存到 data/pet/，以后不联网也能用。
   默认模型是 Live2D 官方示例模型（Haru）；想换成自己的模型，把整个模型文件夹放进 data/pet/model/ 就行，
   程序会自动找到里面的 xxx.model3.json（Cubism 3/4）或 xxx.model.json（Cubism 2）；有好几个时在 pet.model 里指定。
@@ -133,7 +133,6 @@ class Pet(PetAssets):
         self.brain, self.bot, self.db = brain, bot, brain.db
         self.scale = float(c.get("scale", 1.0))
         self.offset_y = int(c.get("offset_y", 0))
-        self.speak_proactive = bool(c.get("speak_proactive", False))
         self.expr_map = dict(c.get("expressions") or ({} if self.model else HARU_EXPR))
         self.chatter = bool(c.get("chatter", True))
         self.chatter_gap = float(c.get("chatter_gap_minutes", 40)) * 60
@@ -153,24 +152,16 @@ class Pet(PetAssets):
         app.router.add_post(f"{prefix}/config", self.set_config)
         app.router.add_post(f"{prefix}/chat", self.chat)
         app.router.add_get(f"{prefix}/poll", self.poll)
-        app.router.add_get(f"{prefix}/tts", self.tts)
 
     # ---------------- 配置 ----------------
     async def get_config(self, req):
         entry = self.model or DEFAULT_MODEL
         return web.json_response({"model": f"/pet/model/{entry}", "scale": self.scale, "offset_y": self.offset_y,
                                   "expr": self.expr(),
-                                  "speak_proactive": self.speak_proactive, "muted": bool(self.db.get("pet_muted")),
                                   "name": self.brain.persona.name, "ta": getattr(self.brain.persona, "ta", "她")})
 
     async def set_config(self, req):
-        try:
-            d = await req.json()
-        except Exception:  # noqa: BLE001
-            d = {}
-        if "muted" in d:
-            self.db.set("pet_muted", bool(d["muted"]))
-        return web.json_response({"ok": True})
+        return web.json_response({"ok": True})          # 以前用来存“静音”，语音去掉后没有要存的了
 
     # ---------------- 聊天 ----------------
     async def chat(self, req):
@@ -198,7 +189,7 @@ class Pet(PetAssets):
         cands = [emotion] if emotion else []
         mood = self.brain.mood or ""
         cands += [k for k in self.expr_map if k in mood]
-        cands.append(self.brain.emotion.voice_style())
+        cands.append(self.brain.emotion.mood_style())
         for c in cands:
             if c and c in self.expr_map:
                 return self.expr_map[c]
@@ -241,7 +232,7 @@ class Pet(PetAssets):
         rows = self.db.conn.execute(
             "SELECT * FROM messages WHERE id>? AND role='assistant' AND kind NOT IN ('desk') ORDER BY id",
             (since,)).fetchall() if since else []
-        msgs = [{"id": r["id"], "text": re.sub(r"^\[语音\]\s*", "", r["content"])} for r in rows
+        msgs = [{"id": r["id"], "text": r["content"]} for r in rows
                 if r["kind"] in ("text", "proactive", "voice", "letter", "song")][-3:]
         self.last_poll = time.time()
         try:
@@ -249,18 +240,9 @@ class Pet(PetAssets):
         except ValueError:
             qsince = 0
         desk = [x for x in self.queue if x["qid"] > qsince and time.time() - x["ts"] < 120]
-        return web.json_response({"last_id": last, "messages": msgs, "style": self.brain.emotion.voice_style(),
+        return web.json_response({"last_id": last, "messages": msgs, "style": self.brain.emotion.mood_style(),
                                   "mood": self.brain.mood, "expr": self.expr(), "desk": desk,
                                   "qid": self._qid})
-
-    async def tts(self, req):
-        text = (req.query.get("text") or "").strip()[:200]
-        if not text or not getattr(self.bot, "tts", None):
-            raise web.HTTPNotFound()
-        style = req.query.get("style") or self.brain.emotion.voice_style()
-        audio = await self.bot.tts.synth(text, style=style)
-        ctype = "audio/wav" if audio[:4] == b"RIFF" else "audio/mpeg"
-        return web.Response(body=audio, content_type=ctype)
 
     # ---------------- OpenAI 兼容接口（给别的桌宠程序用） ----------------
     async def oa_models(self, req):

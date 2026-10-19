@@ -2,19 +2,9 @@ openai>=1.40
 httpx[socks]>=0.27
 pyyaml>=6.0
 python-telegram-bot[socks]>=21.6
-edge-tts>=6.1
-sherpa-onnx>=1.12           # 本地免费语音（合成 Kokoro + 识别 SenseVoice）
 aiohttp>=3.9
 numpy>=1.26
 tzdata>=2024.1
-
-# 打电话（call.enabled: true 时需要）
-telethon>=1.40
-python-socks[asyncio]>=2.4
-py-tgcalls>=2.2
-
-# 本地语音识别（asr.engine: faster_whisper 时需要）
-# faster-whisper>=1.0
 
 # 可选（install.bat 会单独装，装不上也不影响）：
 #   lunar_python                       农历节日、节气

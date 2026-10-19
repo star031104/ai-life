@@ -178,7 +178,7 @@ CREATE TABLE IF NOT EXISTS checkins (
     PRIMARY KEY (habit_id, day)
 );
 
-CREATE TABLE IF NOT EXISTS his_mood (      -- 他每天的情绪（从文字和语音语气粗略统计）
+CREATE TABLE IF NOT EXISTS his_mood (      -- 他每天的情绪（从文字粗略统计）
     day TEXT PRIMARY KEY,
     neg INTEGER NOT NULL DEFAULT 0,
     pos INTEGER NOT NULL DEFAULT 0,
@@ -207,6 +207,7 @@ MIGRATIONS = [
     ("mood_log", "longing", "ALTER TABLE mood_log ADD COLUMN longing REAL"),
     ("mood_log", "sulk", "ALTER TABLE mood_log ADD COLUMN sulk REAL"),
     ("mood_log", "tired", "ALTER TABLE mood_log ADD COLUMN tired REAL"),
+    ("messages", "channel", "ALTER TABLE messages ADD COLUMN channel TEXT"),   # tg / qq（旧记录为空＝tg）
 ]
 
 
@@ -215,7 +216,7 @@ class DB(LifeDBMixin):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(path), check_same_thread=False, timeout=10)
         self.conn.row_factory = sqlite3.Row
-        try:        # WAL：网页、后台任务、语音线程同时读写也不容易“数据库被锁”
+        try:        # WAL：网页、后台任务同时读写也不容易“数据库被锁”
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA busy_timeout=5000")
             self.conn.execute("PRAGMA synchronous=NORMAL")
@@ -232,10 +233,11 @@ class DB(LifeDBMixin):
 
     # ---------- messages ----------
     def add_message(self, role: str, content: str, kind: str = "text",
-                    tg_msg_id: int | None = None, ts: float | None = None) -> int:
+                    tg_msg_id: int | None = None, ts: float | None = None, channel: str | None = None) -> int:
+        """tg_msg_id：消息在聊天软件里的编号（QQ 的也存这里，用 channel 区分是哪边的）。"""
         cur = self.conn.execute(
-            "INSERT INTO messages(ts, role, kind, content, tg_msg_id) VALUES (?,?,?,?,?)",
-            (ts or time.time(), role, kind, content, tg_msg_id),
+            "INSERT INTO messages(ts, role, kind, content, tg_msg_id, channel) VALUES (?,?,?,?,?,?)",
+            (ts or time.time(), role, kind, content, tg_msg_id, channel),
         )
         self.conn.commit()
         return cur.lastrowid
@@ -376,26 +378,32 @@ class DB(LifeDBMixin):
         )
         self.conn.commit()
 
-    def stickers_with_emoji(self, emojis: list[str]) -> list[sqlite3.Row]:
+    # 贴纸表里同时有 Telegram 的贴纸和从 QQ 学来的表情包（file_id 以 "qq:" 开头），各用各的
+    @staticmethod
+    def _plat(qq: bool) -> str:
+        return "file_id LIKE 'qq:%'" if qq else "file_id NOT LIKE 'qq:%'"
+
+    def stickers_with_emoji(self, emojis: list[str], qq: bool = False) -> list[sqlite3.Row]:
         if not emojis:
             return []
         q = " OR ".join(["emoji LIKE ?"] * len(emojis))
         return self.conn.execute(
-            f"SELECT * FROM stickers WHERE {q}", [f"%{e}%" for e in emojis]
+            f"SELECT * FROM stickers WHERE ({q}) AND {self._plat(qq)}", [f"%{e}%" for e in emojis]
         ).fetchall()
 
-    def stickers_with_emotion(self, emotion: str) -> list[sqlite3.Row]:
+    def stickers_with_emotion(self, emotion: str, qq: bool = False) -> list[sqlite3.Row]:
         if not emotion:
             return []
-        rows = self.conn.execute("SELECT * FROM stickers WHERE emotion=?", (emotion,)).fetchall()
+        rows = self.conn.execute(f"SELECT * FROM stickers WHERE emotion=? AND {self._plat(qq)}", (emotion,)).fetchall()
         if rows:
             return rows
-        return [r for r in self.conn.execute("SELECT * FROM stickers WHERE emotion IS NOT NULL AND emotion!=''")
+        return [r for r in self.conn.execute(
+                    f"SELECT * FROM stickers WHERE emotion IS NOT NULL AND emotion!='' AND {self._plat(qq)}")
                 if r["emotion"] in emotion or emotion in r["emotion"]]
 
-    def unlabeled_stickers(self, n: int = 5) -> list[sqlite3.Row]:
+    def unlabeled_stickers(self, n: int = 5, qq: bool = False) -> list[sqlite3.Row]:
         return self.conn.execute(
-            "SELECT * FROM stickers WHERE (emotion IS NULL OR emotion='') AND label_tried<3 "
+            f"SELECT * FROM stickers WHERE (emotion IS NULL OR emotion='') AND label_tried<3 AND {self._plat(qq)} "
             "ORDER BY source='user' DESC LIMIT ?", (n,)).fetchall()
 
     def set_sticker_emotion(self, file_id: str, emotion: str | None):

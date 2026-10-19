@@ -29,12 +29,11 @@ def make_mp4(path, seconds=2, audio=True):
     return path.read_bytes()
 
 
-def test_video_frames_and_audio(tmp_path):
-    from ailife.bot_media import extract_audio, video_frames
+def test_video_frames(tmp_path):
+    from ailife.bot_media import video_frames
     data = make_mp4(tmp_path / "v.mp4")
     frames = asyncio.run(video_frames(data, 2))
     assert len(frames) == 2 and all(f[:2] == b"\xff\xd8" for f in frames)
-    assert asyncio.run(extract_audio(data))
 
 
 class FakeFile:
@@ -65,11 +64,6 @@ def test_media_handlers(env, tmp_path, monkeypatch):
     monkeypatch.setattr(type(brain.llm), "vision", True, raising=False)
     brain.llm.describe_image = describe
 
-    class ASR:
-        async def transcribe_ex(self, audio, name):
-            return "你看我家猫", "开心", None
-    bot.asr = ASR()
-
     async def get_file(fid):
         return FakeFile(data if fid != "txt" else "第一行\n第二行".encode())
     ctx = SimpleNamespace(bot=SimpleNamespace(get_file=get_file))
@@ -88,7 +82,7 @@ def test_media_handlers(env, tmp_path, monkeypatch):
     drain(bot, bot.on_other(fake_update(poll=object()), ctx))
     msgs = [r["content"] for r in brain.db.recent_messages(20) if r["role"] == "user"]
     assert any("动图：一只猫在跳舞" in m for m in msgs)
-    assert any("圆形视频" in m and "你看我家猫" in m for m in msgs)
+    assert any("圆形视频" in m and "一只猫在跳舞" in m and "声音你听不了" in m for m in msgs)
     assert any("笔记.txt" in m and "第一行" in m for m in msgs)
     assert any("大.zip" in m and "打不开" in m for m in msgs)
     assert any("骰子" in m and "满分" in m for m in msgs)

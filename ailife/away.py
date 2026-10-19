@@ -292,6 +292,10 @@ class Away:
             return False
         self._bye_done = True
         try:
+            if getattr(self.bot, "channel", lambda: "tg")() == "qq" and self._goodbye_qq(text, timeout):
+                return True
+            if not getattr(self.bot, "tg", True):
+                return False
             import httpx
             kw = {"timeout": timeout}
             if self.cfg.proxy:
@@ -312,6 +316,40 @@ class Away:
         except Exception as e:  # noqa: BLE001
             log.info("道别没发出去：%s", e)
             return False
+
+
+    def _goodbye_qq(self, text: str, timeout: float) -> bool:
+        """QQ：单独开一条到 NapCat 的连接同步发（主连接这时可能已经跟着事件循环停了）。"""
+        q = self.cfg.get("qq") or {}
+        qq = getattr(self.bot, "qq", None)
+        if not qq or not qq.owner_id:
+            return False
+        tok = str(q.get("access_token") or "")
+        params = {"user_id": int(qq.owner_id), "message": [{"type": "text", "data": {"text": text}}]}
+        data = None
+        try:
+            from .qq import send_once_sync
+            data = send_once_sync(str(q.get("ws_url") or "ws://127.0.0.1:3001"), tok, "send_private_msg", params, timeout)
+        except Exception as e:  # noqa: BLE001
+            log.info("QQ 道别（WebSocket）没发出去：%s", e)
+        url = str(q.get("http_url") or "").rstrip("/")
+        if data is None and url:                      # 备用：NapCat 的 HTTP 服务器（开了才有）
+            try:
+                import httpx
+                headers = {"Authorization": f"Bearer {tok}"} if tok else {}
+                with httpx.Client(timeout=timeout, trust_env=False) as c:
+                    r = c.post(f"{url}/send_private_msg", headers=headers, json=params)
+                d = r.json()
+                data = d.get("data") or {} if d.get("status") == "ok" else None
+            except Exception as e:  # noqa: BLE001
+                log.info("QQ 道别（HTTP）没发出去：%s", e)
+        if data is None:
+            return False
+        self.db.add_message("assistant", text, "text", data.get("message_id"), channel="qq")
+        self.db.set("bye", {"ts": time.time(), "text": text})
+        self.db.set("last_proactive_ts", time.time())
+        log.info("她在 QQ 上说了再见：%s", text)
+        return True
 
 
 def install_console_close(away: Away):

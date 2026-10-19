@@ -1,7 +1,6 @@
 """ai-life 启动入口。
 
-    python run.py            启动（Telegram 聊天 + 主动消息 + 打电话）
-    python run.py login      第一次用：登录“她”的 Telegram 账号（打电话用）
+    python run.py            启动（Telegram / QQ 聊天 + 主动消息）
     python run.py console    不连 Telegram，在命令行里和她聊（调人设用）
     python run.py bench      测一遍配置里每个大模型接口的速度和能否连通
     python run.py eval       人设回归评测（--judge 让大模型打分，--quick 只跑基础部分）；改完设置后跑一遍，看她变好还是变差
@@ -10,6 +9,10 @@
     python run.py import 包.zip   在新电脑上把包里的记忆和设置导进来
     python run.py selftest   离线自检（不联网、不碰你的数据），更新代码后跑一下
     python run.py setup      第一次用：配置向导（Telegram、大模型 key、代理、选人设）
+    python run.py qqsetup    QQ 一键配置：没有 NapCat 就自动下载、配好、扫码登录一次，再选你的 QQ、写好 config.yaml
+                             （--manual 只读现成的 NapCat 配置）
+
+    第二个角色（群聊角色）：set AILIFE_CONFIG=config.group.yaml 再 python run.py（start_group.bat 就是这么做的）
     python run.py persona    人设管理：list / check / use 文件 / new（问答生成）/ import 角色卡.png
 """
 from __future__ import annotations
@@ -30,7 +33,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s | %(message)s",
     datefmt="%m-%d %H:%M:%S",
 )
-for noisy in ("httpx", "httpx2", "openai", "telegram", "telethon", "apscheduler", "pytgcalls", "ntgcalls",
+for noisy in ("httpx", "httpx2", "openai", "telegram", "apscheduler",
               "aiohttp.access"):                 # 桌宠每 5 秒轮询一次，访问日志会刷屏
     logging.getLogger(noisy).setLevel(logging.WARNING)
 log = logging.getLogger("ailife")
@@ -50,6 +53,12 @@ async def main():
         else:
             print("还没有 config.yaml：运行 python run.py setup（或者把 config.example.yaml 复制成 config.yaml 自己填）。")
         sys.exit(EXIT_NO_RESTART)
+    if cfg.get("mode") == "group":               # 独立的群聊角色（config.group.yaml）
+        from ailife.health import setup_file_logging
+        log.info("日志也会写进 %s", setup_file_logging(cfg.root))
+        from ailife.group_runtime import run_group
+        await run_group(cfg)
+        return None
     from ailife import secrets
     moved = secrets.migrate(cfg.root)              # 明文密钥挪进 .env（第一次启动时）
     if moved:
@@ -73,12 +82,9 @@ async def main():
     from ailife.bot import ChatBot
     from ailife.brain import Brain
     from ailife.proactive import Scheduler
-    from ailife.voice import ASR, TTS
 
     brain = Brain(cfg)
-    tts, asr = TTS(cfg), ASR(cfg)
-    tts.persona = brain.persona                    # 人设里的声音设置（音色、语速、试听的话）
-    bot = ChatBot(cfg, brain, tts, asr)
+    bot = ChatBot(cfg, brain)
     bot.health = Health(cfg, bot)
     secrets.install_redaction(secrets.secret_values(cfg))      # 日志里万一出现密钥，替换成 ***
     brain.away.check()                             # 关机 / 断开了很久：先记下来，他离线时发的消息回复时就能顺便说
@@ -87,30 +93,12 @@ async def main():
     await bot.start()
     bot.health.start()
 
-    async def warm_voice():          # 后台准备本地语音模型（第一次会自动下载：合成约 150MB、识别约 160MB）
-        try:
-            await tts.local.ensure_model()
-            await asyncio.to_thread(tts.local._load)
-        except Exception as e:  # noqa: BLE001
-            log.warning("本地语音没准备好：%s（会在发语音时再试）", e)
-        if asr.local:
-            try:
-                await asr.local.ensure_model()
-                await asyncio.to_thread(asr.local._load)
-            except Exception as e:  # noqa: BLE001
-                log.warning("本地语音识别没准备好：%s（会先用在线识别）", e)
-    voice_task = asyncio.create_task(warm_voice())  # noqa: F841
-    if cfg.call.enabled:
-        from ailife.caller import Caller
-        caller = Caller(cfg, brain, tts, asr, bot)
-        try:
-            await caller.start()
-            bot.caller = caller
-        except Exception as e:  # noqa: BLE001
-            log.error("打电话模块没启动：%s", e)
     sched = Scheduler(cfg, brain, bot)
     bot.sched = sched
     sched.start()
+
+    from ailife.qq_bridge import setup as qq_setup
+    qq = qq_setup(cfg, bot)                        # QQ 私聊 / 群聊（config 里 qq.enabled: true 时）
 
     from ailife.sense import PCSense, PhoneSense
     bot.pc = PCSense(cfg, brain.db, on_song=brain.media.on_song)
@@ -206,6 +194,8 @@ async def main():
         if pet_proc and pet_proc.poll() is None:
             pet_proc.terminate()
         await dash.stop()
+        if qq:
+            await qq.stop()
         await bot.stop()
         keep_awake(False)
     return "restart" if restart else None
@@ -226,22 +216,6 @@ def pet():
     """只打开桌宠窗口（主程序要先在运行）。"""
     from ailife.pet import run_window
     run_window(load_config(), auto="--auto" in sys.argv)
-
-
-async def login():
-    cfg = load_config()
-    from telethon import TelegramClient
-    from ailife.caller import telethon_proxy
-    c = cfg.call
-    if not c.api_id or not c.api_hash:
-        print("先在 config.yaml 的 call 部分填好 api_id 和 api_hash。")
-        return
-    client = TelegramClient(str(cfg.root / c.session_name), int(c.api_id), c.api_hash,
-                            proxy=telethon_proxy(cfg.proxy))
-    await client.start()          # 按提示输入她的手机号、验证码（和两步验证密码）
-    me = await client.get_me()
-    print(f"登录成功：{me.first_name}（id {me.id}）。现在用你自己的号给这个账号发一句话，再启动 run.py。")
-    await client.disconnect()
 
 
 async def console():
@@ -265,12 +239,9 @@ async def console():
         if p.skip:
             print("（她决定先不打扰你）")
         for b in p.bubbles:
-            tag = "🔊" if b.voice else ""
             line = f"[贴纸:{b.sticker}]" if b.sticker else b.text
-            print(f"{brain.persona.name}：{tag}{line}")
+            print(f"{brain.persona.name}：{line}")
             brain.db.add_message("assistant", line)
-        if p.call:
-            print("（她想给你打电话）")
         await brain.memory.maybe_extract()
 
 
@@ -301,7 +272,7 @@ async def bench():
             print(f"{name:<14}{(first - t0) if first else 0:>7.2f}s{total:>7.2f}s{speed:>7.0f}  {text[:40]}")
         except Exception as e:  # noqa: BLE001
             print(f"{name:<14}  失败：{str(e)[:120]}")
-    print("通话（call）建议把首字延迟最低、又稳定的放第一位。")
+    print("聊天（chat）建议把首字延迟最低、又稳定的放第一位。")
 
 
 if __name__ == "__main__":
@@ -338,11 +309,18 @@ if __name__ == "__main__":
             print(f"没做成：{e}")
             sys.exit(1)
         sys.exit(0)
+    if mode in ("qqsetup", "napcat"):
+        logging.getLogger().setLevel(logging.WARNING)
+        if "--manual" in sys.argv:                   # 只读现成的 NapCat 配置，不下载、不启动
+            from ailife.qq_setup import main as qq_setup_main
+            sys.exit(qq_setup_main(sys.argv[2:]))
+        from ailife.napcat_install import main as napcat_main
+        sys.exit(napcat_main(sys.argv[2:]))
     if mode == "eval":
         from ailife.evaluate import main as eval_main
         eval_main(load_config(), judge="--judge" in sys.argv, quick="--quick" in sys.argv)
         sys.exit(0)
-    fn = {"run": main, "login": login, "console": console, "bench": bench}.get(mode)
+    fn = {"run": main, "console": console, "bench": bench}.get(mode)
     if not fn:
         print(__doc__)
         sys.exit(1)

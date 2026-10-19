@@ -1,4 +1,4 @@
 """ai-life：住在 Telegram 里的 AI 伴侣。"""
 
-__version__ = "8.5"
-BATCH = "第八批"
+__version__ = "9.0"
+BATCH = "第九批"

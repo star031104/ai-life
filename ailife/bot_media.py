@@ -1,6 +1,6 @@
 """他发来的各种东西：动图、视频、圆形视频、文件、位置、骰子……以前这些她会“看不见”而完全不回。
 
-- 动图 / 视频 / 圆形视频：用 ffmpeg 截几帧给会看图的模型看；圆形视频和短视频里的声音也会转成文字。
+- 动图 / 视频 / 圆形视频：用 ffmpeg 截几帧给会看图的模型看（声音听不了）。
 - 图片文件（不压缩发送的原图）当图片看；小的文本文件读开头；别的文件告诉她文件名和大小。
 - 位置：反查到城市，之后天气就按这里查。
 - 都失败时也会告诉她“发了个什么、你看不了”，她至少会回一句。
@@ -15,7 +15,7 @@ import tempfile
 
 from telegram import Update
 
-from .voice import FFMPEG
+from .fftool import FFMPEG
 
 log = logging.getLogger("ailife.bot")
 
@@ -65,20 +65,6 @@ async def video_frames(data: bytes, n: int = 2, suffix: str = ".mp4") -> list[by
                 with open(dst, "rb") as f:
                     out.append(f.read())
         return out
-
-
-async def extract_audio(data: bytes, suffix: str = ".mp4") -> bytes | None:
-    with tempfile.TemporaryDirectory() as td:
-        src = os.path.join(td, "in" + suffix)
-        dst = os.path.join(td, "a.ogg")
-        with open(src, "wb") as f:
-            f.write(data)
-        await _run(["-loglevel", "error", "-i", src, "-vn", "-ac", "1", "-ar", "16000",
-                    "-c:a", "libopus", "-t", "120", "-y", dst], 40)
-        if os.path.exists(dst) and os.path.getsize(dst) > 800:
-            with open(dst, "rb") as f:
-                return f.read()
-    return None
 
 
 def human_size(n: int | None) -> str:
@@ -134,18 +120,6 @@ class MediaMixin:
             return "；然后".join(descs)
         return descs[0] if descs else ""
 
-    async def _hear(self, data: bytes, suffix: str) -> str:
-        try:
-            audio = await extract_audio(data, suffix)
-            if not audio or not getattr(self, "asr", None):
-                return ""
-            text, emo, event = await self.asr.transcribe_ex(audio, "audio.ogg")
-            tone = "·".join(x for x in (f"语气{emo}" if emo else "", event or "") if x)
-            return (f"（{tone}）" if tone else "") + (text or "")
-        except Exception as e:  # noqa: BLE001
-            log.info("视频里的声音没听清：%s", e)
-            return ""
-
     async def on_animation(self, update: Update, ctx):
         if not self._is_owner(update):
             return
@@ -178,20 +152,14 @@ class MediaMixin:
             data = await self._download(ctx, v.file_id, v.file_size)
             if not data:
                 return f"[发了{what}（{dur} 秒，{human_size(v.file_size)}），太大了你打不开]" + (f" {cap}" if cap else "")
-            frames, heard = [], ""
+            frames = []
             try:
                 frames = await video_frames(data, 1 if round_ else 2, ".mp4")
             except Exception as e:  # noqa: BLE001
                 log.info("视频截帧失败：%s", e)
-            look_task = self._look(frames, "这是他发来的视频画面，描述画面里的人、事和场景" if not round_
+            desc = await self._look(frames, "这是他发来的视频画面，描述画面里的人、事和场景" if not round_
                                    else "这是他自拍的圆形视频，描述他的样子、表情和周围环境")
-            if round_ or dur <= 120:
-                desc, heard = await asyncio.gather(look_task, self._hear(data, ".mp4"))
-            else:
-                desc = await look_task
-            parts = [f"画面：{desc}" if desc else "", f"里面说的话：{heard}" if heard else ""]
-            parts = [p for p in parts if p]
-            content = f"[发了{what}（{dur} 秒）" + ("，" + "；".join(parts) if parts else "，你没看清内容") + "]"
+            content = f"[发了{what}（{dur} 秒）" + (f"，画面：{desc}" if desc else "，你没看清内容") + "（声音你听不了）]"
             if round_:
                 self.brain.together.observe(content)
             return content + (f" {cap}" if cap else "")

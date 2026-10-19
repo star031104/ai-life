@@ -16,10 +16,6 @@ life: student                # student（学期、考试周、寒暑假）/ work
 #   note: 偶尔加班
 home: ""                     # 和你的距离，比如“和你住在同一个城市”“家就在你家楼下”
 look: ""                     # 外貌（她发自拍时画图用）；不写就只拍景物、不画人脸
-voice:                       # 本地语音（在 Telegram 里 /voices 试听后挑编号）
-  sid: 23                    # 3~57 是女声，58~102 是男声
-  speed: 1.0
-  sample: 你好呀，今天过得怎么样？
 catchphrases: []             # 她的口头禅（用太多时会提醒她换个说法）
 hold_lines: []               # 网不好时先说的话（不经过大模型）
 greeting: ""                 # 第一次 /start 时她说的话（留空就让她自己说）

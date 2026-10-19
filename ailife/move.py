@@ -19,7 +19,7 @@ from . import secrets
 
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", "node_modules", ".venv", "venv", ".idea", ".vscode"}
 SKIP_SUFFIX = (".pyc", ".part", ".tmp", ".zip", ".session", ".session-journal", ".log")
-DATA_KEEP = ("photos", "pet/model", "personas.json")          # data/ 里要带走的（语音模型、缓存会在新电脑上重新下载）
+DATA_KEEP = ("photos", "pet/model", "personas.json")          # data/ 里要带走的（缓存会在新电脑上重新下载）
 
 
 def host_running(cfg) -> bool:

@@ -49,7 +49,6 @@ def run(cfg, log=print) -> bool:
 async def _run(cfg, log) -> bool:
     from . import BATCH, __version__
     results: list[tuple[bool, str, str]] = []
-    root = Path(cfg.root)
 
     def check(name):
         def deco(fn):
@@ -170,7 +169,7 @@ async def _run(cfg, log) -> bool:
         async def deliver(p, **kw):
             sent.append(p)
             return True
-        bot = SimpleNamespace(owner_id=1, _lock=asyncio.Lock(), deliver=deliver, caller=None, pc=None,
+        bot = SimpleNamespace(owner_id=1, _lock=asyncio.Lock(), deliver=deliver, pc=None,
                               spawn=lambda c: asyncio.ensure_future(c))
         s = Scheduler(b.cfg, b, bot)
         await s._send_proactive("你突然想到他了")
@@ -194,14 +193,7 @@ async def _run(cfg, log) -> bool:
         text, cur, _ = weekly_report(state["brain"], save=False)
         return "正常"
 
-    @check("语音（本地模型）")
-    def voice():
-        tts_dir = root / "data" / "tts"
-        asr_dir = root / "data" / "asr"
-        have = [n for n, d in (("合成", tts_dir), ("识别", asr_dir)) if d.exists() and any(d.rglob("*.onnx"))]
-        return ("本地模型已下载：" + "、".join(have)) if have else "本地模型还没下载（第一次启动会自动下）"
-
-    for fn in (deps, config, real_db, persona, brain_flow, memory_flow, prompt, proactive, web, report, voice):
+    for fn in (deps, config, real_db, persona, brain_flow, memory_flow, prompt, proactive, web, report):
         await fn()
     try:
         b = state.get("brain")

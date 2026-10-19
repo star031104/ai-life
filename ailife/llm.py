@@ -2,7 +2,7 @@
 
 config.yaml 里：
     llm.profiles   各个接口（base_url / api_key / model / extra_body ...）
-    llm.routes     每种用途按顺序用哪些接口：chat（聊天）、call（打电话）、helper（记忆/日记）、vision（看图）
+    llm.routes     每种用途按顺序用哪些接口：chat（聊天）、helper（记忆/日记）、vision（看图）
 某个接口报错（限流、并发超限、超时、5xx），会自动换下一个，并让它“冷却”一会儿。
 """
 from __future__ import annotations
@@ -12,7 +12,6 @@ import json
 import logging
 import re
 import time
-from typing import AsyncIterator
 
 import httpx
 from openai import AsyncOpenAI
@@ -73,7 +72,7 @@ class LLM:
         self.tz = cfg.get("tz")
         self._stats: dict = {}
 
-    FOREGROUND = ("chat", "call", "vision")
+    FOREGROUND = ("chat", "vision")
     pronoun_note = ""                      # 角色 / 用户不是默认性别时，Brain 会设成一句代词说明
 
     def _with_note(self, messages: list[dict]) -> list[dict]:
@@ -196,59 +195,6 @@ class LLM:
                         continue
                     p.cool(e)
                     break
-        raise RuntimeError(f"所有 {role} 接口都失败了：{last}")
-
-    async def stream(self, messages: list[dict], role: str = "call",
-                     max_tokens: int | None = None) -> AsyncIterator[str]:
-        self._fg_active += 1                     # 打电话时后台的活也要让一让
-        try:
-            async for x in self._stream(messages, role, max_tokens):
-                yield x
-        finally:
-            self._fg_active -= 1
-            self._fg_last = time.time()
-
-    async def _stream(self, messages: list[dict], role: str = "call",
-                      max_tokens: int | None = None) -> AsyncIterator[str]:
-        messages = self._with_note(messages)
-        last: Exception | None = None
-        for p in self._chain(role):
-            got_any = False
-            try:
-                resp = await p.client.chat.completions.create(
-                    messages=messages, stream=True,
-                    **self._kwargs(p, self.temperature, max_tokens or self.max_tokens))
-                in_think = False
-                async for chunk in resp:
-                    if not chunk.choices:
-                        continue
-                    delta = chunk.choices[0].delta.content or ""
-                    out = ""
-                    while delta:                       # 过滤 <think>…</think>
-                        if in_think:
-                            if "</think>" in delta:
-                                delta = delta.split("</think>", 1)[1]
-                                in_think = False
-                            else:
-                                delta = ""
-                        elif "<think>" in delta:
-                            head, delta = delta.split("<think>", 1)
-                            out += head
-                            in_think = True
-                        else:
-                            out += delta
-                            delta = ""
-                    if out:
-                        got_any = True
-                        yield out
-                if got_any:
-                    return
-                raise RuntimeError("流式返回为空")
-            except Exception as e:  # noqa: BLE001
-                p.cool(e)
-                last = e
-                if got_any:            # 已经说出口的不能撤回，只能结束
-                    return
         raise RuntimeError(f"所有 {role} 接口都失败了：{last}")
 
     async def json(self, messages: list[dict], default=None, role: str = "helper"):

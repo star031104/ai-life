@@ -1,4 +1,4 @@
-"""一起的小事：愿望清单、时间胶囊、睡前（晚安语音、睡前故事）。"""
+"""一起的小事：愿望清单、时间胶囊、睡前故事。"""
 from __future__ import annotations
 
 import logging
@@ -8,7 +8,6 @@ from datetime import date, datetime, timedelta
 
 log = logging.getLogger("ailife.moments")
 
-GOODNIGHT_RE = re.compile(r"晚安|睡了|去睡|睡觉了|先睡|要睡|困死了.*睡|躺下了|关灯了|good ?night|gn\b", re.I)
 STORY_RE = re.compile(r"(讲|说|来)(个|一个|段|一段)?(睡前)?故事|睡前故事|哄我睡")
 
 
@@ -54,8 +53,6 @@ class Moments:
     def __init__(self, cfg, brain):
         c = dict(cfg.get("bedtime") or {})
         self.bed_enabled = bool(c.get("enabled", True))
-        self.goodnight_voice = bool(c.get("goodnight_voice", True))
-        self.story_voice = bool(c.get("story_voice", True))
         self.window = str(c.get("window", "21:00-04:00"))
         self.cfg, self.brain, self.db = cfg, brain, brain.db
 
@@ -135,30 +132,6 @@ class Moments:
         from .schedule_util import in_quiet
         return in_quiet(now or self.brain.now(), self.window)
 
-    def wants_goodnight(self, text: str) -> bool:
-        if not (self.bed_enabled and self.goodnight_voice and self.in_window()):
-            return False
-        if not GOODNIGHT_RE.search(text or ""):
-            return False
-        key = f"gn_voice_{(self.brain.now() - timedelta(hours=6)):%Y-%m-%d}"
-        return not self.db.get(key)
-
-    def mark_goodnight(self):
-        self.db.set(f"gn_voice_{(self.brain.now() - timedelta(hours=6)):%Y-%m-%d}", True)
-
-    async def goodnight_line(self) -> str:
-        p = self.brain.persona
-        recent = "\n".join(f"{'他' if r['role'] == 'user' else '你'}：{r['content']}"
-                           for r in self.db.recent_messages(8) if r["role"] in ("user", "assistant"))
-        prompt = f"""{p.body}
-
-你是{p.name}。{p.call_name}要睡了，你们刚才在聊：
-{recent}
-用语音对他说一句晚安（25~45 字，口语，会被念出来；温柔一点，带着你自己的性格；别重复刚才说过的话；
-不要表情、括号、标签）。只输出这句话。"""
-        text = (await self.llm.chat([{"role": "user", "content": prompt}], max_tokens=120)).strip()
-        return re.sub(r"[\[【（(].*?[\]】）)]", "", text).strip().strip("“”\"")[:80]
-
     async def bedtime_story(self, theme: str = "") -> str:
         p = self.brain.persona
         told = self.db.get("stories_told") or []
@@ -166,7 +139,7 @@ class Moments:
 
 你是{p.name}。{p.call_name}睡不着，想听你讲睡前故事。{('他想听的：' + theme) if theme else ''}
 讲一个原创的、温柔安静的睡前小故事（250~400 字），用你自己的口吻讲（开头可以有一句你的小吐槽，然后进入故事），
-节奏慢、画面感强、结尾平和，适合念出来哄人睡觉。不要恐怖、不要悬念、不要说教，不要用别人的作品里的角色。
+节奏慢、画面感强、结尾平和，适合睡前慢慢看。不要恐怖、不要悬念、不要说教，不要用别人的作品里的角色。
 最近讲过的（换个题材）：{'；'.join(told[-5:]) or '无'}
 不要标题、不要 markdown、不要括号动作。只输出要说的话。"""
         text = (await self.llm.chat([{"role": "user", "content": prompt}], role="night", max_tokens=900)).strip()

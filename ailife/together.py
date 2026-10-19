@@ -82,18 +82,13 @@ class Together:
         return out
 
     # ================= 他的情绪 =================
-    def observe(self, text: str, voice_emotion: str | None = None):
+    def observe(self, text: str):
         t = (text or "").lower()
         crisis = any(w in t for w in CRISIS)
         t, neg_w = _take(t, NEG)
         _, pos_w = _take(t, POS)
         pos_w = [w for w in pos_w if not re.search(f"(不|没|别|没有)(太|怎么|那么|很)?{re.escape(w)}", text or "")]
         neg, pos = len(neg_w), len(pos_w)
-        if voice_emotion in ("难过", "生气", "害怕"):
-            neg += 1
-            neg_w.append(f"语气{voice_emotion}")
-        elif voice_emotion == "开心":
-            pos += 1
         if neg or pos or crisis:
             self.db.add_his_mood(habit_day(self.brain.now()), neg, pos, neg_w, crisis)
 
@@ -163,7 +158,6 @@ class Together:
             "他发的消息": sum(1 for r in rows if r["role"] == "user"),
             "她发的消息": sum(1 for r in rows if r["role"] == "assistant"),
             "聊天的天数": len(days),
-            "语音条": sum(1 for r in rows if r["kind"] == "voice"),
             "照片": sum(1 for r in rows if r["kind"] == "photo"),
             "新记住的事": q("SELECT COUNT(*) FROM memories WHERE ts>=? AND ts<?", t0, t1),
             "一起听的歌": q("SELECT COUNT(*) FROM music_log WHERE ts>=? AND ts<?", t0, t1),

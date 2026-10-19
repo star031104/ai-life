@@ -10,7 +10,7 @@ python -m pip install -U pip
 echo "[2/3] 安装依赖"
 pip install -r requirements.txt || pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install lunar_python || echo "（农历库没装上，不影响使用）"
-echo "[3/3] 检查 ffmpeg（语音条要用）"
+echo "[3/3] 检查 ffmpeg（看动图 / 视频要用）"
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "  没找到 ffmpeg：Ubuntu/Debian 运行 sudo apt install ffmpeg；macOS 运行 brew install ffmpeg"
 fi

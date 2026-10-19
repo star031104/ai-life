@@ -14,7 +14,6 @@ CHECKS = [
     ("aiohttp", "aiohttp", "小屋网页、桌宠用不了", None, True),
     ("yaml", "pyyaml", "读不了配置", None, True),
     ("numpy", "numpy", "记忆的向量检索用不了", None, True),
-    ("sherpa_onnx", "sherpa-onnx", "本地语音合成 / 识别用不了（会改用在线）", None, False),
     ("lunar_python", "lunar_python", "农历节日、节气她不知道", None, False),
     ("winrt.windows.media.control", "winrt-Windows.Media.Control", "她不知道你电脑上在放什么歌", "win32", False),
     ("PySide6.QtWebEngineWidgets", "PySide6", "桌宠没法真透明（会有浅色方框、占任务栏；双击 pet_setup.bat 装上）", "win32", False),
@@ -36,10 +35,8 @@ def missing(cfg=None) -> list[tuple[str, str, bool]]:
             continue
         if not _has(mod):
             out.append((pkg, why, req))
-    if cfg is not None and (cfg.get("call") or {}).get("enabled") and not _has("telethon"):
-        out.append(("telethon", "打电话用不了", False))
     if not shutil.which("ffmpeg"):
-        out.append(("ffmpeg（不是 pip 包）", "语音条和打电话用不了", False))
+        out.append(("ffmpeg（不是 pip 包）", "他发的动图 / 视频她看不了（截不了帧）、贴纸认不出情绪", False))
     return out
 
 

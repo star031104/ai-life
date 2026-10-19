@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>小屋</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>/* 只有在 Telegram 里打开时才加载它的脚本：从 QQ / 浏览器打开时（手机上没开代理）这个地址连不上，会让整页一直白着 */
+if(location.hash.indexOf("tgWebAppData")>=0||/Telegram/i.test(navigator.userAgent))document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
 <style>
 /* ============ 设计令牌 ============ */
 :root{
@@ -426,7 +427,7 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
       </div>
 
       <div class="card c12">
-        <div class="card-h"><h2><span data-i="x"></span>她会避开的说法</h2><span class="sp"></span><span class="hint">你在 Telegram 里给她的话点了 👎 之类的表情，她就记下不再这样说</span></div>
+        <div class="card-h"><h2><span data-i="x"></span>她会避开的说法</h2><span class="sp"></span><span class="hint" id="hintDislike">觉得她哪句话不对味，给那句话一个 👎，她就记下不再这样说</span></div>
         <div class="card-b"><ul class="rows" id="disliked"></ul></div>
       </div>
       <div class="card c12">
@@ -559,7 +560,7 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
   <section class="page" id="p-set">
     <div class="grid">
       <div class="card c12">
-        <div class="card-h"><h2><span data-i="pulse"></span>这一周她的表现</h2><span class="sp"></span><span class="hint">用你们真实的聊天算的，和上周比；每周一也会在 Telegram 里发一份</span></div>
+        <div class="card-h"><h2><span data-i="pulse"></span>这一周她的表现</h2><span class="sp"></span><span class="hint">用你们真实的聊天算的，和上周比；每周一也会发给你一份</span></div>
         <div class="card-b"><div class="report" id="report"></div></div>
       </div>
       <div class="card c12">
@@ -586,8 +587,6 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
         <div class="card-b" style="display:flex;flex-direction:column;gap:16px">
           <div class="field"><label for="city">你所在的城市（天气）</label>
             <div class="form" style="margin:0"><input class="input" id="city" placeholder="广州"><button class="btn" data-save="city">保存</button></div></div>
-          <div class="field"><label for="voice">她的声音（语音条）</label>
-            <div class="form" style="margin:0"><select class="input" id="voice"></select><button class="btn" data-save="voice">保存</button></div></div>
           <div class="field"><label for="schedule">你的作息 / 课表（她会避开你忙的时候）</label>
             <textarea class="input" id="schedule" rows="3" placeholder="工作日 9-18 上班，周二周四晚上有课，一般 1 点睡、10 点起"></textarea>
             <div><button class="btn" data-save="schedule">保存作息</button></div></div>
@@ -604,7 +603,7 @@ code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;
     </div>
   </section>
 
-  <div class="foot">只在你自己的设备上运行 · 手机上从 Telegram 里点“小屋”打开</div>
+  <div class="foot" id="foot">只在你自己的设备上运行</div>
 </main>
 <div class="toast" id="toast" role="status"></div>
 
@@ -679,17 +678,25 @@ async function load(retry=true){
   try{const r=await fetch("api/state",{headers:H()});
     if(r.status===401){ if(retry&&TG){await auth(); if(TOK)return load(false)}
       try{sessionStorage.removeItem("ailife_tok")}catch(e){}
-      $("sub").textContent="这个地址要从 Telegram 里点“小屋”打开，或者在 Telegram 发 /home 用“浏览器打开”的链接；在运行她的电脑上直接打开 http://127.0.0.1:8765 就行";return }
+      $("sub").textContent="链接过期了：在 QQ 里给她发 /小屋（Telegram 里点“小屋”或发 /home）拿新链接；在运行她的电脑上直接打开 http://127.0.0.1:8765 就行";return }
     S=await r.json()}catch(e){$("sub").textContent="连不上程序，确认 start.bat 还开着";return}
   render();
 }
 
 /* ============ 渲染 ============ */
+/* 她现在用的是 QQ 还是 Telegram（或者都有）：提示文字跟着变 */
+function apps(){const a=S&&S.apps||{};return {tg:a.tg!==false,qq:!!a.qq}}
+function dislikeHow(){const a=apps(),w=[];
+  if(a.qq)w.push("在 QQ 里引用她那句话、回一个 👎");
+  if(a.tg)w.push("在 Telegram 里给那条消息点个 👎");
+  return "觉得她哪句话不对味："+w.join("，或者")+"，她就记下不再这样说"}
 function render(){
   const name=S.name||"她";
   document.title=`${name}的小屋`; $("name").textContent=`${name}的小屋`;
   const pc=S.sense&&S.sense.pc;
-  $("sub").textContent=`此刻${S.mood||"平静"} · 今天聊了 ${S.stats.today} 条`;
+  $("sub").textContent=`此刻${S.mood||"平静"} · 今天聊了 ${S.stats.today} 条`+(S.channel==="qq"?" · 在 QQ":S.apps&&S.apps.qq?" · 在 Telegram":"");
+  {const a=apps(),w=[]; if(a.qq)w.push("在 QQ 里给她发 /小屋"); if(a.tg)w.push("在 Telegram 里点“小屋”");
+   $("foot").textContent="只在你自己的设备上运行"+(w.length?" · 手机上"+w.join("或")+"打开":""); $("hintDislike").textContent=dislikeHow()}
   const avatar=S.photos.length?S.photos[0].url:null;
   for(const id of["ava","ava2"]){const a=$(id); if(avatar){a.style.backgroundImage=`url("${avatar}")`;a.textContent=""}else{a.style.backgroundImage="";a.textContent=name.slice(-1)}}
   const h=new Date().getHours();
@@ -886,7 +893,7 @@ function renderRecaps(){
   const rs=S.recaps||[];
   $("recaps").innerHTML=rs.length?rs.map(r=>{const st=r.stats||{};const chips=["聊天的天数","他发的消息","她发的消息","照片","新记住的事","打卡","完成的愿望"].filter(k=>st[k]).map(k=>`<span class="tag">${k} ${st[k]}</span>`).join(" ");
     return `<article class="recap"><h3>${esc(r.month.replace("-","年"))}月</h3><div class="chips">${chips}</div><p>${esc(r.content)}</p></article>`}).join("")
-    :'<div class="empty">每月 1 号她会把上个月写成一页纪念册。想先看看这个月的，在 Telegram 发 /recap 本月</div>';
+    :'<div class="empty">每月 1 号她会把上个月写成一页纪念册。想先看看这个月的，给她发 /recap 本月</div>';
 }
 
 /* ---------- 愿望清单 / 时间胶囊 / 她的世界 ---------- */
@@ -975,7 +982,7 @@ function renderDisliked(){
   const ds=S.disliked||[];
   $("disliked").innerHTML=ds.length?ds.slice().reverse().map(d=>`<li><span class="ink3">${esc(d.emoji||"👎")}</span><div class="grow"><div>${esc(d.text)}</div><div class="meta">${md(d.ts)}</div></div>
       <button class="btn ghost sm" data-act="undislike" data-v="${esc(d.text)}">不用避开了</button></li>`).join("")
-    :'<li class="empty" style="display:block">还没有。觉得她哪句话不对味，在 Telegram 里给那条消息点个 👎 就行</li>';
+    :`<li class="empty" style="display:block">还没有。${esc(dislikeHow())}</li>`;
 }
 function renderRoutines(){
   const rs=S.routines||[], lt=S.learned_times||{};
@@ -1002,14 +1009,13 @@ function renderSettings(){
   const st=S.settings, se=S.sense||{};
   if(document.activeElement!==$("city"))$("city").value=st.city||"";
   if(document.activeElement!==$("schedule"))$("schedule").value=st.schedule||"";
-  if(document.activeElement!==$("voice"))$("voice").innerHTML='<option value="">配置文件里的默认声音</option>'+st.voices.map((v,i)=>`<option value="${i}" ${st.voice===i?"selected":""}>${i+1}. ${esc(v)}</option>`).join("");
   const rows=senseRows().map(([i,n,v])=>`<dt>${n}</dt><dd>${v}</dd>`).join("");
   $("senseKv").innerHTML=rows
     +(se.ntfy?`<dt>手机信号频道</dt><dd><code class="k">${esc(se.ntfy)}</code><button class="btn ghost sm copy" data-copy="${esc(se.ntfy)}">${icon("copy")}复制</button></dd>`:"")
     +(se.hook?`<dt>备用地址</dt><dd><code class="k">${esc(se.hook)}起床</code></dd>`:"")
     +`<dt>手机小屋</dt><dd>${se.public_url?`<code class="k">${esc(se.public_url)}</code>`:'<span class="muted">没开起来（看程序窗口里的提示）</span>'}</dd>`;
 }
-async function save(k){const v=k==="voice"?($("voice").value===""?-1:Number($("voice").value)):$(k).value;
+async function save(k){const v=$(k).value;
   const r=await post("api/settings",{[k]:v}); toast(r.message||"已保存"); load()}
 
 /* ============ 事件 ============ */

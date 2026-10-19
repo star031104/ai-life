@@ -3,9 +3,7 @@
 约定（写在系统提示词里）：
     |||            分隔不同的消息气泡
     [表情:难过]     发一个对应情绪的贴纸
-    [语音]          这条气泡用语音发
     [引用]          引用回复对方最近的一条消息
-    [打电话]        给对方打个电话
     [心情:有点失落]  更新自己的心情
     [好感:+1]       （已废弃：好感度永远是满的，忽略）
     [回应:❤]        给对方刚才那条消息点个表情回应
@@ -13,7 +11,8 @@
     [提醒:2026-10-13 08:00|叫他起床]  定一个提醒
     [跳过]          这次什么都不发（主动消息时用）
     [愿望:一起去看海]      记进你们的愿望清单；[完成愿望:一起去看海] 实现了
-    [睡前故事:主题]        接下来单独讲一个睡前故事（语音）
+    [睡前故事:主题]        接下来单独讲一个睡前故事
+    [语音] [打电话]        语音功能已去掉：模型偶尔还会打这两个标签，照样去掉、不做任何事
 """
 from __future__ import annotations
 
@@ -59,7 +58,6 @@ EMOTION_EMOJI = {
 @dataclass
 class Bubble:
     text: str = ""
-    voice: bool = False
     sticker: str | None = None      # 情绪名
     photo: str | None = None        # 照片画面描述
     recall: bool = False            # 发出去几秒后“撤回”
@@ -69,7 +67,6 @@ class Bubble:
 class Parsed:
     bubbles: list[Bubble] = field(default_factory=list)
     quote: bool = False
-    call: bool = False
     skip: bool = False
     mood: str | None = None
     affection_delta: int = 0
@@ -134,16 +131,12 @@ def parse_reply(raw: str, name: str | None = None) -> Parsed:
             elif tag == "推歌" and arg:
                 t, a = (re.split(r"[|｜]", arg, maxsplit=1) + [""])[:2]
                 p.songs.append((t.strip().strip("《》"), a.strip()))
-            elif tag == "语音":
-                b.voice = True
             elif tag == "撤回":
                 b.recall = True
             elif tag == "回应" and arg:
                 p.reaction = arg.strip()[:8]
             elif tag == "引用":
                 p.quote = True
-            elif tag == "打电话":
-                p.call = True
             elif tag == "跳过":
                 p.skip = True
             elif tag == "心情" and arg:

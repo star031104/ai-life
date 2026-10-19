@@ -182,8 +182,6 @@ class Scheduler(EventsMixin):
                 if p.skip or not p.bubbles:
                     continue
                 await self.bot.deliver(p, kind="proactive")
-            if p.call and self.bot.caller:
-                self.bot.spawn(self.bot.caller.call(reason, forced=True))
 
     async def _greetings(self, now: datetime):
         today = now.strftime("%Y-%m-%d")
@@ -339,11 +337,6 @@ class Scheduler(EventsMixin):
                 txt = "\n".join(b.text for b in p.bubbles if b.text)
                 if txt:
                     self.db.add_note("her", txt)
-        if p.call and self.bot.caller:
-            async def later():
-                await asyncio.sleep(random.uniform(5, 20))
-                await self.bot.caller.call(reason)
-            self.bot.spawn(later())
         return bool(sent)
 
     # ---------------- 学来的说法：看他的反应调权重 ----------------

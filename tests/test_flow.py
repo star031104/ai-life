@@ -38,7 +38,7 @@ class FakeLLM:
                 return '{"facts":[{"about":"他","content":"他的橘猫团子最近在减肥","importance":3}]}'
             return ('{"facts":[{"about":"他","content":"他下周三考六级","importance":5},'
                     '{"about":"他","content":"他养了一只橘猫叫团子","importance":4},'
-                    '{"about":"我","content":"有希的室友叫小林","importance":3}],'
+                    '{"about":"我","content":"小葵的室友叫小林","importance":3}],'
                     '"dates":[{"date":"2026-10-21","name":"六级考试"}],'
                     '"threads_open":["他说面试结果下周出"],"phrases":[{"phrase":"摸鱼大王","meaning":"她笑他上班摸鱼"}]}')
         if helper and "日记" in last:
@@ -97,7 +97,6 @@ def env(tmp_path, monkeypatch):
     cfg["telegram"]["bot_token"] = "1:x"
     cfg["telegram"]["owner_id"] = 42
     cfg["style"]["typing_chars_per_sec"] = 1000
-    cfg["style"]["voice_probability"] = 0
     cfg["proactive"]["morning"] = ""      # 早安晚安和真实时间有关，这里关掉免得测试不稳定
     cfg["proactive"]["night"] = ""
     cfg["proactive"]["quiet_hours"] = ""   # 免打扰时段和真实时间有关（半夜跑测试会失败）
@@ -109,7 +108,7 @@ def env(tmp_path, monkeypatch):
     brain.llm = FakeLLM()
     brain.memory.llm = brain.llm
     from ailife.bot import ChatBot
-    bot = ChatBot(cfg, brain, tts=None, asr=None)
+    bot = ChatBot(cfg, brain)
     fake = FakeTGBot()
     monkeypatch.setattr(type(bot.app), "bot", property(lambda self: fake))
     return cfg, brain, bot, fake
@@ -458,26 +457,6 @@ def test_health_notify(env):
     asyncio.run(h.check())                    # 3 小时内不重复说
     assert len(fake.sent) == n
     _lg.getLogger().removeHandler(h.rec)
-
-
-def test_voice_degrade(env):
-    from ailife.voice import TTS, VOICES
-    cfg, brain, bot, fake = env
-    tts = TTS(cfg)
-    hit = []
-    tts.on_degrade = hit.append
-    tts.set_voice(next(i for i, v in enumerate(VOICES) if v[1] == "edge"))
-
-    async def bad(*a, **k):
-        raise RuntimeError("403")
-
-    async def ok(*a, **k):
-        return b"RIFF"
-    tts._edge = bad
-    tts.local.synth = ok
-    for _ in range(3):
-        asyncio.run(tts.synth("你好"))
-    assert hit and tts.override is None
 
 
 def test_rewrite_keeps_tags_and_review_fixes(env):

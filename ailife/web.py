@@ -143,7 +143,7 @@ class Dashboard(LifeWebMixin, PersonaWebMixin):
         tok = req.headers.get("X-Token") or req.query.get("t") or ""
         if self.tokens.get(tok, 0) > time.time():
             return await handler(req)
-        raise web.HTTPUnauthorized(text="请从 Telegram 里打开")
+        raise web.HTTPUnauthorized(text="链接过期了：在 QQ 里给她发 /小屋（或在 Telegram 里点“小屋”）拿新链接")
 
     def issue_token(self, hours: float = 12) -> str:
         """给主人发一个临时令牌（/home 里“用浏览器打开”的链接用），过期就失效。"""
@@ -195,7 +195,6 @@ class Dashboard(LifeWebMixin, PersonaWebMixin):
 
     async def state(self, req):
         from .brain import next_occurrence
-        from .voice import VOICES
         b, db = self.brain, self.db
         wt = getattr(self, "_wtask", None)
         if b.weather_info is None and b.weather.city and (wt is None or wt.done()):
@@ -217,6 +216,9 @@ class Dashboard(LifeWebMixin, PersonaWebMixin):
             "mood": b.mood, "affection": b.affection,
             "life_today": db.get(f"life_{today}", ""),
             "weather": (b.weather_info or {}).get("text", ""),
+            "apps": {"tg": bool(getattr(self.bot, "tg", True)), "qq": getattr(self.bot, "qq", None) is not None,
+                     "qq_online": bool(getattr(self.bot, "qq", None) and self.bot.qq.ob.ready)},
+            "channel": self.bot.channel() if hasattr(self.bot, "channel") else "tg",
             "stats": {"total": total, "today": msgs_today,
                       "days": int((time.time() - first) // 86400) + 1 if first else 0,
                       "memories": len(db.all_memories()), "stickers": db.sticker_count(),
@@ -265,8 +267,7 @@ class Dashboard(LifeWebMixin, PersonaWebMixin):
             "recaps": [{"month": r["month"], "ts": r["ts"], "content": r["content"], "stats": r["stats"]}
                        for r in db.recaps(12)],
             "reminders": [{"due": r["due_ts"], "content": r["content"]} for r in db.pending_reminders()],
-            "settings": {"city": b.weather.city, "schedule": db.get("schedule") or "",
-                         "voice": db.get("tts_voice"), "voices": [v[0] for v in VOICES]},
+            "settings": {"city": b.weather.city, "schedule": db.get("schedule") or ""},
         })
 
     def _photos(self, req=None) -> list[dict]:
@@ -342,12 +343,6 @@ class Dashboard(LifeWebMixin, PersonaWebMixin):
         if "schedule" in d:
             self.db.set("schedule", str(d["schedule"]).strip())
             msg.append("作息已保存")
-        if "voice" in d:
-            v = d["voice"]
-            self.db.set("tts_voice", None if v in (None, "", -1) else int(v))
-            if self.bot and self.bot.tts:
-                self.bot.tts.set_voice(None if v in (None, "", -1) else int(v))
-            msg.append("声音已切换")
         return web.json_response({"ok": True, "message": "；".join(msg)})
 
     # ---------------- 新增：话题 / 说话方式 / 留言板 ----------------

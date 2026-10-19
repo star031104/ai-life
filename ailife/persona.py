@@ -15,7 +15,6 @@
     school / work  校历 / 上班时间（可选，覆盖默认）
     home           “家就在你家隔壁”这类和你的关系距离（放假回家时会用到）
     look           外貌描述（她发自拍时画图用；不写就不画人像，只拍景物）
-    voice          本地语音：sid（音色编号）、speed（语速）、sample（试听的一句话）
     catchphrases   她的口头禅（用太多时会提醒她换个说法）
     hold_lines     网不好时先说的话（不经过大模型）
     greeting       第一次 /start 时她说的话

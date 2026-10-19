@@ -76,27 +76,37 @@ def setup(root: Path = ROOT):
     text = (root / "config.example.yaml").read_text(encoding="utf-8")
     env: dict[str, str] = {}
 
-    print("① Telegram：在 Telegram 里找 @BotFather，发 /newbot 创建一个 bot，把它给你的 token 粘贴过来。")
-    while True:
-        tok = ask("bot token", secret=False)
-        if re.fullmatch(r"\d{6,12}:[\w-]{30,}", tok):
-            break
-        print("  看起来不对（格式像 123456789:AAH...），再试一次")
-    env["TELEGRAM_BOT_TOKEN"] = tok
-    text = _set_line(text, r'^(\s*bot_token:\s*).*$', r'\1"${TELEGRAM_BOT_TOKEN}"')
+    print("① 在哪里和她聊？")
+    print("  1. QQ（推荐，国内不用代理；会自动下载、配置 NapCat，你只要用她的 QQ 小号扫一次码）")
+    print("  2. Telegram（要代理）")
+    print("  3. 两个都要")
+    where = ask("选哪个", "1" if sys.platform == "win32" else "2")
+    use_qq = where in ("1", "3")
+    use_tg = where in ("2", "3")
+    if use_tg:
+        print("\n  Telegram：在 Telegram 里找 @BotFather，发 /newbot 创建一个 bot，把它给你的 token 粘贴过来。")
+        while True:
+            tok = ask("bot token", secret=False)
+            if re.fullmatch(r"\d{6,12}:[\w-]{30,}", tok):
+                break
+            print("  看起来不对（格式像 123456789:AAH...），再试一次")
+        env["TELEGRAM_BOT_TOKEN"] = tok
+        text = _set_line(text, r'^(\s*bot_token:\s*).*$', r'\1"${TELEGRAM_BOT_TOKEN}"')
+    else:
+        text = _set_line(text, r'^(\s*bot_token:\s*).*$', r'\1""   # 只用 QQ；想加 Telegram 就重新运行 setup')
 
-    print("\n② 代理：国内访问 Telegram 需要代理（Clash 一般是 http://127.0.0.1:7890）。")
+    print("\n② 代理：国内访问 Telegram 需要代理（Clash 一般是 http://127.0.0.1:7890）。只用 QQ 可以不要。")
     found = detect_proxy()
     if found:
         print(f"  检测到本机有代理：{found}")
-    proxy = ask("代理地址（不需要就输入 无）", found or "http://127.0.0.1:7890")
+    proxy = ask("代理地址（不需要就输入 无）", found or ("http://127.0.0.1:7890" if use_tg else "无"))
     proxy = "" if proxy in ("无", "no", "none", "-") else proxy
     text = _set_line(text, r'^proxy:.*$', f'proxy: "{proxy}"')
 
     print("\n③ 大模型（都有免费额度）：")
     print("  智谱 open.bigmodel.cn → API Keys（聊天主力，免费）")
     z = ask("智谱 API Key（没有就回车跳过）", secret=True)
-    print("  硅基流动 cloud.siliconflow.cn → API 密钥（备用聊天 + 记忆检索 + 语音识别，免费）")
+    print("  硅基流动 cloud.siliconflow.cn → API 密钥（备用聊天 + 记忆检索，免费）")
     sf = ask("硅基流动 API Key（没有就回车跳过）", secret=True)
     if not z and not sf:
         print("  ⚠️ 两个都没填：她没法说话。之后在 .env 里补上 ZHIPU_KEY 或 SILICONFLOW_KEY。")
@@ -134,8 +144,13 @@ def setup(root: Path = ROOT):
     from .personas import set_persona_file
     set_persona_file(root, persona_file)
     print(f"\n配置好了：config.yaml + .env，人设 {persona_file}")
-    print("下一步：运行一次离线自检（selftest.bat 或 python run.py selftest），"
-          "然后启动（start.bat / start.sh），在 Telegram 里给你的 bot 发 /start。")
+    if use_qq:
+        print("\n⑥ QQ：自动准备 NapCat（QQ 的协议端）……")
+        from .napcat_install import main as napcat_main
+        if napcat_main([]) != 0:
+            print("QQ 这一步没做完：弄好后双击 qq_setup.bat 再来一次（已经下好的不会重新下载）。")
+    print("\n下一步：双击 start.bat（Linux / macOS：bash start.sh）启动"
+          + ("，在 Telegram 里给你的 bot 发 /start" if use_tg else "，用你的 QQ 给她的小号发句话") + "。")
 
 
 # ================= 人设 =================

@@ -162,11 +162,11 @@ class EventsMixin:
         if res and self.bot.owner_id:
             from .bot import stats_line
             text = f"📒 我们的{m}月\n\n{res[0]}\n\n{stats_line(res[1])}"
-            try:
-                msg = await self.bot.app.bot.send_message(self.bot.owner_id, text)
-                self.db.add_message("assistant", f"[{m}月纪念册] {res[0]}", "letter", msg.message_id)
-            except Exception as e:  # noqa: BLE001
-                log.warning("纪念册发送失败：%s", e)
+            msg, ch = await self.bot.owner_text(text)
+            if msg:
+                self.db.add_message("assistant", f"[{m}月纪念册] {res[0]}", "letter", msg.message_id, channel=ch)
+            else:
+                log.warning("纪念册没发出去")
 
     # ---------------- 时间胶囊：到日子拆开 ----------------
     async def _capsules(self, now: datetime):
@@ -176,19 +176,27 @@ class EventsMixin:
         if not due or not self.bot.owner_id:
             return
         tz = self.cfg.tz
-        bot = self.bot.app.bot
+
+        class _Fail(Exception):
+            pass
+
+        async def send(text):
+            m, ch = await self.bot.owner_text(text)
+            if not m:
+                raise _Fail("没发出去")
+            return m, ch
         for c in due[:4]:
             written = datetime.fromtimestamp(c["created"], tz)
             days = (now.date() - written.date()).days
             try:
                 if c["by"] == "her":
                     text = f"💌 {written:%Y-%m-%d} 她写给今天的你（{days} 天前埋下的时间胶囊）\n\n{c['content']}"
-                    m = await bot.send_message(self.bot.owner_id, text)
-                    self.db.add_message("assistant", f"[时间胶囊] {c['content']}", "letter", m.message_id)
+                    m, ch = await send(text)
+                    self.db.add_message("assistant", f"[时间胶囊] {c['content']}", "letter", m.message_id, channel=ch)
                     self.db.open_capsule(c["id"])
                     continue
                 text = f"💌 时间胶囊到日子了：这是你 {written:%Y-%m-%d}（{days} 天前）写下的\n\n{c['content']}"
-                m = await bot.send_message(self.bot.owner_id, text)
+                await send(text)
                 self.db.add_message("event", f"他 {days} 天前（{written:%Y-%m-%d}）埋的时间胶囊今天打开了，里面写着：{c['content']}")
                 self.db.open_capsule(c["id"])
                 await self._send_proactive(f"你们的时间胶囊今天打开了，是他 {days} 天前写的：「{c['content'][:300]}」。"
@@ -212,7 +220,6 @@ class EventsMixin:
         if not cur.get("你发的消息") and not cur.get("主动找你"):
             return
         from .bot_common import ui
-        try:
-            await self.bot.app.bot.send_message(self.bot.owner_id, ui(text))
-        except Exception as e:  # noqa: BLE001
-            log.warning("周报发送失败：%s", e)
+        m, _ = await self.bot.owner_text(ui(text))
+        if not m:
+            log.warning("周报没发出去")

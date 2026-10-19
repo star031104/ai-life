@@ -109,13 +109,6 @@ class Emotion:
         if delta:
             self.nudge(**delta)
 
-    def on_user_emotion(self, label: str | None):
-        """他的语气（语音识别出来的）：难过/生气时她会担心。"""
-        if label in ("难过", "生气", "害怕"):
-            self.nudge(joy=-5, longing=+5)
-        elif label == "开心":
-            self.nudge(joy=+5)
-
     # ---------------- 给提示词 / 网页 ----------------
     def describe(self) -> str:
         st = self.state()
@@ -147,8 +140,8 @@ class Emotion:
             return "心情很好"
         return "平静"
 
-    def voice_style(self) -> str:
-        """给语音合成挑语气：开心 / 撒娇 / 难过 / 生气 / 默认。"""
+    def mood_style(self) -> str:
+        """桌宠挑表情用的语气：开心 / 撒娇 / 难过 / 生气 / 默认。"""
         st = self.state()
         if st["sulk"] >= 45:
             return "生气"

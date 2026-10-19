@@ -13,3 +13,12 @@ data/
 *.db-wal
 # 私人人设：只留在自己电脑上，不进仓库
 persona/yuki.md
+# 第二个角色（群聊角色）：自己的配置和数据
+config.group.yaml
+config.*.yaml
+!config.example.yaml
+!config.group.example.yaml
+instances/
+
+napcat/
+NapCat.Shell.Windows.Node.zip

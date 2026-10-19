@@ -24,7 +24,7 @@ def test_parse_reply_bubbles_and_tags():
     assert p.quote and p.mood == "松了口气" and p.affection_delta == 1
     assert [b.sticker for b in p.bubbles] == [None, None, "委屈", None]
     assert p.bubbles[0].text.startswith("有点")
-    assert p.bubbles[3].voice and p.bubbles[3].text == "你人好好的就够。"
+    assert p.bubbles[3].text == "你人好好的就够。" and "语音" not in p.plain_text      # 语音去掉了：标签照样删掉
     assert p.reminders == [("2026-10-13 08:00", "叫他起床")]
 
 
@@ -74,43 +74,6 @@ def test_parse_json():
     assert parse_json('好的```json\n{"add":[{"content":"a"}]}\n```') == {"add": [{"content": "a"}]}
     assert parse_json('[1,2]') == [1, 2]
     assert parse_json("nothing", 5) == 5
-
-
-def test_vad_segments_and_downsample():
-    from ailife.caller import FRAME_BYTES, CallSession, _down3
-
-    class Dummy:
-        pass
-    caller = Dummy()
-    caller.cfg = load_config()
-    s = CallSession(caller, 1, "test", True)
-    rng = np.random.default_rng(0)
-    silence = lambda: (rng.normal(0, 60, 480)).astype(np.int16).tobytes()
-    speech = lambda i: (np.sin(np.arange(480) * 0.2 + i) * 6000).astype(np.int16).tobytes()
-    for _ in range(100):
-        s.feed(silence())
-    for i in range(80):            # 800ms 说话
-        s.feed(speech(i))
-    for _ in range(90):            # 900ms 静音 → 断句
-        s.feed(silence())
-    assert s.utterances.qsize() == 1
-    seg = s.utterances.get_nowait()
-    assert len(seg) >= FRAME_BYTES * 80
-    assert len(_down3(seg)) == len(seg) // 3 // 2 * 2 or abs(len(_down3(seg)) - len(seg) // 3) <= 2
-
-
-def test_barge_in_clears_output():
-    from ailife.caller import CallSession
-
-    class Dummy:
-        pass
-    caller = Dummy()
-    caller.cfg = load_config()
-    s = CallSession(caller, 1, "test", True)
-    s.out += bytes(96000)
-    for i in range(40):
-        s.feed((np.sin(np.arange(480) * 0.3) * 8000).astype(np.int16).tobytes())
-    assert len(s.out) == 0
 
 
 def test_llm_fallback_and_cooldown():

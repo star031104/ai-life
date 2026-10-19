@@ -43,7 +43,7 @@ def _use(env, name):
     return brain
 
 
-def test_worker_life_and_male_voice(env):
+def test_worker_life(env):
     brain = _use(env, "shenyan")
     cfg = env[0]
     rh = brain.rhythm
@@ -53,13 +53,6 @@ def test_worker_life_and_male_voice(env):
     assert "要上班（09:30-18:30）" in blk and "27 岁" in blk
     brain.now = lambda: datetime(2026, 10, 3, 10, 0, tzinfo=cfg.tz)
     assert "国庆假期" in rh.her_block()
-    from ailife.voice import TTS
-    t = TTS.__new__(TTS)
-    t.c = cfg.tts
-    t.persona = brain.persona
-    assert t.local_voice()[0] == 61 and "下班" in t.sample_line()
-    brain.persona.voice = {}
-    assert t.local_voice()[0] == 58                                       # 男性角色没指定：默认男声
     sp = brain.system_prompt("在干嘛")
     assert "沈言" in sp and "你的生活节奏" in sp
 

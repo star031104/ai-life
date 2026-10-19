@@ -9,7 +9,6 @@ from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from .voice import to_ogg_opus
 from .bot_common import HELP_TEXT, keep, stats_line
 
 log = logging.getLogger("ailife.bot")
@@ -72,47 +71,9 @@ class CommandsMixin:
             f"今天的安排：\n{keep(self.db.get(f'life_{self.brain.now():%Y-%m-%d}', '（未生成）'))}"
         )
 
-    async def cmd_call(self, update: Update, ctx):
-        if not self._is_owner(update):
-            return
-        if not self.caller:
-            await update.message.reply_text("打电话功能没开（config.yaml 里 call.enabled）。")
-            return
-        self.spawn(self.caller.call("他让你现在给他打电话", forced=True))
-
     async def cmd_help(self, update: Update, ctx):
         if self._is_owner(update):
             await update.message.reply_text(HELP_TEXT)
-
-    async def cmd_voices(self, update: Update, ctx):
-        if not self._is_owner(update):
-            return
-        from .voice import VOICES, voice_gender
-        cur = self.db.get("tts_voice")
-        g = getattr(self.brain.persona, "gender", "female")
-        await update.message.reply_text("试听几种声音（生成需要几秒）。喜欢哪个就发 /voice 编号")
-        line = self.tts.sample_line()
-        for i, (label, *v) in enumerate(VOICES):
-            if g in ("female", "male") and voice_gender((label, *v)) != g and v[0] != "sovits":
-                continue                            # 只给和角色性别对得上的声音
-            try:
-                audio = await to_ogg_opus(await self.tts.synth(line, tuple(v)))
-                mark = "（当前）" if cur == i else ""
-                await self.app.bot.send_voice(self.owner_id, audio, caption=f"{i + 1}. {label}{mark}")
-            except Exception as e:  # noqa: BLE001
-                await update.message.reply_text(f"{i + 1}. {label} 生成失败：{e}")
-
-    async def cmd_voice(self, update: Update, ctx):
-        if not self._is_owner(update):
-            return
-        from .voice import VOICES
-        a = (ctx.args or [""])[0]
-        if a.isdigit() and 1 <= int(a) <= len(VOICES):
-            self.db.set("tts_voice", int(a) - 1)
-            self.tts.set_voice(int(a) - 1)
-            await update.message.reply_text(f"好，以后用「{VOICES[int(a) - 1][0]}」的声音。")
-        else:
-            await update.message.reply_text(f"用法：/voice 1~{len(VOICES)}（先发 /voices 试听）")
 
     async def cmd_city(self, update: Update, ctx):
         if not self._is_owner(update):
@@ -435,12 +396,6 @@ class CommandsMixin:
             res = await self.brain.together.monthly_recap(now.year, now.month, save=False)
             await msg.reply_text(f"📒 这个月到现在\n\n{keep(res[0])}\n\n{stats_line(res[1])}" if res else "这个月还没什么可写的。")
         self.spawn(job())
-
-    def _voice_degraded(self, label: str):
-        self.db.set("tts_voice", None)
-        if self.owner_id:
-            self.spawn(self.app.bot.send_message(
-                self.owner_id, f"⚠️ 「{label}」连续 3 次合成失败，已自动换回本地声音。想换别的发 /voices 试听。"))
 
     async def cmd_diag(self, update: Update, ctx):
         if not self._is_owner(update):

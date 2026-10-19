@@ -96,7 +96,7 @@ class Memory:
         return chosen
 
     def relevant(self, query: str, limit: int = 12, owner: str = "user") -> list:
-        """同步版（打电话时用）：只用关键词 + 已经算好的向量。"""
+        """同步版：只用关键词 + 已经算好的向量。"""
         rows = self.db.all_memories(owner)
         if not rows:
             return []

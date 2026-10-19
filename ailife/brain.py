@@ -74,7 +74,6 @@ PROTO_HEAD = """
 - 你是在手机上发消息。想分成几条就用 ||| 隔开，每条一两句话。平时回 1~2 条；他认真讲事、问你问题、情绪低落时可以多几条（最多 4 条）。
 - 标签不会被他看到，只会被执行，偶尔用就好：
   [表情:情绪] 发贴纸（开心/大笑/喜欢/害羞/难过/委屈/生气/哼/惊讶/无语/困/抱抱/想你/得意/哭），三四轮才发一次
-  [语音] 放在某条开头，这条发成语音条（撒娇、晚安、想他时偶尔用）
   [引用] 引用他刚才那句话回复（只写标签，不复述原话）
   [回应:❤] 给他刚才那条消息点个表情（❤ 🥰 😁 😢 🤔 😱 👍 🔥 🎉 😘 🙈 😴 🤗 👀 之一）
   [撤回] 放在某条开头：发出去几秒后撤回（说漏真心话后悔时，很少用）
@@ -89,8 +88,7 @@ PROTO_OPT = {
     "song": "  [推歌:歌名|歌手] 想给他推荐一首真实存在的歌时用，程序会附上链接",
     "habit": "  [打卡:目标名] 他说自己完成了某个打卡目标（{habits}）时，帮他打卡",
     "wish": "  [愿望:想一起做的事] 他说“以后想和你一起…”这类愿望时记进你们的愿望清单；真的一起做到了就用 [完成愿望:那件事]",
-    "story": "  [睡前故事:主题] 他想听睡前故事时：这次只回一两句应答（比如“好啦好啦，就讲一个”），再加这个标签，故事会单独用语音讲",
-    "call": "  [打电话] 真的给他打个语音电话（他说想听你声音、睡不着、让你打给他时）",
+    "story": "  [睡前故事:主题] 他想听睡前故事时：这次只回一两句应答（比如“好啦好啦，就讲一个”），再加这个标签，故事会单独发",
     "game": "- 无聊或气氛合适时可以提议玩个小游戏（成语接龙、猜谜、真心话、二选一…），玩的时候认真按规则、按你的性格在意输赢。",
 }
 TOPIC_RE = {
@@ -331,7 +329,11 @@ class Brain:
     def protocol(self, query: str = "") -> str:
         """按聊到的话题挑要给的标签说明。"""
         recent = query or ""
-        lines = [PROTO_HEAD]
+        head = PROTO_HEAD
+        if self.db.get("last_channel") == "qq":    # QQ 私聊没有“给消息点表情”；贴纸会发成表情包 / 小黄脸
+            head = "\n".join(x for x in head.splitlines() if "[回应:" not in x)
+            head = head.replace("发贴纸（", "发表情包（")
+        lines = [head]
         photos_left = self.photos.remaining_today()
         if photos_left > 0 and (TOPIC_RE["photo"].search(recent) or random.random() < 0.25):
             lines.append(PROTO_OPT["photo"].format(photos_left=photos_left))
@@ -344,8 +346,6 @@ class Brain:
         habits = [h["name"] for h in self.db.habits()] if hasattr(self.db, "habits") else []
         if habits:
             lines.append(PROTO_OPT["habit"].format(habits="、".join(habits)))
-        if bool(self.cfg.call.get("enabled")):
-            lines.append(PROTO_OPT["call"])
         if TOPIC_RE["wish"].search(recent):
             lines.append(PROTO_OPT["wish"])
         from .moments import STORY_RE
@@ -394,7 +394,7 @@ class Brain:
                          "但别像查岗一样报时长，也别每句都提）")
         lu = self.db.last_message("user")
         if lu and lu["kind"] == "desk" and time.time() - lu["ts"] < 1800:
-            lines.append("他正在电脑桌面上和你说话（你以桌宠的样子待在他屏幕角落，说的话会被念出来，所以多用口语、短一点）")
+            lines.append("他正在电脑桌面上和你说话（你以桌宠的样子待在他屏幕角落，说的话会冒在你头顶的气泡里，所以多用口语、短一点）")
         ph = self.db.get("sense_phone") or {}
         if ph and time.time() - ph.get("ts", 0) < 3 * 3600:
             t = datetime.fromtimestamp(ph["ts"], self.cfg.tz)
@@ -418,16 +418,17 @@ class Brain:
         diary_txt = "\n".join(f"{d['day']}：{d['content']}" for d in diaries) or "（还没有）"
         life = self.db.get(f"life_{self.now():%Y-%m-%d}", "")
         owner = p.user_name or self.cfg.telegram.get("owner_name") or p.call_name or "他"
+        app = "QQ" if self.db.get("last_channel") == "qq" else "Telegram"
         from . import examples as ex
         lu_row = self.db.last_message("user")
         chosen = ex.pick(p, query, (lu_row["content"] if lu_row else ""), avoid=self._last_examples)
         self._last_examples = [e.scene for e in chosen]
         self.quality.ref_lines = ex.her_lines(p, chosen)
         parts = [
-            f"你就是{p.name}，正在和你在意的人（{owner}）用 Telegram 聊天。始终以{p.name}的身份说话，"
+            f"你就是{p.name}，正在和你在意的人（{owner}）用 {app} 聊天。始终以{p.name}的身份说话，"
             f"不要提到自己是 AI、模型或程序。称呼他时用“{p.call_name}”或你们自然的叫法。",
             p.body,
-            ex.block(p, chosen) if mode != "call" else "",
+            ex.block(p, chosen),
             f"# 你今天自己的安排\n{life or '（普通的一天，自由发挥但要前后一致）'}",
             self.together.care_block(),
             f"# 你此刻的心情\n{self.mood}；{self.emotion.describe()}\n"
@@ -449,10 +450,7 @@ class Brain:
             "# 此刻（说话要符合这个时间，比如下午不要说早上好）\n" + self._time_block(),
         ]
         parts = [x for x in parts if x]
-        if mode == "call":
-            parts.append(CALL_PROTOCOL)
-        else:
-            parts.append(self.protocol(query))
+        parts.append(self.protocol(query))
         return "\n\n".join(parts)
 
     def history(self, n: int | None = None) -> list[dict]:
@@ -627,7 +625,6 @@ class Brain:
                         if getattr(p2, k) is None:
                             setattr(p2, k, getattr(p, k))
                     p2.quote = p2.quote or p.quote
-                    p2.call = p2.call or p.call
                     p = p2
                     if not proactive:
                         self._cap_bubbles(p, max_bubbles)
@@ -640,11 +637,3 @@ class Brain:
             if first:
                 self.quality.remember_shared(first)
         return p
-
-
-CALL_PROTOCOL = """
-# 现在你们在打语音电话
-- 你说的每个字都会被直接念出来：只说口语，一次一到三句，像真人打电话那样自然、有停顿感。
-- 不要用任何标签、表情符号、括号、markdown，不要念出符号。
-- 可以主动找话题，也可以安静地听他说。他说要挂了就温柔地道别。
-"""

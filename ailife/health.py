@@ -101,10 +101,7 @@ class Health:
             text = "⚠️ 程序这边出了点问题（不是她在说话）：\n" + "\n".join(msgs[:5]) + \
                    "\n\n发 /diag 看详细情况；日志在 data/logs/ailife.log。"
             from .bot_common import ui
-            try:
-                await self.bot.app.bot.send_message(self.bot.owner_id, ui(text))
-            except Exception:  # noqa: BLE001
-                pass
+            await self.bot.owner_text(ui(text))
 
 
 def friendly(name: str, msg: str) -> str:
@@ -185,17 +182,9 @@ async def diagnose(cfg, brain, bot, dash=None) -> str:
     else:
         out.append(f"记忆向量检索 {warn} 没开（只用关键词）")
 
-    # 语音
-    tts = getattr(bot, "tts", None)
-    if tts:
-        # 显式传声音：自检失败不计入“连续失败 3 次自动换声音”
-        r = await timed(tts.synth("你好呀", voice=tts.override), 40)
-        voice = next((v[0] for v in __import__("ailife.voice", fromlist=["VOICES"]).VOICES
-                      if tts.override and tuple(v[1:]) == tuple(tts.override)), "配置里的默认声音")
-        out.append(f"语音合成 {ok if r[0] else bad} {voice}" + (f" {r[1]:.1f}s" if r[0] else f"：{str(r[2])[:60]}"))
-    asr = getattr(bot, "asr", None)
-    if asr and asr.local:
-        out.append(f"语音识别 {ok if asr.local.ready_on_disk() else warn} 本地 SenseVoice：{asr.local.status}")
+    qq = getattr(bot, "qq", None)
+    if qq is not None:
+        out.append(qq.status_line())
 
     # 外部服务
     async def _none():

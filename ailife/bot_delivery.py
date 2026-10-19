@@ -1,4 +1,4 @@
-"""把她的回复拟人化地发出去：分条、打字停顿、偶尔打错字、贴纸、语音、表情回应。"""
+"""把她的回复拟人化地发出去：分条、打字停顿、偶尔打错字、贴纸、表情回应。"""
 from __future__ import annotations
 
 import asyncio
@@ -10,14 +10,48 @@ import time
 from telegram.constants import ChatAction
 
 from .output import Parsed, emotion_to_emojis
-from .voice import to_ogg_opus
 from .bot_common import EMOTION_LABELS, TYPOS, to_reaction  # noqa: F401
 
 log = logging.getLogger("ailife.bot")
 
 
 class DeliveryMixin:
+    # ---------------- 发到哪边：Telegram 还是 QQ 私聊 ----------------
+    def channel(self) -> str:
+        """回他 / 主动找他时发到哪边：他最后在哪边说话就发哪边（QQ 没连上时退回 Telegram）。"""
+        if not getattr(self, "tg", True):
+            return "qq"                              # 只用 QQ
+        qq = getattr(self, "qq", None)
+        if qq is not None and qq.private_ready() and self.db.get("last_channel") == "qq":
+            return "qq"
+        return "tg"
+
+    def _out(self):
+        """(发送器, 对方 ID, 渠道)。发送器的方法名和 Telegram 的 bot 一样。QQ 没连上又没有 Telegram 时对方 ID 是 0。"""
+        if self.channel() == "qq":
+            qq = getattr(self, "qq", None)
+            if qq is not None and qq.private_ready():
+                return qq.out, qq.owner_id, "qq"
+            return None, 0, "qq"
+        return self.app.bot, self.owner_id, "tg"
+
+    async def owner_text(self, text: str):
+        """发一段普通文字给他（信、纪念册、提醒之类），发到他现在在用的那边。返回 (消息, 渠道)，没发出去是 (None, 渠道)。"""
+        bot, chat, ch = self._out()
+        if not chat:
+            return None, ch
+        try:
+            return await bot.send_message(chat, text), ch
+        except Exception as e:  # noqa: BLE001
+            log.warning("给他发消息失败：%s", e)
+            return None, ch
+
     async def send_action(self, action):
+        if self.channel() == "qq":                  # QQ：对方那边显示“正在输入…” / “正在说话…”
+            bot, chat, _ = self._out()
+            if chat and action in (ChatAction.TYPING, ChatAction.RECORD_VOICE):
+                await bot.typing(chat, speaking=(action == ChatAction.RECORD_VOICE))
+            return
         if self.owner_id:
             try:
                 await self.app.bot.send_chat_action(self.owner_id, action)
@@ -39,20 +73,16 @@ class DeliveryMixin:
 
     async def deliver(self, p: Parsed, quote_id: int | None = None, kind: str = "text") -> bool:
         """把解析后的回复一条条发出去，并写入聊天记录。"""
-        chat = self.owner_id
+        bot, chat, ch = self._out()
         if not chat or p.skip or not p.bubbles:
             return False
-        bot = self.app.bot
-        voice_p = float(self.cfg.style.voice_probability)
         sent_any = False
-        voices_sent = 0
         rate = float(self.cfg.style.get("sticker_rate", 1.0))
         has_text = any(b.text for b in p.bubbles)
         if has_text and rate < 1:
             p.bubbles = [b for b in p.bubbles if not b.sticker or random.random() < rate]
-        if p.reaction and self._last_user_msg_id and kind != "proactive":
+        if p.reaction and self._last_user_msg_id and kind != "proactive" and ch == "tg":
             await self._react(self._last_user_msg_id, p.reaction)
-        style = self.brain.emotion.voice_style()
         typo_rate = float(self.cfg.style.get("typo_rate", 0.03))
         for i, b in enumerate(p.bubbles):
             reply_to = quote_id if i == 0 else None
@@ -68,7 +98,7 @@ class DeliveryMixin:
                         except OSError:
                             pass
                         m = await bot.send_photo(chat, img, reply_to_message_id=reply_to)
-                        self.db.add_message("assistant", f"[照片:{b.photo}]", "photo", m.message_id)
+                        self.db.add_message("assistant", f"[照片:{b.photo}]", "photo", m.message_id, channel=ch)
                         sent_any = True
                     else:
                         self.db.add_message("event", f"你想发一张照片（{b.photo}），但没发出去")
@@ -76,24 +106,9 @@ class DeliveryMixin:
                 if b.sticker:
                     await asyncio.sleep(random.uniform(0.6, 1.6))
                     await self._send_sticker(b.sticker, reply_to)
-                    self.db.add_message("assistant", f"[表情:{b.sticker}]", "sticker")
+                    self.db.add_message("assistant", f"[表情:{b.sticker}]", "sticker", channel=ch)
                     sent_any = True
                     continue
-                as_voice = (b.voice or (voice_p > 0 and len(b.text) < 60 and random.random() < voice_p)) \
-                    and voices_sent < 1
-
-                if as_voice:
-                    try:
-                        await self.send_action(ChatAction.RECORD_VOICE)
-                        audio = await to_ogg_opus(await self.tts.synth(b.text, style=style))
-                        await asyncio.sleep(min(4.0, len(b.text) / 8))
-                        m = await bot.send_voice(chat, audio, reply_to_message_id=reply_to)
-                        self.db.add_message("assistant", f"[语音] {b.text}", "voice", m.message_id)
-                        sent_any = True
-                        voices_sent += 1
-                        continue
-                    except Exception as e:  # noqa: BLE001
-                        log.warning("语音发送失败，改发文字：%s", e)
                 await self._typing_pause(b.text, first=(i == 0))
                 if b.recall:                        # 说出口又后悔了：发出去几秒后撤回
                     m = await bot.send_message(chat, b.text, reply_to_message_id=reply_to)
@@ -103,18 +118,27 @@ class DeliveryMixin:
                         self.db.add_message("event", f"你发了「{b.text}」又马上撤回了（他可能看到了）")
                     except Exception as e:  # noqa: BLE001
                         log.info("撤回失败：%s", e)
-                        self.db.add_message("assistant", b.text, kind, m.message_id)
+                        self.db.add_message("assistant", b.text, kind, m.message_id, channel=ch)
                     sent_any = True
                     continue
                 typo = self._make_typo(b.text) if random.random() < typo_rate else None
                 m = await bot.send_message(chat, typo or b.text, reply_to_message_id=reply_to)
+                if typo and ch == "qq":             # QQ 改不了已发的消息：像真人一样补一句“*正确的字”
+                    fix = self._typo_fix(b.text, typo)
+                    if fix:
+                        await asyncio.sleep(random.uniform(1.2, 3.0))
+                        try:
+                            await bot.send_message(chat, fix)
+                        except Exception:  # noqa: BLE001
+                            pass
+                    typo = None
                 if typo:                            # 打错字，过两秒改过来
                     await asyncio.sleep(random.uniform(1.5, 3.5))
                     try:
                         await bot.edit_message_text(b.text, chat_id=chat, message_id=m.message_id)
                     except Exception:  # noqa: BLE001
                         pass
-                self.db.add_message("assistant", b.text, kind, m.message_id)
+                self.db.add_message("assistant", b.text, kind, m.message_id, channel=ch)
                 sent_any = True
             except Exception as e:  # noqa: BLE001
                 log.exception("发送失败：%s", e)
@@ -127,7 +151,7 @@ class DeliveryMixin:
                     text = f"🎵 《{title}》" + (f"- {artist}" if artist else "")
                 m = await bot.send_message(chat, text, disable_web_page_preview=False)
                 self.db.add_message("assistant", f"[推荐了一首歌] 《{title}》{('-' + artist) if artist else ''}", "song",
-                                    m.message_id)
+                                    m.message_id, channel=ch)
                 sent_any = True
             except Exception as e:  # noqa: BLE001
                 log.info("推歌失败：%s", e)
@@ -142,6 +166,14 @@ class DeliveryMixin:
             return None
         k, v = random.choice(cands)
         return text.replace(k, v, 1)
+
+    @staticmethod
+    def _typo_fix(text: str, typo: str) -> str | None:
+        """打错的那个词 → “*正确的词”。"""
+        for k, v in TYPOS.items():
+            if k in text and typo == text.replace(k, v, 1):
+                return "*" + k
+        return None
 
     async def _react(self, msg_id: int, emoji: str):
         try:
@@ -159,7 +191,7 @@ class DeliveryMixin:
             try:
                 f = await self.app.bot.get_file(row["thumb"] or row["file_id"])     # 缩略图（动图贴纸也能看）
                 raw = bytes(await f.download_as_bytearray())
-                from .voice import ffmpeg
+                from .fftool import ffmpeg
                 png = await ffmpeg(["-i", "pipe:0", "-frames:v", "1", "-vf", "scale=256:-1", "-f", "image2",
                                     "-vcodec", "png", "pipe:1"], raw)
                 b64 = base64.b64encode(png).decode()
@@ -177,11 +209,26 @@ class DeliveryMixin:
                 return None
 
     async def label_stickers(self, n: int = 20):
+        if not getattr(self, "tg", True):
+            return
         for row in self.db.unlabeled_stickers(n):
             await self._label_one(row)
 
     async def _send_sticker(self, emotion: str, reply_to: int | None):
         emojis = emotion_to_emojis(emotion)
+        bot, chat, ch = self._out()
+        if ch == "qq":                              # QQ：先用从他那学来的表情包，没有就发小黄脸，再没有发 emoji
+            from .qq import face_for
+            row = self.qq.pick_sticker(emotion) if getattr(self, "qq", None) else None
+            if row is not None:
+                await bot.send_sticker_image(chat, row, reply_to)
+                return
+            fid = face_for(emotion)
+            if fid is not None:
+                await bot.send_face(chat, fid, reply_to)
+            elif emojis:
+                await bot.send_message(chat, emojis[0])
+            return
         rows = self.db.stickers_with_emotion(emotion) or self.db.stickers_with_emoji(emojis)
         if rows:
             st = random.choice(rows)

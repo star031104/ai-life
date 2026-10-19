@@ -63,7 +63,9 @@ class WorldLLM(FakeLLM):
             return json.dumps([{"name": "阿杰", "role": "社团学长", "desc": "爱讲冷笑话"},
                                {"name": "没出现的人", "role": "x", "desc": "y"}], ensure_ascii=False)
         if "长期目标" in last and "plan" in last:
-            d0 = date.today()
+            from datetime import datetime
+            from ailife.config import load_config
+            d0 = datetime.now(load_config().tz).date()      # 用她那边的日期（和 brain.now() 一致），不用电脑的 UTC 日期
             plan = [{"day": (d0 + timedelta(days=i * 10)).isoformat(), "text": t, "progress": p}
                     for i, (t, p) in enumerate([("报名了钢琴八级", 5), ("练《月光》第三乐章", 30),
                                                 ("模拟考没过，有点丧", 25), ("考完了", 100)])]
@@ -140,23 +142,15 @@ def test_wishes_tags_and_capsule(env):
     assert not brain.db.due_capsules((today + timedelta(days=1)).isoformat())
 
 
-def test_bedtime_story_and_goodnight(env):
+def test_bedtime_story(env):
     cfg, brain, bot, fake = env
     brain.llm = WorldLLM()
     from ailife.output import parse_reply
     p = parse_reply("好啦好啦，就讲一个[睡前故事:萤火虫]")
     assert p.story == "萤火虫"
-    bot.tts = type("T", (), {"synth": staticmethod(lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no tts")))})()
     asyncio.run(bot._bedtime(p, "讲个故事"))
-    assert any("萤火虫" in a[1] for k, a, kw in fake.sent if k == "text")       # 语音失败时改发文字
-    mo = brain.moments
-    mo.window = "00:00-23:59"
-    assert mo.wants_goodnight("那我睡了，晚安")
-    assert not mo.wants_goodnight("今天吃了什么")
-    line = asyncio.run(mo.goodnight_line())
-    assert "（" not in line and "晚安" in line
-    mo.mark_goodnight()
-    assert not mo.wants_goodnight("晚安")
+    assert any("萤火虫" in a[1] for k, a, kw in fake.sent if k == "text")       # 故事用文字发
+    assert not any(k == "voice" for k, a, kw in fake.sent)
     assert "睡前故事" in brain.protocol("给我讲个睡前故事吧")
 
 

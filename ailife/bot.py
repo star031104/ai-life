@@ -1,4 +1,4 @@
-"""Telegram 聊天 Bot：收消息（文字/贴纸/语音/图片）、合并连发、拟人化地分条回复。"""
+"""Telegram 聊天 Bot：收消息（文字/贴纸/图片）、合并连发、拟人化地分条回复。"""
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +15,6 @@ from telegram.ext import (Application, ApplicationBuilder, CallbackQueryHandler,
 from .brain import Brain
 from .games import Games
 from .output import Parsed
-from .voice import ASR, TTS
 from .bot_commands import CommandsMixin
 from .bot_delivery import DeliveryMixin
 from .bot_life import LifeCommandsMixin
@@ -26,20 +25,30 @@ from .bot_common import (EMOTION_LABELS, HELP, HELP_TEXT, REACTION_ALIAS, REACTI
 
 log = logging.getLogger("ailife.bot")
 
+VOICE_IN = "[发了一条语音，但你这边听不了语音：让他打字说]"
+
+
+def tg_configured(cfg) -> bool:
+    tok = str((cfg.get("telegram") or {}).get("bot_token") or "").strip()
+    return bool(tok) and ":" in tok and not tok.startswith("123456:ABC")
+
 class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
-    def __init__(self, cfg, brain: Brain, tts: TTS, asr: ASR):
-        self.cfg, self.brain, self.tts, self.asr = cfg, brain, tts, asr
+    def __init__(self, cfg, brain: Brain):
+        self.cfg, self.brain = cfg, brain
         self.db = brain.db
         brain.away.bot = self
         self.restart_event = asyncio.Event()     # 设上就让 run.py 正常退出（外面的启动脚本会自动重开）
         from .bot_common import install_ui_pronoun
         install_ui_pronoun(getattr(brain.persona, "ta", "她"))      # 男性角色：系统提示里的“她”改成“他”
-        self.caller = None                     # 由 main 注入（打电话模块）
-        b = ApplicationBuilder().token(cfg.telegram.bot_token)
-        if cfg.proxy:
-            b = b.proxy(cfg.proxy).get_updates_proxy(cfg.proxy)
-        b = b.connect_timeout(30).read_timeout(30).write_timeout(60)
-        self.app: Application = b.build()
+        self.qq = None                         # 由 main 注入（QQ 私聊 / 群聊，config 里 qq.enabled 打开时）
+        self.tg = tg_configured(cfg) or not (cfg.get("qq") or {}).get("enabled")
+        self.app: Application | None = None
+        if self.tg:           # 没填 Telegram token、又开了 QQ：只用 QQ（Telegram 那一套都不启动）
+            b = ApplicationBuilder().token(cfg.telegram.bot_token)
+            if cfg.proxy:
+                b = b.proxy(cfg.proxy).get_updates_proxy(cfg.proxy)
+            b = b.connect_timeout(30).read_timeout(30).write_timeout(60)
+            self.app = b.build()
         self._pending: asyncio.Task | None = None
         self._waiting = False                  # 还在“等他说完”阶段（可以被新消息打断重新计时）
         self._lock = asyncio.Lock()
@@ -53,30 +62,32 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
         self.miniapp_url: str | None = None
         self.health = None                     # 由 main 注入
         self.dash = None
-        if self.tts:
-            self.tts.on_degrade = self._voice_degraded
         self._label_lock = asyncio.Lock()
         self._register()
 
     # ---------------- 基础 ----------------
     @property
     def owner_id(self) -> int:
+        """他的 ID：有 Telegram 时是 TG ID；只用 QQ 时是他的 QQ 号。（各处拿它判断“有没有主人”）"""
+        if not self.tg:
+            return int(getattr(self.qq, "owner_id", 0) or 0)
         return int(self.cfg.telegram.get("owner_id") or self.db.get("owner_id", 0) or 0)
 
     def _is_owner(self, update: Update) -> bool:
+        if getattr(update, "trusted_owner", False):     # QQ 私聊转过来的命令（已经核对过是他）
+            return True
         uid = update.effective_user.id if update.effective_user else 0
         return bool(self.owner_id) and uid == self.owner_id
 
     def _register(self):
         a = self.app
+        if a is None:
+            return
         a.add_handler(CommandHandler("start", self.cmd_start))
         a.add_handler(CommandHandler("memory", self.cmd_memory))
         a.add_handler(CommandHandler("forget", self.cmd_forget))
         a.add_handler(CommandHandler("diary", self.cmd_diary))
         a.add_handler(CommandHandler("status", self.cmd_status))
-        a.add_handler(CommandHandler("call", self.cmd_call))
-        a.add_handler(CommandHandler("voices", self.cmd_voices))
-        a.add_handler(CommandHandler("voice", self.cmd_voice))
         a.add_handler(CommandHandler("city", self.cmd_city))
         a.add_handler(CommandHandler("schedule", self.cmd_schedule))
         a.add_handler(CommandHandler("dates", self.cmd_dates))
@@ -120,14 +131,14 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
         a.add_handler(MessageHandler(new & ~filters.COMMAND & ~filters.StatusUpdate.ALL, self.on_other))
 
     async def start(self):
+        if not self.tg:
+            log.info("没填 Telegram bot token：只用 QQ")
+            return
         await self.app.initialize()
         await self.app.start()
         await self.app.updater.start_polling(drop_pending_updates=False, allowed_updates=Update.ALL_TYPES)
         me = await self.app.bot.get_me()
         log.info("Bot 已上线：@%s", me.username)
-        idx = self.db.get("tts_voice")
-        if idx is not None and self.tts:
-            self.tts.set_voice(int(idx))
         try:
             from telegram import BotCommand
             from .bot_common import ui
@@ -137,6 +148,8 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
         await self._load_sticker_sets()
 
     async def stop(self):
+        if not self.tg:
+            return
         try:
             await self.app.updater.stop()
             await self.app.stop()
@@ -182,7 +195,7 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
             out.append({"text": line})
         self.spawn(self._after_turn(p))
         last = self.db.conn.execute("SELECT MAX(id) m FROM messages").fetchone()["m"] or 0
-        return {"bubbles": out, "style": self.brain.emotion.voice_style(), "mood": self.brain.mood, "last_id": last}
+        return {"bubbles": out, "style": self.brain.emotion.mood_style(), "mood": self.brain.mood, "last_id": last}
 
     async def on_note(self, text: str):
         if self.sched:
@@ -197,6 +210,8 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
     async def setup_miniapp(self, url: str):
         """把“小屋”按钮放到聊天输入框左边的菜单里。"""
         self.miniapp_url = url
+        if not self.tg:
+            return
         try:
             from telegram import MenuButtonWebApp, WebAppInfo
             await self.app.bot.set_chat_menu_button(
@@ -209,8 +224,9 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
     async def send_letter(self, text: str):
         if not self.owner_id:
             return
-        m = await self.app.bot.send_message(self.owner_id, f"💌 这周的信\n\n{text}")
-        self.db.add_message("assistant", f"[这周写给他的信] {text}", "letter", m.message_id)
+        m, ch = await self.owner_text(f"💌 这周的信\n\n{text}")
+        if m:
+            self.db.add_message("assistant", f"[这周写给他的信] {text}", "letter", m.message_id, channel=ch)
 
     # ---------------- 他给她的消息点了表情 ----------------
     async def on_reaction(self, update: Update, ctx):
@@ -251,9 +267,7 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
             if rt.sticker:
                 text = f"一个表情{rt.sticker.emoji or ''}"
             elif rt.voice:
-                row = self.db.conn.execute("SELECT content FROM messages WHERE tg_msg_id=? AND role='assistant'",
-                                           (rt.message_id,)).fetchone()
-                text = row["content"] if row else "一条语音"
+                text = "一条语音"
             elif rt.photo:
                 text = "一张照片"
             else:
@@ -268,7 +282,8 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
             content = self._quote_ctx(update.message) + content
         except Exception as e:  # noqa: BLE001
             log.debug("引用解析失败：%s", e)
-        mid = self.db.add_message("user", content, kind, update.message.message_id)
+        mid = self.db.add_message("user", content, kind, update.message.message_id, channel="tg")
+        self.db.set("last_channel", "tg")             # 他在 Telegram 说话了：之后回复、主动消息都发 Telegram
         self._last_user_msg_id = update.message.message_id
         self._user_active()
         return mid
@@ -332,21 +347,10 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
         await self.schedule_reply()
 
     async def on_voice(self, update: Update, ctx):
+        """语音功能已经去掉：她听不了语音，只知道他发了一条。"""
         if not self._is_owner(update):
             return
-        media = update.message.voice or update.message.audio
-        try:
-            f = await ctx.bot.get_file(media.file_id)
-            data = bytes(await f.download_as_bytearray())
-            text, emo, event = await self.asr.transcribe_ex(data, "voice.ogg")
-        except Exception as e:  # noqa: BLE001
-            log.warning("语音识别失败：%s", e)
-            text, emo, event = "", None, None
-        tone = "·".join(x for x in (f"语气{emo}" if emo else "", event or "") if x)
-        head = f"[语音{('·' + tone) if tone else ''}]"
-        self._user_in(update, f"{head} {text}" if text else "[发了一条语音，但你没听清]", "voice")
-        self.brain.emotion.on_user_emotion(emo)
-        self.brain.together.observe(text, emo)
+        self._user_in(update, VOICE_IN, "text")
         await self.schedule_reply()
 
     async def on_photo(self, update: Update, ctx):
@@ -410,9 +414,7 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
         if p is None:
             await self._hold_on(last_user)               # 在锁外面发“等我一下”，不挡住别的回复
             return
-        if p.story is not None or (last_user and self.brain.moments.wants_goodnight(last_user["content"])):
-            if p.story is None:
-                self.brain.moments.mark_goodnight()          # 马上记下，免得连说两次晚安发两条
+        if p.story is not None:
             self.spawn(self._bedtime(p, last_user["content"] if last_user else ""))
         self.spawn(self._after_turn(p))
 
@@ -428,11 +430,12 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
                 self.db.add_message("event", "你刚才因为网络问题一直没能回他，等他再说话时，先简单说一句刚才网不好")
             self._retry_n = 0
             return
-        if time.time() - float(self.db.get("hold_sent_ts") or 0) > 600 and self.owner_id:
+        out, chat, ch = self._out()
+        if time.time() - float(self.db.get("hold_sent_ts") or 0) > 600 and chat:
             line = random.choice(getattr(self.brain.persona, "hold_lines", None) or self.HOLD_LINES)
             try:
-                m = await self.app.bot.send_message(self.owner_id, line)
-                self.db.add_message("assistant", line, "text", m.message_id)
+                m = await out.send_message(chat, line)
+                self.db.add_message("assistant", line, "text", m.message_id, channel=ch)
                 self.db.set("hold_sent_ts", time.time())
             except Exception as e:  # noqa: BLE001
                 log.warning("连“等一下”都没发出去：%s", e)
@@ -454,29 +457,18 @@ class ChatBot(CommandsMixin, LifeCommandsMixin, MediaMixin, DeliveryMixin):
         self._retry_task = self.spawn(later())
 
     async def _bedtime(self, p: Parsed, user_text: str):
-        """睡前：他想听故事就讲一个（语音）；他说晚安就补一条晚安语音（一晚一次）。"""
+        """睡前：他想听故事就讲一个（文字）。"""
         from .output import Bubble, Parsed as P
-        mo = self.brain.moments
         try:
-            if p.story is not None:
-                await self.send_action(ChatAction.RECORD_VOICE if mo.story_voice else ChatAction.TYPING)
-                text = await mo.bedtime_story(p.story)
-                if text:
-                    async with self._lock:
-                        await self.deliver(P(bubbles=[Bubble(text=text, voice=mo.story_voice)]), kind="story")
-                return
-            await asyncio.sleep(random.uniform(4, 9))
-            line = await mo.goodnight_line()
-            if line:
+            await self.send_action(ChatAction.TYPING)
+            text = await self.brain.moments.bedtime_story(p.story)
+            if text:
                 async with self._lock:
-                    await self.deliver(P(bubbles=[Bubble(text=line, voice=True)]), kind="text")
+                    await self.deliver(P(bubbles=[Bubble(text=text)]), kind="story")
         except Exception as e:  # noqa: BLE001
-            log.warning("睡前语音 / 故事没发出去：%s", e)
+            log.warning("睡前故事没发出去：%s", e)
 
     async def _after_turn(self, p: Parsed):
-        if p.call and self.caller:
-            await asyncio.sleep(random.uniform(3, 8))
-            await self.caller.call("你们正在聊天，你说要给他打电话", forced=True)
         try:
             last_user = self.db.last_message("user")
             quick = bool(last_user) and self.brain.memory.needs_quick_extract(
