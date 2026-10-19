@@ -86,6 +86,8 @@ th:first-child,td:first-child{text-align:left}
 .alerts li{padding:9px 0;border-top:1px solid var(--line);font-size:13px;display:flex;gap:10px}
 .alerts li:first-child{border-top:0}
 .alerts .t{color:var(--ink-3);font:12px var(--mono);white-space:nowrap;padding-top:1px}
+.howto{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--ink-2)}
+.howto a{color:var(--accent)} .howto code{font:12px var(--mono);background:var(--surface-2);padding:1px 5px;border-radius:5px}
 .empty{color:var(--ink-3);text-align:center;padding:14px 0;font-size:13px}
 #tip{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);display:none;z-index:9;min-width:120px}
 #tip .r{display:flex;justify-content:space-between;gap:12px}
@@ -118,7 +120,9 @@ th:first-child,td:first-child{text-align:left}
   </div>
 
   <h2>最近的提醒<span class="hint">掉线超过 10 分钟会在 QQ 上告诉你</span></h2>
-  <div class="card"><ul class="alerts" id="alerts"></ul></div>
+  <div class="card"><ul class="alerts" id="alerts"></ul>
+    <div class="howto"><b>掉线了怎么办</b>：微信 → 打开 <a href="/wechat/">/wechat/</a> 用手机扫码；
+      QQ → 电脑上双击 <code>scripts\open_home.bat</code>，再打开 <code>127.0.0.1:6099</code>（有希）或 <code>127.0.0.1:6100</code>（群里的小满）扫码。</div></div>
 </div>
 <div id="tip"></div>
 <script>
