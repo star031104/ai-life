@@ -169,10 +169,32 @@ async def main():
         log.info("提示：用你自己的 TG 给 bot 发 /start 完成绑定。")
     restart = False
     leaving = False
+    tray_stop = asyncio.Event()
+
+    async def watch_tray():                        # 托盘里点了“重启 / 退出”：它往 data/tray_cmd 里写一个字
+        p = cfg.root / "data" / "tray_cmd"
+        while True:
+            await asyncio.sleep(1)
+            try:
+                cmd = p.read_text(encoding="utf-8").strip() if p.exists() else ""
+                if cmd:
+                    p.unlink(missing_ok=True)
+            except OSError:
+                cmd = ""
+            if cmd == "stop":
+                tray_stop.set()
+                bot.restart_event.set()
+            elif cmd == "restart":
+                bot.restart_event.set()
+    tray_task = asyncio.create_task(watch_tray())  # noqa: F841
     try:
         await bot.restart_event.wait()             # 换人设后需要重启：结束这一轮，start.bat / start.sh 会自动再开
-        log.info("正在重启……")
-        restart = True
+        if tray_stop.is_set():
+            log.info("托盘里点了退出")
+            leaving = True                         # 她说一声再走
+        else:
+            log.info("正在重启……")
+            restart = True
     except (asyncio.CancelledError, KeyboardInterrupt):
         leaving = True                             # 你按了 Ctrl+C：她说一声再走（出错崩溃重启时不说）
         raise
@@ -192,7 +214,7 @@ async def main():
             await qq.stop()
         await bot.stop()
         keep_awake(False)
-    return "restart" if restart else None
+    return "restart" if restart else "stop" if leaving else None
 
 
 def _proxy_alive(url: str) -> bool:
@@ -326,6 +348,8 @@ if __name__ == "__main__":
         res = asyncio.run(fn())
     except KeyboardInterrupt:
         res = None
+    if res == "stop":                              # 托盘里点了退出：别再自动重开
+        sys.exit(EXIT_NO_RESTART)
     if res == "restart" and not os.environ.get("AILIFE_LAUNCHER"):
         # 不是用 start.bat / start.sh 启动的（没人负责重开）：自己重新启动一遍
         os.execv(sys.executable, [sys.executable] + sys.argv)

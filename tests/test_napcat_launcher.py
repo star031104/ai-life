@@ -36,7 +36,8 @@ def test_pick_and_args(tmp_path):
 
 def test_ensure_napcat_on_windows(tmp_path, monkeypatch):
     root = _napcat(tmp_path)
-    cfg = {"qq": {"napcat_dir": str(root), "ws_url": "ws://127.0.0.1:3001", "napcat_qq": 2918273645}}
+    cfg = {"root": str(tmp_path), "qq": {"napcat_dir": str(root), "ws_url": "ws://127.0.0.1:3001",
+                                         "napcat_qq": 2918273645, "napcat_hidden": False}}
     launched, opened = [], []
     monkeypatch.setattr(L.sys, "platform", "win32")
     monkeypatch.setattr(L, "pick_launcher", lambda r: r / "napcat.bat")
@@ -80,3 +81,23 @@ def test_auto_login_written(tmp_path):
     assert json.loads(w.read_text(encoding="utf-8"))["port"] == 6099
     assert not L.set_auto_login(root, 2918273645)          # 已经是了：不重复写
     assert not L.set_auto_login(root, None)
+
+
+def test_start_napcat_hidden(tmp_path, monkeypatch):
+    root = _napcat(tmp_path)
+    cfg = {"root": str(tmp_path), "qq": {"napcat_dir": str(root), "napcat_qq": 2918273645}}
+    calls = []
+
+    class P:
+        pid = 4321
+
+    def fake_popen(cmd, **kw):
+        calls.append((cmd, kw))
+        return P()
+    monkeypatch.setattr(L.sys, "platform", "win32")
+    monkeypatch.setattr(L.subprocess, "Popen", fake_popen)
+    assert L.start_napcat(cfg)
+    cmd, kw = calls[0]
+    assert cmd == ["cmd", "/c", "napcat.bat", "-q", "2918273645"] and kw["stdout"] is not None   # 后台跑，没有窗口
+    assert (tmp_path / "data" / "napcat.pid").read_text() == "4321"
+    assert (tmp_path / "data" / "logs" / "napcat.log").exists()

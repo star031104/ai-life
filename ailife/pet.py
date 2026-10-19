@@ -4,7 +4,8 @@
   （PySide6；右下角托盘有图标可以显示 / 收起 / 关掉），没装 PySide6 就退回 pywebview（Windows 上有浅色底）或浏览器。
 - 在桌宠里打字和她聊，她的话冒在头顶的气泡里；她在 Telegram 上主动找你时，桌宠头上也会冒气泡。
 - Live2D 的运行库和模型第一次用时从 CDN 下载并缓存到 data/pet/，以后不联网也能用。
-  默认模型是 Live2D 官方示例模型（Haru）；想换成自己的模型，把整个模型文件夹放进 data/pet/model/ 就行，
+  默认模型是 Live2D 官方示例模型 Rice（金发小魔法师，pet.preset: rice）；也可以换回 Haru（pet.preset: haru）。
+  这两个都是 Live2D 官方的免费示例（Free Material License：个人和小规模使用可以免费用）。想换成自己的模型，把整个模型文件夹放进 data/pet/model/ 就行，
   程序会自动找到里面的 xxx.model3.json（Cubism 3/4）或 xxx.model.json（Cubism 2）；有好几个时在 pet.model 里指定。
 - 另外提供 OpenAI 兼容接口 http://127.0.0.1:8765/v1/chat/completions ，
   别的桌宠/VTuber 程序（如 Open-LLM-VTuber、AIRI）把大模型地址填成它，就是在和同一个她说话。
@@ -32,12 +33,20 @@ LIBS = {
     "live2d.min.js": "https://cdn.jsdelivr.net/gh/dylanNew/live2d@master/webgl/Live2D/lib/live2d.min.js",
     "live2dcubismcore.min.js": "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js",
 }
-DEFAULT_MODEL_BASE = "https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@master/test/assets/haru/"
-DEFAULT_MODEL = "haru_greeter_t03.model3.json"
+HARU_BASE = "https://cdn.jsdelivr.net/gh/guansss/pixi-live2d-display@master/test/assets/haru/"
+RICE_BASE = "https://cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/Samples/Resources/Rice/"
 # 默认模型（Haru）的表情：按每个表情文件里的参数判断的
 HARU_EXPR = {"开心": "f04", "大笑": "f01", "喜欢": "f04", "得意": "f04", "期待": "f01", "生气": "f02", "哼": "f07",
              "无语": "f07", "难过": "f03", "委屈": "f03", "哭": "f03", "惊讶": "f05", "害羞": "f06", "想你": "f06",
              "撒娇": "f06", "困": "f00", "默认": "f00"}
+# 自带的形象：pet.preset 选一个（没放自己的模型时用）。值：(下载地址, 入口文件, 情绪→表情, 摆放)
+# 摆放：模型画布里人物的位置不一样，先按人物摆好；pet.scale / offset_y 在这个基础上再调
+PRESETS = {
+    "rice": (RICE_BASE, "Rice.model3.json", {},          # 金发、贝雷帽的小魔法师（没有表情，靠动作）
+             {"scale": 2.1, "offset_x": -0.2, "offset_y": 60}),
+    "haru": (HARU_BASE, "haru_greeter_t03.model3.json", HARU_EXPR, {"scale": 1.0, "offset_x": 0, "offset_y": 0}),
+}
+DEFAULT_PRESET = "rice"
 CTYPES = {".js": "application/javascript", ".json": "application/json", ".png": "image/png",
           ".jpg": "image/jpeg", ".moc3": "application/octet-stream", ".moc": "application/octet-stream",
           ".mtn": "text/plain", ".wav": "audio/wav", ".mp3": "audio/mpeg"}
@@ -52,7 +61,12 @@ class PetAssets:
         self.enabled = bool(c.get("enabled", True))
         self.dir = cfg.root / "data" / "pet"
         self.model = str(c.get("model") or "").replace("\\", "/").strip("/") or self.find_model()
-        self.model_base = (c.get("model_base") or DEFAULT_MODEL_BASE).rstrip("/") + "/"
+        self.preset = str(c.get("preset") or DEFAULT_PRESET).lower()
+        if self.preset not in PRESETS:
+            self.preset = DEFAULT_PRESET
+        base, self.default_entry, self.default_expr, self.place = PRESETS[self.preset]
+        self.custom_base = bool(c.get("model_base"))
+        self.model_base = (c.get("model_base") or base).rstrip("/") + "/"
         self.proxy = cfg.proxy or None
         self._locks: dict[str, asyncio.Lock] = {}
 
@@ -121,7 +135,7 @@ class PetAssets:
         local = self._local_model_dir() / rel
         if self.model and local.exists():             # 用户自己的模型
             return self._resp(local)
-        cache = self.dir / "cache" / re.sub(r"[^\w./-]", "_", rel)
+        cache = self.dir / "cache" / ("custom" if self.custom_base else self.preset) / re.sub(r"[^\w./-]", "_", rel)
         return self._resp(await self._cached(self.model_base + rel, cache))
 
 
@@ -133,7 +147,7 @@ class Pet(PetAssets):
         self.brain, self.bot, self.db = brain, bot, brain.db
         self.scale = float(c.get("scale", 1.0))
         self.offset_y = int(c.get("offset_y", 0))
-        self.expr_map = dict(c.get("expressions") or ({} if self.model else HARU_EXPR))
+        self.expr_map = dict(c.get("expressions") or ({} if self.model else self.default_expr))
         self.chatter = bool(c.get("chatter", True))
         self.chatter_gap = float(c.get("chatter_gap_minutes", 40)) * 60
         self.last_poll = 0.0
@@ -155,8 +169,10 @@ class Pet(PetAssets):
 
     # ---------------- 配置 ----------------
     async def get_config(self, req):
-        entry = self.model or DEFAULT_MODEL
-        return web.json_response({"model": f"/pet/model/{entry}", "scale": self.scale, "offset_y": self.offset_y,
+        entry = self.model or self.default_entry
+        place = {"scale": 1.0, "offset_x": 0, "offset_y": 0} if self.model else self.place
+        return web.json_response({"model": f"/pet/model/{entry}", "scale": self.scale * place["scale"],
+                                  "offset_x": place["offset_x"], "offset_y": self.offset_y + place["offset_y"],
                                   "expr": self.expr(),
                                   "name": self.brain.persona.name, "ta": getattr(self.brain.persona, "ta", "她")})
 

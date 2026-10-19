@@ -67,10 +67,10 @@ async function init(){
     try{ PIXI.live2d.config.sound=false }catch(e){}        // 模型自带的动作音效不放（她说话用自己的声音），也免得去找不存在的文件
     const app=new PIXI.Application({resizeTo:window,backgroundAlpha:0,antialias:true,autoDensity:true,resolution:window.devicePixelRatio||1});
     $("stage").appendChild(app.view);
-    model=await PIXI.live2d.Live2DModel.from(cfg.model||"/pet/model/haru_greeter_t03.model3.json",{autoInteract:true});
+    model=await PIXI.live2d.Live2DModel.from(cfg.model||"/pet/model/Rice.model3.json",{autoInteract:true});
     app.stage.addChild(model);
     const fit=()=>{const s=Math.min(window.innerWidth/model.internalModel.width,(window.innerHeight*0.98)/model.internalModel.height)*(cfg.scale||1);
-      model.scale.set(s); model.x=(window.innerWidth-model.width)/2; model.y=window.innerHeight-model.height+(cfg.offset_y||0)};
+      model.scale.set(s); model.x=(window.innerWidth-model.width)/2+(cfg.offset_x||0)*model.width; model.y=window.innerHeight-model.height+(cfg.offset_y||0)};
     fit(); window.addEventListener("resize",fit);
     model.on("hit",areas=>{ if(areas.includes("body")||areas.includes("Body"))motion(); else motion(); });
     $("status").textContent="";

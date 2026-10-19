@@ -1,18 +1,23 @@
 @echo off
+rem Start in the background with a tray icon (bottom-right of the taskbar), no console window.
+rem Right-click the icon: status, log, restart, autostart, quit. Debugging: use start_console.bat.
 cd /d "%~dp0"
 
 call "%~dp0tools\env.bat" || exit /b 1
-set AILIFE_LAUNCHER=1
 
-:loop
-python run.py
-if errorlevel 3 if not errorlevel 4 goto stop
-echo.
-echo Program exited. Restarting in 10 seconds (close this window to stop) ...
-timeout /t 10 >NUL
-goto loop
+python -c "import pystray, PIL" >NUL 2>NUL
+if errorlevel 1 (
+  echo First run: installing the tray icon packages ^(pystray, Pillow^) ...
+  python -m pip install pystray Pillow -i https://pypi.tuna.tsinghua.edu.cn/simple
+  if errorlevel 1 python -m pip install pystray Pillow
+)
+python -c "import pystray, PIL" >NUL 2>NUL
+if errorlevel 1 goto console
+where pythonw >NUL 2>NUL
+if errorlevel 1 goto console
+start "" pythonw "%~dp0tools\tray.pyw"
+exit /b 0
 
-:stop
-echo.
-echo Not restarting. See the message above.
-pause
+:console
+echo Tray icon is not available, running in this window instead.
+call "%~dp0start_console.bat"

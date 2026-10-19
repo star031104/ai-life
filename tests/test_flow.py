@@ -434,6 +434,8 @@ def test_responsiveness_and_daily_cap(env):
 def test_desk_line_and_pet_expr(env):
     cfg, brain, bot, fake = env
     from ailife.pet import Pet
+    assert Pet(cfg, brain, bot).preset == "rice" and Pet(cfg, brain, bot).default_entry == "Rice.model3.json"
+    cfg["pet"] = {**dict(cfg.get("pet") or {}), "preset": "haru"}
     pet = Pet(cfg, brain, bot)
     brain.db.set("mood", "有点害羞")
     assert pet.expr() == "f06"

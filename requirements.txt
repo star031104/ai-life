@@ -11,3 +11,5 @@ tzdata>=2024.1
 #   winrt-runtime winrt-Windows.Foundation winrt-Windows.Media.Control   电脑上正在放的歌
 #   PySide6                            桌宠的透明小窗口（没有方框、不占任务栏；装不上会退回 pywebview）
 #   pywebview                          桌宠窗口的备用方案
+pystray>=0.19; sys_platform == "win32"     # 托盘图标（start.bat 不开黑窗口）
+Pillow>=9.0; sys_platform == "win32"

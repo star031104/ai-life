@@ -38,7 +38,7 @@ ai-life 不是一个“问一句答一句”的聊天机器人。TA 有自己的
 | 🌙 | **关机前后** | 关掉程序时 TA 说一声“先去忙了”；开机后说说这段时间在干嘛，错过的提醒和纪念日一起补上 |
 | 🖥️ | **知道你在干嘛**（可关） | 电脑上在玩哪个游戏、在 B 站看什么、今天各忙了多久，会顺着聊，提醒你歇会儿 |
 | 🏠 | **小屋** | Telegram 里点“小屋”打开，看 TA 的心情、日记、记忆、留言板，还能直接改人设；电脑浏览器也能看 |
-| 🧸 | **桌宠** | Live2D 小人待在桌面上，透明背景、不占任务栏，可以打字聊天，话冒在头顶气泡里、会换表情 |
+| 🧸 | **桌宠** | Live2D 小人待在桌面上（默认是金发、戴贝雷帽的小魔法师 Rice，Live2D 官方免费示例模型），透明背景、不占任务栏，可以打字聊天，话冒在头顶气泡里、会做动作；也能换成自己的模型 |
 | 🎧 | **一起做的事** | 打卡、追番、听歌、愿望清单、时间胶囊、每月纪念册、睡前故事、小游戏 |
 | 🔗 | **看得懂你发的东西** | 图片、动图、视频、文件、位置，B 站 / YouTube / 公众号 / 网页链接（先点开读完再回你） |
 | 🐧 | **QQ** | 一键自动下载配置 NapCat，扫一次码以后自动登录；私聊和 Telegram 共用记忆、你在哪边说话就在哪边回，也可以只用 QQ |
@@ -165,13 +165,15 @@ python run.py setup                       # 配置向导；或者把 config.exam
 ### 自检并启动
 
 1. 双击 **`selftest.bat`**（或 `python run.py selftest`）：离线跑一遍核心流程，不联网、不碰你的数据。全是 ✅ 就可以继续。
-2. 双击 **`start.bat`**（Linux / macOS：`bash start.sh`）启动。用了 QQ 的话，它会顺便把 NapCat 启动（任务栏里最小化的窗口，自动登录）。程序意外退出时会在 10 秒后自动重启。
+2. 双击 **`start.bat`**（Linux / macOS：`bash start.sh`）启动。**不会开黑窗口**：她和 NapCat 都在后台跑，任务栏右下角多一个粉色的小图标（可能藏在 ^ 里）。
+   右键图标：看状态、打开小屋、看日志、换大模型、重启、开机自动启动、退出；双击图标打开小屋。用了 QQ 的话，NapCat 会顺便在后台启动（自动登录）。
+   程序意外退出时 10 秒后自动重启。第一次运行会自动装上托盘需要的两个小包（pystray、Pillow）。想看实时输出排查问题就用 `start_console.bat`（老样子，开一个窗口）。
 3. 用你的 QQ 给 TA 的小号发句话（记得先**加好友**，不然 TA 没法主动找你），或者在 Telegram 里给 bot 发 `/start`。
 4. 遇到问题先发 **`/diag`**：它会检查每个大模型接口、代理、QQ、数据库，告诉你哪里没配好。
 
 ### 可选：桌宠、小屋、开机自启
 
-- **桌宠**：Windows 上启动时自动出现在桌面右下角。背景不透明的话，双击 `pet_setup.bat` 安装 PySide6 后重启。想换成自己的 Live2D 模型，把模型文件夹放进 `data/pet/model/` 就会自动识别（请使用你有权使用的模型）。
+- **桌宠**：Windows 上启动时自动出现在桌面右下角。背景不透明的话，双击 `pet_setup.bat` 安装 PySide6 后重启。默认形象是 Live2D 官方免费示例模型 Rice（金发、贝雷帽的小魔法师），`pet.preset: haru` 可以换回原来的 Haru。想换成自己的 Live2D 模型，把模型文件夹放进 `data/pet/model/` 就会自动识别（请使用你有权使用的模型）。
 - **小屋**：手机上在 Telegram bot 聊天框左边点“小屋”按钮，QQ 里给 TA 发 `/小屋`；电脑上浏览器打开 `http://127.0.0.1:8765`。手机小屋通过免费的 Cloudflare 临时隧道访问，程序会自动下载 `cloudflared`。
 - **开机自启**：双击 `autostart_on.bat`，或者发 `/autostart 开`。关闭用 `autostart_off.bat`。
 - **QQ 群**：ai-life 只管私聊。群里的角色是单独的程序 **[ai-life-group](https://github.com/star031104/ai-life-group)**：另一个 QQ 小号、另一个人设，一行命令部署，它会从这里的 NapCat 克隆一份给自己用，两边可以同时开。
@@ -181,7 +183,7 @@ python run.py setup                       # 配置向导；或者把 config.exam
 
 - 在 Windows“电源和睡眠”里，把**插电时的睡眠**改成“从不”，合上盖子时选“不采取任何操作”。程序运行时也会阻止系统自动睡眠（`keep_awake: true`）。
 - 打开开机自启。
-- 关机前在 start.bat 窗口按 **Ctrl+C**，TA 会跟你说一声再下线。
+- 关机前右键托盘图标 →“退出”，TA 会跟你说一声再下线（直接关机也会说）。
 
 ### 更新
 
@@ -319,7 +321,7 @@ llm:
 <details>
 <summary><b>日志里报 Conflict</b></summary>
 
-同一个 bot 同时在两个地方运行了。关掉多开的 start.bat 窗口；换过电脑的话，旧电脑上别再启动。
+同一个 bot 同时在两个地方运行了。同一台电脑上托盘只会开一个；换过电脑的话，旧电脑上别再启动。
 
 </details>
 
@@ -405,7 +407,8 @@ ai-life/
 │   └── TESTING.md         实机测试清单
 ├── tests/                 自动测试（python -m pytest tests）
 ├── get.ps1                一行命令部署（下载代码 + 运行 install.bat）
-├── install.bat · start.bat · selftest.bat · setup.bat · qq_setup.bat · llm.bat · pet_setup.bat   Windows 脚本
+├── tools/tray.pyw         托盘图标（start.bat 用它在后台运行，不开窗口）
+├── install.bat · start.bat · start_console.bat · selftest.bat · setup.bat · qq_setup.bat · llm.bat · pet_setup.bat   Windows 脚本
 ├── tools/env.bat          Windows 脚本共用：找到 .venv 或 conda 环境
 └── install.sh · start.sh  Linux / macOS 脚本
 ```

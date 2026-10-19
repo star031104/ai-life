@@ -105,6 +105,7 @@ qq:
   enabled: false
   ws_url: "ws://127.0.0.1:3001"   # NapCat 里开的“WebSocket 服务器”地址
   access_token: ""               # NapCat 里设的 token（没设就留空）
+  napcat_hidden: true            # NapCat 在后台跑（不开窗口，输出在 data/logs/napcat.log）
   napcat_autostart: true         # 开 start.bat 时 NapCat 没在运行，就顺便启动它（Windows）
   napcat_dir: ""                 # NapCat 文件夹，比如 D:\NapCat.Shell.Windows.Node（qq_setup 会写；空着就自动找）
   napcat_qq: 0                   # 她小号的 QQ 号：启动 NapCat 时用来快速登录，不用每次扫码（qq_setup 会写）
@@ -205,6 +206,7 @@ pet:
   on_top: true                # 总在最前
   width: 320
   height: 480
+  preset: rice                # 自带的形象：rice（金发小魔法师，默认）/ haru（原来那个）
   model: ""                   # 换自己的 Live2D 模型：把整个模型文件夹放进 data/pet/model/ 就会自动用（留空即可）；
                               # 里面有好几个模型时，这里写要用的那个，比如 角色名/xxx.model3.json
   scale: 1.0                  # 模型大小

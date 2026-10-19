@@ -101,7 +101,8 @@ def bot_uin(cfg, root: Path) -> int | None:
 
 
 def start_napcat(cfg) -> float | None:
-    """在新的最小化窗口里启动 NapCat。返回启动时间；没启动返回 None。"""
+    """启动 NapCat。默认在后台（不开窗口，输出写进 data/logs/napcat.log）；qq.napcat_hidden: false 就开一个最小化的窗口。
+    返回启动时间；没启动返回 None。"""
     if sys.platform != "win32":
         return None
     root = napcat_root(cfg)
@@ -116,17 +117,31 @@ def start_napcat(cfg) -> float | None:
     args = launch_args(launcher, uin)
     if set_auto_login(root, uin):
         log.info("已在 NapCat 里打开 %s 的自动登录（以后不用每次扫码）", uin)
-    # start 把第一个带引号的参数当窗口标题，所以整条命令自己拼（路径都加引号，防空格）
-    cmd = f'cmd /c start "NapCat" /min /D "{launcher.parent}" "{launcher.name}" ' + " ".join(args)
     import os
     env = dict(os.environ, **({"NAPCAT_QUICK_ACCOUNT": str(uin)} if uin else {}))
+    hidden = bool((cfg.get("qq") or {}).get("napcat_hidden", True))
+    data = Path(str(cfg.get("root") or ".")) / "data"
     try:
-        subprocess.Popen(cmd, cwd=str(launcher.parent), env=env,
-                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if hidden:            # 后台跑：没有黑窗口；要扫码时二维码图片照样会弹出来
+            (data / "logs").mkdir(parents=True, exist_ok=True)
+            out = open(data / "logs" / "napcat.log", "ab")
+            proc = subprocess.Popen(["cmd", "/c", launcher.name, *args], cwd=str(launcher.parent), env=env,
+                                    stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            try:
+                (data / "napcat.pid").write_text(str(proc.pid), encoding="utf-8")   # 托盘里“退出”时一起关掉
+            except OSError:
+                pass
+        else:
+            # start 把第一个带引号的参数当窗口标题，所以整条命令自己拼（路径都加引号，防空格）
+            cmd = f'cmd /c start "NapCat" /min /D "{launcher.parent}" "{launcher.name}" ' + " ".join(args)
+            subprocess.Popen(cmd, cwd=str(launcher.parent), env=env,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except OSError as e:
         log.warning("启动 NapCat 失败：%s", e)
         return None
-    log.info("已经帮你启动 NapCat（%s %s，任务栏里最小化的那个窗口）", launcher.name, " ".join(args))
+    log.info("已经帮你启动 NapCat（%s %s，%s）", launcher.name, " ".join(args),
+             "在后台运行，输出在 data/logs/napcat.log" if hidden else "任务栏里最小化的那个窗口")
     return time.time()
 
 
