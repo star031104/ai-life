@@ -99,7 +99,7 @@ class GroupBrain:
             text = "\n".join(ln.strip(" -•\t") for ln in text.splitlines() if RANGE_RE.match(ln.strip(" -•\t")))
             if self.valid_life(text):
                 break
-            log.info("今天的安排不像样，重排（第 %d 次）：%s", attempt + 1, text[:80])
+            logging.getLogger("aigroup.text.brain").info("今天的安排不像样，重排（第 %d 次）：%s", attempt + 1, text[:80])
         else:
             self.db.set(key + "_tried", True)                     # 连着 3 次不像样：今天不再重排（免得每 30 分钟白调 3 次）
             if not text:

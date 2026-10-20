@@ -78,6 +78,39 @@
 
 手动写也行：`llm.profiles` 是各个接口，`llm.routes.chat` 是群里说话按顺序用哪些（限流自动换下一个），和 ai-life 的写法一样。
 
+**13.0 推荐的一套（又强又便宜，大部分免费）**：
+
+| 用途（routes） | 用什么 | 花费 |
+| --- | --- | --- |
+| chat / helper / memory / night / vision | DeepSeek 的 `deepseek-flash`（能看图） | 按 token，极低；一张图不到 1 厘钱 |
+| image（日常的图） | 硅基流动 `Tongyi-MAI/Z-Image-Turbo` | 约 ¥0.04 / 张 |
+| image_ref（画她自己，带参考图） | 硅基流动 `Qwen/Qwen-Image-Edit-2509`，参考图放 `home/qq/data/avatar/`（1~3 张同一个虚拟形象） | 约 ¥0.3 / 张 |
+| embed（语义召回） | 硅基流动 `BAAI/bge-m3` | 免费 |
+| 语音转文字（net.asr） | 硅基流动 `FunAudioLLM/SenseVoiceSmall`（默认借上面硅基的 Key） | 免费 |
+| 搜索（net.tavily_key） | Tavily | 每月 1000 次免费 |
+
+图上的中文字（生日卡、表情包）是程序用 Pillow 叠上去的，Linux 服务器上要装中文字体：`sudo apt install fonts-noto-cjk`。
+
+### 她自己发语音（可选，服务器上本地合成）
+
+只在有人让她“发个语音 / 说句话听听”时发，固定一个合成音色，不克隆任何真人的声音：
+
+```bash
+.venv/bin/pip install sherpa-onnx
+cd home/qq && mkdir -p tts && cd tts
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_1.tar.bz2
+tar xf kokoro-int8-multi-lang-v1_1.tar.bz2
+```
+
+`home/qq/config.yaml` 里：
+
+```yaml
+net:
+  tts: {model_dir: tts/kokoro-int8-multi-lang-v1_1, sid: 46, speed: 1.0, per_day: 5}
+```
+
+`sid` 是音色编号（这个模型里 `zf_` 开头的是中文女声，45~52 左右，可以挨个试）。2 核的服务器合成一句要一两秒。
+
 ## 常见问题
 
 <details>
@@ -166,3 +199,7 @@ NapCat 会先用上次的登录“快速登录”；QQ 那边判定登录失效�
 - 程序和数据（群聊记录、对群友的印象）都在你自己的电脑上：`home/qq/data/`、`config.yaml`、`.env`、`napcat/` 都在 `.gitignore` 里。
 - 发给大模型的只有拼提示词需要的那部分：人设、最近的群聊、她对群友的印象和画像。画像里不记住址、电话、真名、学校公司全名这类隐私。
 - 只在白名单里的群说话；你私下的事她不知道，也不会在群里说。
+- 13.0：群友的话写进数据库前，手机号、身份证号、银行卡号、验证码、邮箱换成占位（`mask_pii`）；带聊天正文的日志只进
+  `home/qq/data/logs/`，不进 systemd 日志；`keep_days` 可以让原始消息只留一段时间；退群或者有人不想被记，
+  `python run.py qq forget-group 群号` / `forget-person 编号` 彻底删掉（备份在 `data/backup/`，要连备份一起清就删掉那几个文件）。
+- 往 GitHub 推之前：`git config core.hooksPath .githooks` 装上提交前的隐私扫描，`.privacy-words` 里写上自己的群号、朋友的名字。

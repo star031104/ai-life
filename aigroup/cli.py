@@ -41,8 +41,9 @@ async def _run():
     if secrets.migrate(cfg.root):                # config.yaml 里的明文密钥挪进 .env
         cfg = load_config()
     secrets.install_redaction(secrets.secret_values(cfg))
-    from aigroup.app import run, setup_file_logging
+    from aigroup.app import quiet_console_text, run, setup_file_logging
     log.info("日志也会写进 %s", setup_file_logging(cfg.root))
+    quiet_console_text(not cfg.get("log_text_console", False))
     return EXIT_NO_RESTART if await run(cfg) == "stop" else 0
 
 
@@ -167,6 +168,45 @@ def cmd_people(argv: list[str]) -> int:
     return 0
 
 
+def _forget(argv: list[str], what: str) -> int:
+    from aigroup.core.config import load_config, resolve
+    from aigroup.core.store import Store
+    from aigroup.memory.forget import forget_group, forget_person
+    if not argv or not argv[0].strip():
+        print(f"用法：python run.py <qq|wechat> forget-{what} 编号（{'群号 / 群 id' if what == 'group' else '群友编号，小屋“群里的人”里看'}）")
+        return 2
+    c = load_config()
+    db = Store(resolve(c, "data/group.db"))
+    key = argv[0].strip()
+    if what == "group" and key.endswith("@chatroom"):            # 微信群 id → 编号
+        import sqlite3
+        from pathlib import Path
+        ids = Path(c.root) / "data" / "wechat" / "ids.db"
+        row = sqlite3.connect(ids).execute("SELECT id FROM ids WHERE wxid=?", (key,)).fetchone() if ids.exists() else None
+        if not row:
+            print("没找到这个群")
+            return 1
+        key = str(row[0])
+    if not key.isdigit():
+        print("要写编号（数字）")
+        return 2
+    if "--yes" not in argv and input(f"真的要彻底删掉{'这个群' if what == 'group' else '这个人'}（{key}）在她这里的所有记录吗？输入 yes：").strip() != "yes":
+        print("没删")
+        return 1
+    n = (forget_group if what == "group" else forget_person)(db, int(key))
+    print("删掉了：" + ("、".join(f"{k} {v} 条" for k, v in n.items() if v) or "（本来就没有）"))
+    print("data/backup/ 里的旧备份没动：要连备份一起清，把那几个文件删掉。服务器上的话，小管家的备份在 ~/ailife/backups/。")
+    return 0
+
+
+def cmd_forget_person(argv: list[str]) -> int:
+    return _forget(argv, "person")
+
+
+def cmd_forget_group(argv: list[str]) -> int:
+    return _forget(argv, "group")
+
+
 def cmd_llm(argv: list[str]) -> int:
     _quiet()
     from aigroup.llm.custom import main
@@ -252,6 +292,8 @@ COMMANDS = {
     "qqpass": ("存小号密码（只存 MD5）：QQ 说“身份已失效”时用密码登录，不用再扫码", cmd_qqpass),
     "llm": ("大模型接口：填地址和 Key → 测连通 → 列出模型选一个 → 试聊 → 加进路由", cmd_llm),
     "people": ("看看她心里群里每个人的样子（画像）", cmd_people),
+    "forget-person": ("彻底忘掉一个人：聊天记录、画像、事实……全删（python run.py qq forget-person 编号）", cmd_forget_person),
+    "forget-group": ("彻底忘掉一个群（退群以后用；python run.py wechat forget-group 群 id 或编号）", cmd_forget_group),
     "wxdiag": ("微信接入体检：版本、数据目录、密钥、能不能读到群消息、窗口、锁屏（有问题把输出发给 Claude）", cmd_wxdiag),
     "wxkeys": ("重新拿微信数据库的密钥（--deep：慢，但不挑微信版本）", cmd_wxkeys),
     "wxsend": ("试发一句：python run.py wxsend 群名 要说的话（发完在库里核对）", cmd_wxsend),

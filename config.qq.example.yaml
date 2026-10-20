@@ -26,6 +26,11 @@ quiet_hours: ""
 #   chat 群里说话；helper 其它小活；memory 整理对群友的印象；night 排她每天的安排（后两个不写就用 helper）；
 #   vision 看群里的图（要选能看图的模型，qq.group.see_images 打开时才用）
 #   image 画她偶尔晒的日常照片（OpenAI 兼容的 /images/generations，比如硅基流动的 Tongyi-MAI/Z-Image-Turbo；不写就不发照片）
+#   image_ref 画她自己（带参考图保持长相一致，比如硅基流动的 Qwen/Qwen-Image-Edit-2509；参考图放 data/avatar/，最多 3 张；不写就不画她自己）
+#   embed 算向量做语义召回（OpenAI 兼容的 /embeddings，比如硅基流动免费的 BAAI/bge-m3；不写就只用关键词）
+# 13.0 推荐（又强又便宜）：chat / helper / memory / night / vision 都用 DeepSeek 的 deepseek-flash（它能看图）；
+#   image 用硅基流动 Tongyi-MAI/Z-Image-Turbo；image_ref 用 Qwen/Qwen-Image-Edit-2509；embed 用 BAAI/bge-m3（免费）
+#   图里要写的中文字由程序用 Pillow 叠上去（不让画图模型写字），要有中文字体（Windows 自带；Linux 装 fonts-noto-cjk）
 llm:
   budget:                        # 每天的花费上限（人民币，按 token 估算，画图按张算）；到了上限后台的活先停，聊天再多一成也停，第二天恢复
     daily_cny: 0                 # 0 = 不限；三个她放一台服务器上时，三个都写同一个数、同一个 shared_file，就是三个加起来的上限
@@ -45,6 +50,8 @@ llm:
     helper: []
     vision: []
     image: []
+    image_ref: []
+    embed: []
 
 
 # ---------------- 小屋（网页） ----------------
@@ -80,7 +87,7 @@ qq:
     learn: true                  # 跟着群里学说话方式和黑话（小屋“学到的”页可以点不用）
     plan_json: true              # 先想再说：大模型先写想法、选回哪条、说多长，再写要发的话
     profile_every: 15            # 某个人又说了这么多句，就更新一次她心里这个人的画像（称呼、性格、说话风格、近况……）
-    see_images: false            # 群里的图片要不要让看图模型看（会多花调用次数）
+    see_images: true             # 群里的图片要不要让看图模型看（没配 routes.vision 就不看；一张图只看一次）
     typing_chars_per_sec: 6      # 打字速度（每秒几个字）
     # 像真人的小细节（一般不用改）：
     pace: 1.0                    # 下面这些等待时间的倍数（0＝全部立刻回）
@@ -114,7 +121,7 @@ qq:
     people_aliases: {}
     #   "2206某某": "某某、阿某"
     #   "某个昵称": "小名"
-    memory_embed_model: ""       # 语义召回的向量模型（要装 sentence-transformers），空 = 只用关键词
+    memory_embed_model: ""       # 本机向量模型（要装 sentence-transformers）；配了 llm.routes.embed 就走接口（推荐，硅基流动 bge-m3 免费）
     # 联网（4.0）：读链接、不知道的先搜一搜、记住查到的东西
     read_links: true
     web_search: true

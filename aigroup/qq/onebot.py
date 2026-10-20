@@ -75,6 +75,11 @@ def image_seg(data: bytes, sticker: bool = False) -> dict:
     return {"type": "image", "data": d}
 
 
+def record_seg(data: bytes) -> dict:
+    """13.0 发语音（wav / mp3 的字节；NapCat 自己转成 QQ 的格式）。"""
+    return {"type": "record", "data": {"file": "base64://" + base64.b64encode(data).decode()}}
+
+
 def face_seg(fid: int) -> dict:
     return {"type": "face", "data": {"id": str(fid)}}
 
@@ -87,6 +92,7 @@ class Flat:
     reply_id: int | None = None          # 引用了哪条消息
     images: list[str] = field(default_factory=list)      # 图片 URL
     record: str | None = None            # 语音（NapCat 给的 file 名）
+    record_url: str | None = None        # 13.0 语音的下载地址（有的话）
     ats: list[str] = field(default_factory=list)         # @ 了谁（QQ 号字符串）
     stickers: list[str] = field(default_factory=list)    # 表情包图片的 URL（会被她“偷”来用）
     sticker_files: list[str] = field(default_factory=list)  # 表情包的文件名（多半是 md5，用来认出“同一张”）
@@ -145,6 +151,7 @@ def flatten(message, self_id: int | None, names: dict[str, str] | None = None) -
             parts.append(f"[表情包{(':' + d['summary'].strip('[]')) if d.get('summary') else ''}]")
         elif t == "record":
             f.record = d.get("file") or d.get("path") or d.get("url")
+            f.record_url = d.get("url") if str(d.get("url") or "").startswith("http") else None
             parts.append("[语音]")
         elif t == "video":
             parts.append("[视频]")

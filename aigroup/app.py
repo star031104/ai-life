@@ -27,6 +27,22 @@ def setup_file_logging(root: Path) -> Path:
     return p
 
 
+class _NoChatText(logging.Filter):
+    """13.0 控制台（服务器上就是 systemd 日志）不写聊天正文：aigroup.text 这个 logger 记的是大模型原文、她的想法、
+    群友说的话，只进她家里的日志文件（data/logs/group.log，小屋“日志”页看的就是它），不进 journald / syslog。
+    config.yaml 里写 log_text_console: true 可以让控制台也显示（自己电脑上调试用）。"""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not record.name.startswith("aigroup.text")
+
+
+def quiet_console_text(enabled: bool = True):
+    for h in logging.getLogger().handlers:
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler):
+            if enabled and not any(isinstance(f, _NoChatText) for f in h.filters):
+                h.addFilter(_NoChatText())
+
+
 def single_instance(path: Path):
     """同一个角色只能跑一个（不然两个进程抢着回话）。拿到锁返回打开的文件（要一直留着）；已经有一个在跑返回 None。"""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +110,7 @@ async def record_own(gc, ev: dict):
     if text:
         gc._record(gid, int(gc.ob.self_id or 0), gc.brain.persona.name, text, ev.get("message_id"), role="assistant",
                    ts=float(ev.get("time") or 0) or None)
-        log.info("群 %s：记下了她的号在别处说的「%s」", gid, text[:30])
+        logging.getLogger("aigroup.text").info("群 %s：记下了她的号在别处说的「%s」", gid, text[:30])
 
 
 async def run(cfg):

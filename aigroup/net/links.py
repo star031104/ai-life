@@ -332,6 +332,13 @@ class LinkReader:
         title = (p.meta.get("og:title") or p.meta.get("twitter:title") or p.title or "").strip()
         desc = (p.meta.get("og:description") or p.meta.get("description") or p.meta.get("twitter:description") or "").strip()
         body = p.body(self.max_chars)
+        try:                                   # 13.0 装了 trafilatura 就用它抠正文（广告、导航去得更干净），没装用自己的
+            import trafilatura  # type: ignore
+            tb = trafilatura.extract(html, include_comments=False, include_tables=False, favor_precision=True) or ""
+            if len(tb.strip()) >= 40:
+                body = re.sub(r"\s+", " ", tb).strip()[:self.max_chars]
+        except Exception:  # noqa: BLE001
+            pass
         if not title and not body:
             raise RuntimeError("页面里没读到内容（可能要登录）")
         if re.search(r"安全验证|人机验证|验证码|captcha|just a moment|attention required|请登录|登录后", title, re.I):

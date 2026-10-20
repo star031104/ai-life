@@ -12,6 +12,7 @@ python -m pip install -U pip
 echo "[2/3] 安装依赖"
 pip install -r requirements.txt || pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install lunar_python || echo "（农历库没装上，不影响使用）"
+pip install trafilatura || echo "（trafilatura 没装上，不影响使用：读网页用自带的办法）"
 echo "[3/3] 检查 ffmpeg（看动图 / 视频、听 B 站视频要用）"
 command -v ffmpeg >/dev/null 2>&1 || echo "  没找到 ffmpeg：Ubuntu/Debian 运行 sudo apt install ffmpeg；macOS 运行 brew install ffmpeg"
 if [ ! -f "home/$T/config.yaml" ]; then

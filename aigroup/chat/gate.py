@@ -187,6 +187,21 @@ def labeled_rows(db, since: float = 0.0) -> list[tuple[dict, float, float]]:
             out.append((f, 1.0 if r["score"] >= 0.6 else 0.0, 1.0))
         elif r["llm_skip"] and r["outcome"] in (None, "skip"):
             out.append((f, 0.0, 0.5))
+    # 13.0：没过门槛的也能有标签——你在小屋里标的（最准，权重 2）；拿不准时问出来的“不 / 等”（弱标签，权重 0.3）
+    try:
+        extra = db.conn.execute("SELECT id, feats, human, judge FROM qq_gate_log WHERE mentioned=0 AND ts>? AND "
+                                "(human IN (0, 1) OR (passed=0 AND judge IN ('skip', 'wait')))", (since,)).fetchall()
+    except Exception:  # noqa: BLE001
+        extra = []
+    for r in extra:
+        try:
+            f = json.loads(r["feats"] or "{}")
+        except ValueError:
+            continue
+        if r["human"] in (0, 1):
+            out.append((f, float(r["human"]), 2.0))
+        else:
+            out.append((f, 0.0, 0.3))
     return out
 
 
@@ -328,6 +343,8 @@ class GateLog:
         ensure_columns(db.conn, "qq_gate_log", {
             "kind": "TEXT NOT NULL DEFAULT ''",          # 2.0：大模型判断的类别 I1 / I2 / S1 / S2
             "explore": "INTEGER NOT NULL DEFAULT 0",     # 2.0.1：本该拦下、随机放行的一小部分（重新拟合时纠正选样偏差）
+            "judge": "TEXT NOT NULL DEFAULT ''",         # 13.0 拿不准时问的那一个字：say / wait / skip
+            "human": "INTEGER",                          # 13.0 你在小屋“标注”里判的：1 该说、0 不该说（最准的标签）
         })
         db.conn.commit()
 
@@ -341,11 +358,13 @@ class GateLog:
             "SELECT p, spoke FROM qq_gate_log WHERE group_id=? AND ts>? AND mentioned=0", (gid, now - WINDOW)).fetchall()
         return [float(r["p"]) for r in rows], sum(int(r["spoke"]) for r in rows)
 
-    def add(self, gid: int, mentioned: bool, p: float, thr: float, passed: bool, feats: dict, explore: bool = False) -> int:
+    def add(self, gid: int, mentioned: bool, p: float, thr: float, passed: bool, feats: dict, explore: bool = False,
+            judge: str = "") -> int:
         cur = self.db.conn.execute(
-            "INSERT INTO qq_gate_log(ts, group_id, mentioned, p, threshold, passed, feats, explore) VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO qq_gate_log(ts, group_id, mentioned, p, threshold, passed, feats, explore, judge) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             (time.time(), gid, int(mentioned), round(p, 4), round(thr, 4), int(passed),
-             json.dumps({k: round(float(v), 4) for k, v in feats.items()}), int(explore)))
+             json.dumps({k: round(float(v), 4) for k, v in feats.items()}), int(explore), judge or ""))
         self.db.conn.commit()
         return int(cur.lastrowid)
 

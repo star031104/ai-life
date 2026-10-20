@@ -29,6 +29,7 @@ from aigroup.chat.trace import new_trace
 from aigroup.qq.onebot import face_for, image_seg, reply_seg, text_seg
 
 log = logging.getLogger("aigroup.group")
+tlog = logging.getLogger("aigroup.text.group")       # 13.0 带聊天正文的：只进她家里的日志文件，不进控制台
 SOFT_BLOCK = 6.0          # 5.0 罚分到这么多：没被叫到就不说了；被叫到就让她重写一次
 
 
@@ -150,7 +151,7 @@ class SpeakMixin:
         self._record(gid, self.ob.self_id or 0, self.brain.persona.name, text, mid, role="assistant")
         st.last_reply_ts = time.time()
         st.replies.append(st.last_reply_ts)
-        log.info("群 %s：跟着复读了「%s」", gid, text)
+        tlog.info("群 %s：跟着复读了「%s」", gid, text)
         return True
 
     def human_delay(self, gid: int, key: str, scale: float) -> float:
@@ -221,9 +222,26 @@ class SpeakMixin:
         if (not ok and not mentioned and not quiet and why.startswith("不太想插话") and talk > 0
                 and random.random() < float(self.gk(gid).get("explore_rate", 0.02))):
             ok, explore, why = True, True, f"随机试一次（{why}）"      # 少量放行本该拦下的：以后重新拟合时不偏
+        judged = ""
+        if (not ok and not mentioned and not quiet and why.startswith("不太想插话") and talk > 0 and texts
+                and self.gk(gid).get("gate_judge", True) and p >= thr - float(self.gk(gid).get("gate_judge_band", 0.15))
+                and self._allow(f"judge_{gid}", int(self.gk(gid).get("gate_judge_per_hour", 20)))):
+            try:
+                judged = await self.quick_judge(gid)       # 13.0 拿不准：问一下便宜模型“说 / 等 / 不”
+            except asyncio.CancelledError:                 # 问的时候又来了新消息：这批留给下一轮
+                st.batch_texts = texts + st.batch_texts
+                st.batch_owner = st.batch_owner or owner
+                st.batch_callers = callers + st.batch_callers
+                st.batch_guess = st.batch_guess or guess
+                return
+            if judged == "say":
+                ok, explore, why = True, True, f"拿不准，问了一下：说（{p:.2f} / 阈值 {thr:.2f}）"
+            elif judged == "wait" and texts:
+                st.wait = {"uid": int(texts[-1][1]), "until": now + 150}
+                log.info("群 %s：拿不准，先等等看 %s 还说不说", gid, texts[-1][1])
         gate_id = None
         if texts and not quiet:
-            gate_id = self.gate.add(gid, mentioned, p, thr, ok, feats, explore=explore)
+            gate_id = self.gate.add(gid, mentioned, p, thr, ok, feats, explore=explore, judge=judged)
         if not ok:
             log.debug("群 %s：不说话（%s）", gid, why)
             if not mentioned and texts and not quiet and random.random() < float(self.gk(gid).get("react_chance", 0)):
@@ -285,13 +303,22 @@ class SpeakMixin:
 
     async def speak(self, gid: int, mentioned: bool, owner_spoke: bool, trigger: int | None, who: str,
                     why: str | None = None, note: str = "", interest: bool = False, gate_id: int | None = None,
-                    focus: list[int] | None = None, query: str = "", last_is_sticker: bool = False, web: str = "") -> bool:
-        """问大模型、质检、发。why 为空 = 在接群友的话（跳过时才算进退避）；冒泡、欢迎新人、小屋 nudge 会给 why。"""
+                    focus: list[int] | None = None, query: str = "", last_is_sticker: bool = False, web: str = "",
+                    must: bool = False, _rethink: int = 0) -> bool:
+        """问大模型、质检、发。why 为空 = 在接群友的话（跳过时才算进退避）；冒泡、欢迎新人、小屋 nudge 会给 why。
+        must：生日、约好的事、打气这类“这次一定要说”的，不受每天主动开口的预算限制，新消息来了也照样说（会重新想）。"""
         b = self.brain
         st = self._st(gid)
         start = time.time()
         trace = new_trace(gid)
         replying = why is None and not mentioned
+        cap = int(self.gk(gid).get("unprompted_per_day", 0) or 0)
+        if not mentioned and not must and cap and self.unprompted_today(gid) >= cap:      # 13.0 每天主动开口的总预算（插话、冒泡、分享共用）
+            log.info("群 %s：今天主动说的够多了（%d 次），这次不说", gid, cap)
+            self.gate.mark(gate_id, spoke=False)
+            return False
+        last_id = int(self.db.conn.execute("SELECT IFNULL(MAX(id), 0) m FROM qq_group_messages WHERE group_id=?",
+                                           (gid,)).fetchone()["m"])
         if why is None and not web:                                   # 接群友话时：有她得先查一下的事就搜一搜
             texts = []
             for r in reversed(list(self._rows(gid, 6))):     # 只看她上次说话以后的新消息（问过的不再重复搜）
@@ -303,7 +330,32 @@ class SpeakMixin:
                                              query=query, focus=focus, web=web)
         raw = await b.llm.chat(messages, role=str(self.gk(gid).get("route") or "chat"),
                                json_mode=bool(self.gk(gid).get("plan_json", True)))
-        log.info("群 %s 原文：%s", gid, raw)
+        tlog.info("群 %s 原文：%s", gid, raw)
+        fresh = self.db.conn.execute("SELECT COUNT(*) n, IFNULL(MAX(to_her), 0) h FROM qq_group_messages "
+                                     "WHERE group_id=? AND role='user' AND id>?", (gid, last_id)).fetchone()
+        if fresh["n"] and (fresh["h"] or fresh["n"] >= int(self.gk(gid).get("rethink_min_new", 2))):
+            if why is not None and not mentioned and not must:  # 冒泡、分享时群里突然热闹了：这句不说了，照常看新消息
+                log.info("群 %s：想说的时候群里来了 %d 条新消息，这句先不说", gid, fresh["n"])
+                self.gate.mark(gate_id, spoke=False)
+                return False
+            if _rethink < int(self.gk(gid).get("rethink_max", 2)):
+                # 13.0 想好了还没发、群里又说了几句（或者有人叫她）：带上新消息重新想（MaiBot 的“新消息打断重想”）
+                log.info("群 %s：还没发出去就来了 %d 条新消息，重新想一遍", gid, fresh["n"])
+                if st.batch_mentioned:
+                    mentioned, who = True, who or st.batch_who
+                    trigger = trigger or st.batch_trigger
+                owner_spoke = owner_spoke or st.batch_owner
+                if st.batch_callers:
+                    note += ("（刚才又有人叫你：" + "；".join(f"{n}：「{t}」" for n, t in st.batch_callers[-4:])
+                             + "，都回应到）")
+                st.batch_mentioned = st.batch_owner = False
+                st.batch_trigger, st.batch_who, st.batch_texts, st.batch_callers, st.batch_guess = None, "", [], [], ""
+                new = [int(r["user_id"]) for r in self.db.conn.execute(
+                    "SELECT user_id FROM qq_group_messages WHERE group_id=? AND role='user' AND id>?", (gid, last_id))]
+                return await self.speak(gid, mentioned=mentioned, owner_spoke=owner_spoke, trigger=trigger, who=who,
+                                        why=why, note=note, interest=interest, gate_id=gate_id,
+                                        focus=list(dict.fromkeys([*(focus or []), *new])), query=self._recent_text(gid),
+                                        last_is_sticker=last_is_sticker, web=web, must=must, _rethink=_rethink + 1)
         mb = int(self.gk(gid)["max_bubbles"])
         use_plan = bool(self.gk(gid).get("plan_json", True))
         tmap = self._tmap.get(gid, {}) if use_plan else {}
@@ -341,7 +393,7 @@ class SpeakMixin:
         elif plan is not None:
             kind = plan["kind"]
             if plan["think"]:
-                log.info("群 %s 她想（%s）：%s", gid, kind or "-", plan["think"])
+                tlog.info("群 %s 她想（%s）：%s", gid, kind or "-", plan["think"])
             nxt = plan.get("next")
             if nxt and isinstance(nxt, dict):
                 try:
@@ -489,6 +541,24 @@ class SpeakMixin:
             self._record(gid, self.ob.self_id or 0, b.persona.name, plain, mid, role="assistant")
             sent_ids.append(mid)
             sent_txt.append(plain)
+        # ---- 13.0 有人让她“发语音 / 说句话听听”：把第一句也发成语音（本地合成，固定的合成音色） ----
+        vo = getattr(self, "voice", None)
+        if (sent_txt and mentioned and not interrupted and vo is not None and getattr(self.ob, "can_voice", True)
+                and self.gk(gid).get("voice_reply", True)):
+            from aigroup.net.voice import ASK_VOICE
+            vkey = f"qq_voice_{self.brain.now():%Y-%m-%d}"
+            if ASK_VOICE.search(query or "") and vo.ready and int(self.db.get(vkey, 0) or 0) < vo.per_day:
+                audio = await vo.synth(sent_txt[0])
+                if audio:
+                    from aigroup.qq.onebot import record_seg
+                    try:
+                        mid = await self.ob.send_group(gid, [record_seg(audio)])
+                        self._record(gid, self.ob.self_id or 0, b.persona.name, f"[语音：{sent_txt[0]}]", mid,
+                                     role="assistant")
+                        self.db.set(vkey, int(self.db.get(vkey, 0) or 0) + 1)
+                        sent_ids.append(mid)
+                    except Exception as e:  # noqa: BLE001
+                        log.info("语音没发出去：%s", e)
         # ---- 表情包：跟在文字后面，一次最多一张；别人刚发表情包时不拿表情包回 ----
         if (sticker and self.gk(gid).get("stickers", True) and not last_is_sticker and not interrupted
                 and (sent_ids or not bubbles)):
@@ -558,7 +628,7 @@ class SpeakMixin:
                 bb = [x for x in (AT_RE.sub("", y).strip() for y in bb) if x]
             if bb:
                 out.append(bb)
-        log.info("群 %s 重写：%s", gid, raw2)
+        tlog.info("群 %s 重写：%s", gid, raw2)
         return out
 
     def avoid_words(self, gid: int, focus: list[int] | None, target: int | None) -> list[str]:
@@ -572,6 +642,31 @@ class SpeakMixin:
                 if 2 <= len(w) <= 6:
                     out.append(w)
         return out[:12]
+
+    def unprompted_today(self, gid: int) -> int:
+        """今天她在这个群主动开口了几次（插话、冒泡、分享；被叫到的不算）。"""
+        now = self.brain.now()
+        t0 = now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        return int(self.db.conn.execute("SELECT COUNT(*) n FROM qq_reply_effect WHERE group_id=? AND mentioned=0 AND ts>=?",
+                                        (gid, t0)).fetchone()["n"])
+
+    async def quick_judge(self, gid: int) -> str:
+        """13.0 本地门控拿不准时：把最近十几句给便宜模型，只要一个字——说 / 等 / 不。返回 say / wait / skip（出错按 skip）。"""
+        p = self.brain.persona
+        hist = self.transcript(gid, 14)
+        prompt = (f"下面是{p.name}所在的群最近的聊天（“你”是{p.name}）。最后几句之后，{p.name}要不要接一句？\n"
+                  "只回一个字：\n说＝这话其实是冲你来的（问你、接你刚说的、在说你），或者你接一句很自然、有具体的话可说；\n"
+                  "等＝话还没说完、或者在等别人回，先别插；\n不＝跟你无关、两个人在聊、插进去会突兀。\n\n" + hist)
+        try:
+            out = await self.brain.llm.chat([{"role": "user", "content": prompt}], role="gate", temperature=0.0,
+                                            max_tokens=16)
+        except Exception as e:  # noqa: BLE001
+            log.info("问要不要说失败：%s", e)
+            return "skip"
+        out = (out or "").strip()
+        verdict = "say" if out.startswith("说") else "wait" if out.startswith("等") else "skip"
+        log.info("群 %s：拿不准，问了一下 → %s", gid, out[:4])
+        return verdict
 
     def _last_user_mid(self, gid: int):
         last = self.db.conn.execute("SELECT qq_msg_id FROM qq_group_messages WHERE group_id=? AND role='user' "

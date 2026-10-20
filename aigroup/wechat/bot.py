@@ -237,6 +237,7 @@ def send_problem(d, chat: str, titles: dict | None = None) -> str:
 class WeChatBot:
     can_react = False                     # 微信不能给消息点表情（chat/ 据此不让大模型选“点表情”）
     can_quote = False                     # 也不能引用回复（reply 段直接丢掉）
+    can_voice = False                     # 13.0 也不能发语音（窗口操作发不了语音文件）
     history_by_id = True                  # 补消息时只按消息 id 去重（历史就是本地库，id 稳定）
     prompt_hint = ("\n- 微信的小表情可以直接写成 [捂脸]、[旺柴]、[破涕为笑]、[裂开]、[奸笑] 这种，粘进去就是表情"
                    "（偶尔用，一条里最多一个）。")

@@ -12,4 +12,4 @@
     eval/                            回放、评审、每周评测
 渠道看 config.yaml 的 channel: qq / wechat（python run.py qq / wechat 会帮你选好）。
 """
-__version__ = "5.0.0"            # 12.0 起和有希合成一个仓库（ai-life）；QQ 群版 4.4 / 微信版 2.10 合并
+__version__ = "6.0.0"            # 13.0：群聊 6.0（12.0 起和有希合成一个仓库 ai-life）

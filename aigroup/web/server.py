@@ -92,6 +92,10 @@ class GroupHome:
         r.add_post("/api/group/norms", self.group_norms)
         r.add_get("/api/pairs/next", self.pairs_next)
         r.add_post("/api/pairs/answer", self.pairs_answer)
+        r.add_get("/api/label/next", self.label_next)          # 13.0 金标准集：这一刻她该不该开口
+        r.add_post("/api/label/answer", self.label_answer)
+        r.add_get("/api/person/versions", self.person_versions)  # 13.0 画像的历史版本
+        r.add_post("/api/person/restore", self.person_restore)
         r.add_post("/api/lore", self.lore_set)
         r.add_post("/api/knowledge", self.knowledge_set)
         r.add_get("/api/life", self.life)                      # 她的日子
@@ -403,6 +407,7 @@ class GroupHome:
                 "note": prof.get("印象") or (r["note"] if r else ""), "msgs": spoke,
                 "last_seen": r["last_seen"] if r else None, "updated": r["updated"] if r else None,
                 "since_update": r["since_update"] if r else 0, "hours": hours, "when": active_time(hours),
+                "fp": self.gc.fingerprint_of(uid, gid) if hasattr(self.gc, "fingerprint_of") else "",
                 "partners": self._partners(gid, uid),
                 "found_her": self._q("SELECT COUNT(*) n FROM qq_group_messages WHERE user_id=? AND group_id=? "
                                      "AND role='user' AND (content LIKE '@你%' OR content LIKE '[回复你的%' "
@@ -447,6 +452,7 @@ class GroupHome:
             gids = [int(gid)] if gid else []
         js = json.dumps(prof, ensure_ascii=False)
         for g in gids:
+            self.gc.save_profile_version(uid, int(g), "web")             # 13.0 改之前存一份
             self.db.conn.execute(
                 "INSERT INTO qq_profiles(user_id, group_id, profile, note, since_update, updated) VALUES (?,?,?,?,0,?) "
                 "ON CONFLICT(user_id, group_id) DO UPDATE SET profile=excluded.profile, note=excluded.note, "
@@ -839,6 +845,44 @@ class GroupHome:
         except (KeyError, TypeError, ValueError):
             return web.json_response({"ok": False, "error": "参数不对"}, status=400)
         return web.json_response({"ok": True, "stats": pair_stats(self.db)})
+
+    async def label_next(self, req):
+        from aigroup.eval.label import next_moment, stats
+        return web.json_response({"moment": next_moment(self.db, self._gid(req), self.gc.cfg.tz), "stats": stats(self.db)})
+
+    async def label_answer(self, req):
+        d = await self._json(req)
+        from aigroup.eval.label import answer, stats
+        try:
+            lab = d.get("label")
+            answer(self.db, int(d["id"]), None if lab in (None, "", "skip") else int(lab))
+        except (KeyError, TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "参数不对"}, status=400)
+        return web.json_response({"ok": True, "stats": stats(self.db)})
+
+    async def person_versions(self, req):
+        from aigroup.memory.style import profile_diff
+        uid, gid = int(req.query.get("uid") or 0), int(req.query.get("gid") or 0)
+        cur = self.gc.person(uid, gid) or {}
+        now = dict(cur.get("profile") or {})
+        out = []
+        for v in self.gc.profile_versions(uid, gid):
+            out.append({**v, "diff": profile_diff(v["profile"], now)})      # 从这一版到现在改了什么
+            now = v["profile"]
+        return web.json_response({"versions": out})
+
+    async def person_restore(self, req):
+        d = await self._json(req)
+        try:
+            uid, gid, vid = int(d["uid"]), int(d["gid"]), int(d["id"])
+        except (KeyError, TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "参数不对"}, status=400)
+        r = self._q("SELECT profile FROM qq_profile_versions WHERE id=? AND user_id=? AND group_id=?", (vid, uid, gid))
+        if not r:
+            return web.json_response({"ok": False, "error": "没有这一版"})
+        self.gc._set_profile(uid, gid, json.loads(r[0]["profile"]), "web")
+        self.db.conn.commit()
+        return web.json_response({"ok": True, "message": "退回去了（现在这份也存了一版，想反悔还能再退）"})
 
     # ---------------- 群梗词条 ----------------
     async def knowledge_set(self, req):

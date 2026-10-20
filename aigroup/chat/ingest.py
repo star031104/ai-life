@@ -19,12 +19,16 @@ from aigroup.memory.stickers import sticker_key
 from aigroup.qq.onebot import fetch_bytes, flatten
 
 log = logging.getLogger("aigroup.group")
+tlog = logging.getLogger("aigroup.text.group")
 
 
 class IngestMixin:
     def _record(self, gid: int, uid: int, name: str, text: str, mid=None, role: str = "user",
                 to_her: bool = False, reply_to: int | None = None, ts: float | None = None) -> int:
         now = float(ts) if ts else time.time()
+        if role == "user" and self.g.get("mask_pii", True):        # 13.0 入库即脱敏（手机号、证件号、卡号、验证码、邮箱）
+            from aigroup.core.safety import mask_pii
+            text = mask_pii(text)
         cur = self.db.conn.execute(
             "INSERT INTO qq_group_messages(ts, group_id, user_id, name, role, content, qq_msg_id, to_her, reply_to) "
             "VALUES (?,?,?,?,?,?,?,?,?)", (now, gid, uid, name, role, text[:500], mid, int(to_her), reply_to))
@@ -104,9 +108,14 @@ class IngestMixin:
         called = self._called(text)             # 只看他自己打的字（不看引用的内容、图片描述）
         st = self._st(gid)
         if f.images and self.gk(gid).get("see_images") and self.brain.llm.vision:
-            desc = await self._look(f.images[0])
+            desc = await self._look(f.images[0], name, gid)
             if desc:
-                text = text.replace("[图片]", f"[图片：{clean_member_text(desc, 80)}]", 1)
+                text = text.replace("[图片]", f"[图片：{clean_member_text(desc, 100)}]", 1)
+        if (f.record and self.gk(gid).get("hear_voice", True) and getattr(self, "hearing", None) is not None
+                and self.hearing.ready and self._allow(f"hear_{gid}", 30)):
+            heard = await self._hear(f.record, getattr(f, "record_url", None))     # 13.0 听懂语音（免费的 SenseVoice）
+            if heard:
+                text = text.replace("[语音]", clean_member_text(heard, 160), 1)
         reply_to_her = False
         if f.reply_id:
             row = self.db.conn.execute(
@@ -147,7 +156,7 @@ class IngestMixin:
             if how:
                 st.batch_guess = f"{how}:{name}"      # 5.0 没 @ 她，但多半是冲她说的 / 在说她：这一批一定看一眼
                 meta["guess"] = how
-                log.info("群 %s：%s 这句%s：%s", gid, name, "多半是在跟她说" if how == "to" else "在说她",
+                tlog.info("群 %s：%s 这句%s：%s", gid, name, "多半是在跟她说" if how == "to" else "在说她",
                          clean_member_text(f.text, 40))
         if f.mentioned:
             text = "@你 " + text
@@ -327,13 +336,38 @@ class IngestMixin:
                 self.stickers.save_file(key, data)
                 log.info("存了一张群里常用的表情包（%s）", key[:8])
 
-    async def _look(self, url: str) -> str:
+    async def _hear(self, file: str | None, url: str | None) -> str:
+        from aigroup.net.voice import voice_text, wav_seconds
+        try:
+            data = await self.hearing.fetch_qq(self.ob, file, url)
+            if not data:
+                return ""
+            txt, tags = await self.hearing.hear(data)
+        except Exception as e:  # noqa: BLE001
+            log.info("语音没听清：%s", e)
+            return ""
+        return voice_text(txt, tags, wav_seconds(data))
+
+    async def _look(self, url: str, who: str = "群友", gid: int | None = None) -> str:
         data = await fetch_bytes(url)
         if not data:
             return ""
         import base64
+        import hashlib
+
+        from aigroup.llm.client import GROUP_IMAGE_PROMPT
+        key = "qq_img_" + hashlib.md5(data).hexdigest()[:16]            # 同一张图（转发、复读）只看一次
+        old = self.db.get(key)
+        if old:
+            return str(old)
+        names = "、".join(self.member_names(gid)[:12]) if gid is not None and hasattr(self, "member_names") else ""
         try:
-            return (await self.brain.llm.describe_image(base64.b64encode(data).decode(), ""))[:80]
+            desc = (await self.brain.llm.describe_image(
+                base64.b64encode(data).decode(), "",
+                prompt=GROUP_IMAGE_PROMPT.format(who=who, names=names or "（不知道）")))[:100]
+            if desc:
+                self.db.set(key, desc)
+            return desc
         except Exception as e:  # noqa: BLE001
             log.info("群图片没看清：%s", e)
             return ""

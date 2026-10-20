@@ -42,6 +42,8 @@ from aigroup.chat.trace import Tracer
 from aigroup.core.store import ensure_columns
 from aigroup.eval.weekly import EvalMixin
 from aigroup.memory.digest import DigestMixin
+from aigroup.memory.style import SCHEMA as STYLE_SCHEMA
+from aigroup.memory.style import StyleMixin
 from aigroup.memory.facts import Memory
 from aigroup.memory.learn import Learner
 from aigroup.memory.lore import Lore
@@ -75,7 +77,7 @@ MSG_COLUMNS = {"to_her": "INTEGER NOT NULL DEFAULT 0",   # 这条是在叫她（
 
 
 class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, PromptMixin, PeopleMixin, DigestMixin,
-                NetMixin, GrowMixin, EvalMixin):
+                NetMixin, GrowMixin, EvalMixin, StyleMixin):
     """她在群里的一切：收消息 → 判断要不要说 → 说 → 看效果；空闲时冒泡、整理记忆。
 
     这个类只负责把各部分装起来、放共用的小工具；具体的活在各个 Mixin 里（见文件开头的说明）。
@@ -110,7 +112,7 @@ class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, Pr
             if isinstance(o, dict):
                 self.gover[gid] = {k: v for k, v in o.items() if k in KNOBS and k not in GLOBAL_ONLY}
         self.state: dict[int, GroupState] = {}
-        self.db.conn.executescript(SCHEMA + PEOPLE_SCHEMA + EFFECT_SCHEMA)
+        self.db.conn.executescript(SCHEMA + PEOPLE_SCHEMA + EFFECT_SCHEMA + STYLE_SCHEMA)
         ensure_columns(self.db.conn, "qq_people", PEOPLE_COLUMNS)
         ensure_columns(self.db.conn, "qq_group_messages", MSG_COLUMNS)
         self.db.conn.commit()
@@ -118,7 +120,7 @@ class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, Pr
         self.gate = GateLog(self.db)
         self.learner = Learner(self.db, brain)
         from aigroup.memory.facts import load_embedder
-        self.memory = Memory(self.db, cfg.tz, load_embedder(str(self.g.get("memory_embed_model") or "")))
+        self.memory = Memory(self.db, cfg.tz, load_embedder(str(self.g.get("memory_embed_model") or ""), cfg))
         from pathlib import Path
         self.stickers = Stickers(self.db, Path(cfg.root))
         self.tracer = Tracer(self.db)
@@ -130,6 +132,9 @@ class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, Pr
         self.links = LinkReader(cfg, brain)                 # 读群友发的链接
         self.web = WebSearch(cfg)                           # 不知道的先搜一搜
         self.knowledge = Knowledge(self.db)
+        from aigroup.net.voice import Hearing, Voice
+        self.hearing = Hearing(cfg)                         # 13.0 听懂群友的语音
+        self.voice = Voice(cfg)                             # 13.0 她偶尔发语音（服务器本地合成）
         from aigroup.net.photo import PhotoMaker
         self.photos = PhotoMaker(cfg, self.db, brain.persona, int(self.g.get("photo_per_day", 1)))
         self.photos.llm = brain.llm   # 偶尔晒照片
@@ -188,6 +193,17 @@ class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, Pr
                 if m and _dt.strptime(m.group(1), "%Y-%m-%d").timestamp() < cutoff:
                     self.db.conn.execute("DELETE FROM kv WHERE k=?", (k,))
             self.db.conn.execute("DELETE FROM qq_reply_effect WHERE ts<?", (time.time() - 180 * 86400,))
+            keep = int(self.g.get("keep_days", 0) or 0)
+            if keep > 0:                                        # 13.0 原始消息只留这么多天（事实和画像不受影响）
+                old = time.time() - keep * 86400
+                self.db.conn.execute("DELETE FROM qq_embed WHERE msg_id IN (SELECT id FROM qq_group_messages WHERE ts<?)", (old,))
+                n_old = self.db.conn.execute("DELETE FROM qq_group_messages WHERE ts<?", (old,)).rowcount
+                if n_old:
+                    log.info("清掉了 %d 条 %d 天以前的群消息", n_old, keep)
+            n_img = self.db.conn.execute("SELECT COUNT(*) FROM kv WHERE k LIKE 'qq_img_%'").fetchone()[0]
+            if n_img > 3000:                                    # 看过的图的描述：太多了就清掉一半（只是缓存）
+                self.db.conn.execute("DELETE FROM kv WHERE k IN (SELECT k FROM kv WHERE k LIKE 'qq_img_%' LIMIT ?)",
+                                     (n_img // 2,))
             self.db.conn.commit()
         except Exception as e:  # noqa: BLE001
             log.info("清理旧数据出错：%s", e)

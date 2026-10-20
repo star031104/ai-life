@@ -87,6 +87,7 @@ if errorlevel 1 (
 )
 echo     Optional packages ^(lunar calendar^). Errors here are OK ...
 pip install lunar_python %MIRROR%
+pip install trafilatura %MIRROR%
 
 rem ---------- 3. ffmpeg ----------
 echo [3/4] Checking ffmpeg ^(used to look at GIFs / videos you send^) ...

@@ -20,7 +20,7 @@ DEFAULTS = {
     "impression_every": 40,        # 每个群每攒这么多条群友消息，整理一次印象、群梗，顺便学说话方式
     "profile_every": 15,           # 某个人又说了这么多句，就更新一次她心里这个人的画像
     "route": "chat",               # 用哪条模型路线（llm.routes 里的名字）
-    "see_images": False,           # 群里的图片要不要让看图模型看（会多花调用次数）
+    "see_images": True,            # 群里的图片要不要让看图模型看（13.0 默认开：deepseek-flash 看一张不到 1 厘钱；没配 vision 就不看）
     "owner_note": "把你拉进群的老朋友，爱和你互损",   # 她怎么看你（wechat.owner 那个人）
     "learn": True,                 # 跟着群里学说话方式和黑话（memory/learn.py）
     "plan_json": True,             # 先想再说：大模型先写想法、选回哪条、说多长，再写正文
@@ -63,7 +63,7 @@ DEFAULTS = {
     "catch_up": True,              # 接上微信后补上她不在时群里说的话（重启、关机、微信没开期间；直接从本地库里读）
     "catch_up_count": 200,         # 每个群往回最多补多少条
     "people_aliases": {},          # 3.0.3 群友的别名（真名、外号）：{"群名片或昵称或微信号": "别名、别名"}；这里新加的启动时补进去，小屋里能改
-    "memory_embed_model": "",      # 语义召回用的向量模型（要装 sentence-transformers；比如 BAAI/bge-small-zh-v1.5），空 = 只用关键词
+    "memory_embed_model": "",      # 本机的向量模型（要装 sentence-transformers）；配了 llm.routes.embed（比如硅基流动免费的 BAAI/bge-m3）就走接口，不用这个
     # —— 联网（net/）——
     "read_links": True,            # 群友发的链接 / 分享卡片点开看（标题、简介、正文开头），不用假装看过
     "web_search": True,            # 被问到她可能不知道的事（是什么 / 讲了什么 / 最新……）先搜一搜
@@ -92,6 +92,19 @@ DEFAULTS = {
     "merge_bubbles": True,         # 两条都很短、或者最近老是分两条发：合成一条发（大多数时候一条）
     "stale_hours": 3,              # 她自己的口头禅、招牌梗这么多小时内不重复
     "pending_reply_minutes": 20,   # 重启前有人 @ 她还没回：重启后这么多分钟以内的补回
+    # —— 13.0 开口更像人 ——
+    "gate_judge": True,            # 本地门控拿不准（差一点到阈值）时，问一下便宜模型“说 / 等 / 不”（只回一个字）
+    "gate_judge_band": 0.15,       # 离阈值这么近算“拿不准”
+    "gate_judge_per_hour": 20,     # 每个群每小时最多问几次
+    "unprompted_per_day": 40,      # 每个群每天主动开口（插话、冒泡、分享，不算被叫到）最多几次；0 = 不限
+    "rethink_max": 2,              # 想好要说的话、还没发出去时群里又来了新消息：重新想（最多几次）
+    "rethink_min_new": 2,          # 新来了这么多条（或者有人叫她）才重新想
+    "hear_voice": True,            # 群友发的语音转成文字（带情绪、笑声）再给她看（QQ；默认用硅基流动免费的 SenseVoice）
+    "voice_reply": True,           # 有人让她“发语音 / 说句话听听”时发一条语音（要配 net.tts，QQ 才能发）
+    "plans_cheer": True,           # 群友自己的事（考试、面试、比赛）开始前几个小时给他打个气（每件事一次）
+    "birthday_card": True,         # 群友生日：祝完再发一张生日卡（要配画图接口；字是程序叠上去的）
+    "mask_pii": True,              # 群友的话写进数据库前把手机号、身份证号、银行卡号、验证码、邮箱换成占位
+    "keep_days": 0,                # 原始群消息留多少天（0 = 一直留；整理出的事实和画像不受影响）
 }
 
 # 渠道不一样、默认值不一样的几个（QQ 能点表情、能戳一戳，补消息少补一点；微信做不到点表情和戳）
@@ -156,6 +169,13 @@ KNOBS = {
     "group_note": ("关于这个群的交代", "str", None, None, None, "写给她看的一两句话，比如“大家互称 X 总”“别提考研”"),
     "guess_to_her": ("没 @ 也接追问", "bool", None, None, None, "她刚说完，同一个人接着说“你……”或接她的话：当成在跟她说"),
     "celebrate": ("生日和节日说一声", "bool", None, None, None, "生日在“她的日子”里填；节日按日历（节气只算冬至）"),
+    "gate_judge": ("拿不准时问一下", "bool", None, None, None, "差一点就想插话时，让便宜模型判断“说 / 等 / 不”（只回一个字）"),
+    "unprompted_per_day": ("每天主动开口最多几次", "int", 0, 200, 5, "插话、冒泡、分享加起来，不算被叫到；0 = 不限"),
+    "rethink_max": ("新消息来了重新想几次", "int", 0, 3, 1, "想好了还没发、群里又说了几句：重新想一遍再发"),
+    "hear_voice": ("听群友的语音", "bool", None, None, None, "转成文字、带上情绪和笑声（免费的 SenseVoice）"),
+    "voice_reply": ("让她说话时发语音", "bool", None, None, None, "要配本地语音合成 net.tts；QQ 才能发"),
+    "plans_cheer": ("事前打个气", "bool", None, None, None, "考试、面试、比赛开始前几个小时说一句加油"),
+    "birthday_card": ("生日发贺卡", "bool", None, None, None, "祝完生日再发一张画的贺卡（要配画图接口）"),
 }
 
 

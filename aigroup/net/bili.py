@@ -154,13 +154,17 @@ class ASR:
         self.enabled = bool(c.get("enabled", True)) and bool(self.key)
         self.max_minutes = int(c.get("max_minutes", 20))
 
-    async def one(self, data: bytes, name: str = "a.mp3", mime: str = "audio/mpeg") -> str:
+    async def one_raw(self, data: bytes, name: str = "a.mp3", mime: str = "audio/mpeg") -> str:
+        """原样返回（SenseVoice 会带表示情绪、笑声的 emoji，13.0 的语音消息要用）。"""
         import httpx
         async with httpx.AsyncClient(timeout=60) as cli:
             r = await cli.post(f"{self.base}/audio/transcriptions", headers={"Authorization": f"Bearer {self.key}"},
                                files={"file": (name, data, mime)}, data={"model": self.model})
             r.raise_for_status()
-            return EMOJI_RE.sub("", str(r.json().get("text") or "")).strip()
+            return str(r.json().get("text") or "")
+
+    async def one(self, data: bytes, name: str = "a.mp3", mime: str = "audio/mpeg") -> str:
+        return EMOJI_RE.sub("", await self.one_raw(data, name, mime)).strip()
 
     async def transcribe(self, audio: bytes, seconds: int) -> str:
         """一分钟一段，带时间（要 ffmpeg）；没有 ffmpeg 就整段转（只转 10 分钟以内的）。"""

@@ -317,8 +317,25 @@ class GrowMixin:
         day_key = f"qq_plans_n_{gid}_{self.brain.now():%Y-%m-%d}"
         if int(self.db.get(day_key, 0) or 0) >= int(g.get("plans_per_day", 3)):
             return False
+        hour = self.brain.now().hour
         for p in self.plans(gid):
             due = float(p["due"])
+            # 13.0 事前打个气：某个人自己的事（考试、面试、比赛）开始前 3~18 小时、白天，说一句（每件事一次）
+            if (p["kind"] == "ask" and p["user_id"] and g.get("plans_cheer", True) and 8 <= hour < 23
+                    and due - 18 * 3600 <= now <= due - 3 * 3600 and not self.db.get(f"qq_plan_cheer_{p['id']}")):
+                self.db.set(f"qq_plan_cheer_{p['id']}", now)
+                self.db.set(day_key, int(self.db.get(day_key, 0) or 0) + 1)
+                when = datetime.fromtimestamp(due, self.cfg.tz)
+                day = "今天" if when.date() == self.brain.now().date() else "明天"
+                why = (f"{p['who']}{day}要「{p['what']}」。像朋友那样给他打个气，一句话（可以带点只有你们懂的梗），"
+                       f"别太正式、别问他准备得怎么样、别给建议（想 @ 他就写 [@{p['who']}]）")
+                async with st.lock:
+                    try:
+                        await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who=p["who"], why=why,
+                                         must=True)
+                    except Exception as e:  # noqa: BLE001
+                        log.info("群 %s 打气失败：%s", gid, e)
+                return True
             if p["kind"] == "remind":
                 ready = due - 45 * 60 <= now <= due + 15 * 60
                 late = now > due + 15 * 60
@@ -343,7 +360,8 @@ class GrowMixin:
                        f"（关心，别查户口；他不想说就算了）{at}")
             async with st.lock:
                 try:
-                    await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who=p["who"], why=why)
+                    await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who=p["who"], why=why,
+                                     must=True)
                 except Exception as e:  # noqa: BLE001
                     log.info("群 %s 提醒失败：%s", gid, e)
             return True
@@ -651,7 +669,7 @@ class GrowMixin:
         self.db.set(key, True)
         md = f"{now:%m-%d}"
         since = time.time() - 90 * 86400
-        who = []
+        who, who_ids = [], []
         for uid, d in self.birthdays().items():
             if d != md:
                 continue
@@ -659,6 +677,7 @@ class GrowMixin:
                                      "ORDER BY id DESC LIMIT 1", (gid, int(uid), since)).fetchone()
             if r:                                           # 只在他常待的群里祝（别的群的人不认识他）
                 who.append(r["name"])
+                who_ids.append(int(uid))
         fest = self.festival(now.date())
         if not who and not fest:
             return False
@@ -672,11 +691,39 @@ class GrowMixin:
         why = "；".join(bits) + "。一两句话，这次一定要说"
         async with st.lock:
             try:
-                await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who=who[0] if who else "", why=why)
+                said = await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who=who[0] if who else "",
+                                        why=why, must=True)
             except Exception as e:  # noqa: BLE001
                 log.info("群 %s 祝生日 / 过节没说成：%s", gid, e)
                 return False
         log.info("群 %s：%s", gid, "祝了生日：" + "、".join(who) if who else "过节：" + fest)
+        if said and who and self._gk(gid).get("birthday_card", True):
+            await self.birthday_card(gid, st, who[0], who_ids[0])
+        return True
+
+    async def birthday_card(self, gid: int, st, name: str, uid: int = 0) -> bool:
+        """13.0 生日卡：画一张和他的兴趣有关的图，中文祝福由程序叠在图上（画图模型不写字）；不占每天的照片名额。"""
+        photo = getattr(self, "photos", None)
+        if photo is None or not photo.gen.ready:
+            return False
+        uid = uid or next((int(k) for k, v in self.names(gid).items() if v == name), 0)
+        prof = ((self.person(uid, gid) or {}).get("profile") or {}) if uid else {}
+        likes = re.split(r"[，,、；;/\s]+", str(prof.get("兴趣") or ""))[:2]
+        scene = ("一张温馨可爱的生日贺卡插画：生日蛋糕、蜡烛、彩带" + (f"，画面里有和「{'、'.join(x for x in likes if x)}」有关的小元素"
+                                                              if any(likes) else "") + "，明亮的暖色调，留出下方空白")
+        data = await photo.make(scene, with_self=photo.can_draw_self, text=f"{name}，生日快乐！", count=False)
+        if not data:
+            return False
+        from aigroup.qq.onebot import image_seg
+        async with st.lock:
+            try:
+                mid = await self.ob.send_group(gid, [image_seg(data)])
+                self._record(gid, self.ob.self_id or 0, self.brain.persona.name, f"[图片：给{name}画的生日卡]", mid,
+                             role="assistant")
+            except Exception as e:  # noqa: BLE001
+                log.info("群 %s 生日卡没发出去：%s", gid, e)
+                return False
+        log.info("群 %s：给 %s 发了生日卡", gid, name)
         return True
 
     # ================= 小屋“她的日子”用 =================

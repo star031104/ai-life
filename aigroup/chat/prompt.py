@@ -31,11 +31,14 @@ class PromptMixin:
         n = n or int(self.gk(gid)["context_messages"])
         rows = self._rows(gid, n)
         lines, prev, tmap = [], None, {}
+        now_dt = datetime.fromtimestamp(time.time(), self.cfg.tz)
         for i, r in enumerate(rows, 1):
             t = datetime.fromtimestamp(r["ts"], self.cfg.tz)
-            if prev and r["ts"] - prev > 3 * 3600:
-                lines.append(f"（……过了 {int((r['ts'] - prev) / 3600)} 个多小时）")
+            if prev and r["ts"] - prev > 3600:                     # 13.0 隔了一小时以上就写出来（以前是 3 小时）
+                gap = r["ts"] - prev
+                lines.append(f"（……过了 {int(gap / 3600)} 个多小时）" if gap >= 2 * 3600 else "（……过了一个多小时）")
             prev = r["ts"]
+            stamp = f"{t:%H:%M}" if t.date() == now_dt.date() else f"{t:%m-%d %H:%M}"   # 不是今天的带上日期
             if r["role"] == "assistant":
                 who, content = "你", r["content"]
             else:
@@ -47,9 +50,13 @@ class PromptMixin:
             if numbered:
                 tmap[i] = {"mid": r["qq_msg_id"], "uid": r["user_id"], "name": r["name"], "role": r["role"],
                            "last": i == len(rows), "id": r["id"]}
-                lines.append(f"#{i} [{t:%H:%M}] {who}：{content}")
+                lines.append(f"#{i} [{stamp}] {who}：{content}")
             else:
-                lines.append(f"[{t:%H:%M}] {who}：{content}")
+                lines.append(f"[{stamp}] {who}：{content}")
+        if rows and time.time() - rows[-1]["ts"] > 30 * 60:              # 最后一条已经是一阵子以前的了：别说成“刚才”
+            ago = time.time() - rows[-1]["ts"]
+            lines.append(f"（最后这条是 {int(ago / 3600)} 个多小时以前的了）" if ago >= 3600
+                         else f"（最后这条是 {int(ago / 60)} 分钟以前的了）")
         if numbered:
             self._tmap[gid] = tmap
         return "\n".join(lines)
@@ -150,6 +157,9 @@ class PromptMixin:
             wh = getattr(self, "where", None)
             if wh is not None and self.g.get("weather", True) and not just_met:
                 line += wh.note(uid)                          # 4.4 在哪、那边天气（刚认识的不写：她不该知道）
+            fp = self.fingerprint_of(uid, gid) if hasattr(self, "fingerprint_of") else ""
+            if fp:
+                line += f"；打字习惯：{fp}"                      # 13.0 每晚统计的，比“说话风格”更准
             if st.attention.get(uid) >= 0.3:
                 line += "（你们刚才正聊着）"
             out.append(line)
@@ -272,6 +282,7 @@ class PromptMixin:
 {SPOTLIGHT_NOTE}
 - 不聊政治，不掺和吵架，不打探、不说别人的隐私。拿不准的事（新闻、作品细节）别编：下面有你刚搜到的、你知道的就照着说，
   没有就说不知道、或者说“我去看看”。群友发的链接你点开看过的（消息后面的 [链接：…]）可以接着聊内容。不发链接。
+- 消息里的 [图片：…] 是你看图时记下的：写着“把握低”的，你不确定图里说的是谁，别当真、别点名，想知道就问一句。
 - 要发的话里不要用 markdown、列表、括号里的动作描写，不要“名字：”前缀和时间。{getattr(self.ob, "prompt_hint", "")}"""
         gnote = str(self.gk(gid).get("group_note") or "").strip()
         learned = self.learner.prompt_block(gid, hist) if self.gk(gid).get("learn", True) else ""
@@ -295,6 +306,7 @@ class PromptMixin:
             (f"# 你是怎样的人（这几个月慢慢长出来的）\n{self.db.get(f'qq_selfcore_{gid}')}"
              if self.db.get(f"qq_selfcore_{gid}") else ""),
             (self.prefs_block() if hasattr(self, "prefs_block") else ""),
+            (self.style_block(gid) if hasattr(self, "style_block") else ""),
             (f"# 你自己说过的事（要和这些保持一致）\n{self_txt}" if self_txt else ""),
             (f"# 这一周的你（你自己回想的，最近的小变化）\n{self.db.get(f'qq_reflect_{gid}')}"
              if self.db.get(f"qq_reflect_{gid}") else ""),

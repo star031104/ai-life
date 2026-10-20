@@ -22,7 +22,7 @@ IMPRESSION_CHARS = 50
 PROFILE_MEMORIES = 8
 MEMORY_CHARS = 80
 
-PROFILE_FIELDS = ["称呼", "性格", "说话风格", "口头禅", "兴趣", "近况", "群里关系", "和你", "怎么聊", "别碰", "记得的事"]
+PROFILE_FIELDS = ["称呼", "性格", "说话风格", "口头禅", "兴趣", "看法", "近况", "群里关系", "和你", "怎么聊", "别碰", "记得的事"]
 
 
 def familiarity(msgs: int, mentions: int) -> str:
@@ -51,7 +51,7 @@ def profile_line(name: str, prof: dict, fam: str, when: str, owner_note: str = "
         bits.append(owner_note)
     if p.get("印象"):
         bits.append(str(p["印象"]))
-    for k in ("称呼", "性格", "说话风格", "口头禅", "兴趣", "近况", "群里关系", "和你", "怎么聊"):
+    for k in ("称呼", "性格", "说话风格", "口头禅", "兴趣", "看法", "近况", "群里关系", "和你", "怎么聊"):
         if p.get(k):
             bits.append(f"{k}：{p[k]}")
     if p.get("记得的事"):
@@ -225,7 +225,12 @@ class PeopleMixin:
         return [int(r["group_id"]) for r in self.db.conn.execute(
             "SELECT group_id FROM qq_profiles WHERE user_id=?", (uid,)).fetchall()]
 
-    def _set_profile(self, uid: int, gid: int, prof: dict):
+    def _set_profile(self, uid: int, gid: int, prof: dict, source: str = ""):
+        if hasattr(self, "save_profile_version"):              # 13.0 改之前存一份旧的（小屋里能看、能退回）
+            try:
+                self.save_profile_version(uid, gid, source)
+            except Exception:  # noqa: BLE001
+                pass
         js = json.dumps(prof, ensure_ascii=False)
         note = str(prof.get("印象") or "")[:80]
         now = time.time()

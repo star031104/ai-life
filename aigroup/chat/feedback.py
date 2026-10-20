@@ -147,6 +147,13 @@ class FeedbackMixin:
                 await self.weekly_eval()                           # 4.3 每周一：拿真实聊天评一次分
             except Exception as e:  # noqa: BLE001
                 log.info("每周评测出错：%s", e)
+        if hasattr(self, "update_fingerprints"):
+            try:                                                   # 13.0 说话指纹、她自己的风格审计（只统计，不花钱）
+                nfp = self.update_fingerprints()
+                nst = self.style_audit(yday)
+                log.info("每晚统计：%d 个人的打字习惯；%d 个群里她有要注意的说话毛病", nfp, nst)
+            except Exception as e:  # noqa: BLE001
+                log.info("统计说话习惯出错：%s", e)
         if hasattr(self, "update_closeness"):
             try:
                 self.update_closeness(yday)                        # 昨天和她聊过的人熟一点

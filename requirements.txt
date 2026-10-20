@@ -9,5 +9,7 @@ zstandard>=0.22                                     # 微信群：微信 4.x 压
 
 # 可选（install.bat / install.sh 会单独装，装不上也不影响）：
 #   lunar_python                       农历节日、节气
+#   trafilatura                        读网页正文更干净（13.0）
+#   sherpa-onnx                        她在服务器上本地合成语音（13.0，还要下载 Kokoro 模型，见 docs）
 pystray>=0.19; sys_platform == "win32"     # 托盘图标（start.bat 不开黑窗口）
-Pillow>=9.0; sys_platform == "win32"
+Pillow>=9.0                                         # 托盘图标；13.0 起图上叠中文字也用它

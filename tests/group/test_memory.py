@@ -113,6 +113,32 @@ def test_digest_writes_facts_norms_and_ignores_orders(cfg, brain):
     assert "不成文的规矩" in m[0]["content"] and "答辩" in m[1]["content"]          # 每次都变的放 user（缓存）
 
 
+def test_digest_numbered_lines_without_tags(cfg, brain):
+    """13.0：模型把“5. 事|…”写成“5. 编号|…”、印象行带名字，也要认出来（以前事实表一直是 0 条）。"""
+    class D(FakeLLM):
+        async def chat(self, messages, **kw):
+            if "更新你对每个群友的印象" in messages[-1]["content"]:
+                return (f"1. {FRIEND}|小王|嘴毒但靠谱，最近在赶论文\n2. 群|说好下次订民宿一人一道菜\n"
+                        "3. 规|互损很狠全是玩笑\n4. 我|我说话都有算法依据\n"
+                        f"5. {FRIEND}|投了虾皮，对方主动要简历|-\n5. 群|说好下次订民宿一人做一道菜|-\n"
+                        "6. 梗|这是人类/嘴太毒|调侃 AI 不像人\n7. 好|贝岗村|近又便宜")
+            return await super().chat(messages, **kw)
+    brain.llm = D()
+    gc, ob = _gc(cfg, brain)
+    gc._record(GROUP, FRIEND, "小王", "我投了虾皮", 1)
+    asyncio.run(gc.digest([GROUP]))
+    assert {f["text"] for f in gc.memory.facts(GROUP)} == {"投了虾皮，对方主动要简历", "说好下次订民宿一人做一道菜"}
+    assert "民宿" in brain.db.get(f"qq_group_notes_{GROUP}") and "玩笑" in brain.db.get(f"qq_group_norms_{GROUP}")
+    assert gc.person(FRIEND, GROUP)["note"].startswith("嘴毒但靠谱")
+    assert gc.prefs().get("贝岗村")
+
+
+def test_normalize_digest_lines():
+    from aigroup.memory.digest import normalize_digest_lines
+    out = normalize_digest_lines("- 事|1|a|-\n5. 10008|b|-\n1. 10003|x\n8. 群|民宿|2026-10-25|提醒\n9、10003|广州|-|住\n\n")
+    assert out == ["事|1|a|-", "事|10008|b|-", "10003|x", "约|群|民宿|2026-10-25|提醒", "在|10003|广州|-|住"]
+
+
 def test_memory_recall_and_replace(cfg, brain):
     gc, ob = _gc(cfg, brain)
     m: Memory = gc.memory

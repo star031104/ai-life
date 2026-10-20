@@ -1,8 +1,8 @@
 """上网查一下：她不知道的东西（这是什么、谁、哪本书讲了什么、最近的新闻比分……）先搜一搜再说。
 
 按顺序试，哪个先给出“对得上”的结果就用哪个：
+- Tavily（config.yaml 的 net.tavily_key 填了才用；每月 1000 次免费；13.0 起填了 Key 就先用它，net.tavily_first: false 改回兜底）
 - 百度、360、搜狗（都不用 Key；像浏览器一样先打开首页拿 cookie 再搜，国内服务器直连就能用）
-- Tavily（config.yaml 的 net.tavily_key 填了才用；每月 1000 次免费，前面几个都不行时兜底）
 只拿标题和摘要，最多几条；不点开结果页（点开交给 links.py，只读群友发的链接）。
 结果里一个查询词都没出现（被风控时会给一堆不相干的）就当没搜到，换下一个。
 """
@@ -70,6 +70,7 @@ class WebSearch:
         c = dict(cfg.get("net") or {})
         self.enabled = bool(c.get("search", True))
         self.tavily_key = str(c.get("tavily_key") or "").strip()
+        self.tavily_first = bool(c.get("tavily_first", True))      # 13.0 配了 Key 就先用 Tavily（结果干净，服务器上不会被风控）
         self.proxy = cfg.get("proxy") or None
         self.timeout = float(c.get("search_timeout", 12))
         self._cache: dict[str, list[dict]] = {}
@@ -104,8 +105,10 @@ class WebSearch:
         if q in self._cache:
             return self._cache[q]
         res: list[dict] = []
-        tries = [(e[0], (lambda e=e: self._engine(*e, q, n))) for e in ENGINES] + \
-            ([("Tavily", lambda: self._tavily(q, n))] if self.tavily_key else [])
+        tries = [(e[0], (lambda e=e: self._engine(*e, q, n))) for e in ENGINES]
+        if self.tavily_key:
+            tav = ("Tavily", lambda: self._tavily(q, n))
+            tries = [tav] + tries if self.tavily_first else tries + [tav]
         for name, fn in tries:
             try:
                 got = await fn()

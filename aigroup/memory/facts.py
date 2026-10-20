@@ -112,7 +112,72 @@ class Embedder:
         return np.asarray(v, dtype="float32")
 
 
-def load_embedder(name: str):
+class APIEmbedder:
+    """13.0：用接口算向量（OpenAI 兼容的 /embeddings，比如硅基流动免费的 BAAI/bge-m3），不用在本机装模型。
+    config.llm.yaml 里 routes.embed 写一个接口就启用。召回时查询句的向量是同步算的：超时很短，失败就只用关键词。"""
+
+    def __init__(self, profile: dict, timeout: float = 2.5):
+        self.base = str(profile.get("base_url") or "").rstrip("/")
+        self.key = str(profile.get("api_key") or "")
+        self.model = str(profile.get("model") or "BAAI/bge-m3")
+        self.timeout = float(profile.get("timeout", timeout) or timeout)
+        self.proxy = profile.get("_proxy")
+        self._cache: dict[str, object] = {}
+        self._down_until = 0.0
+
+    def encode(self, texts: list[str]):
+        import httpx
+        import numpy as np  # type: ignore
+        texts = [str(t or " ")[:500] or " " for t in texts]
+        if len(texts) == 1 and texts[0] in self._cache:
+            return np.asarray([self._cache[texts[0]]], dtype="float32")
+        if len(texts) == 1 and time.time() < self._down_until:      # 接口刚出过错：聊天时先别等它
+            raise RuntimeError("向量接口暂时不可用")
+        try:
+            return self._encode(texts, httpx, np)
+        except Exception:
+            if len(texts) == 1:
+                self._down_until = time.time() + 300
+            raise
+
+    def _encode(self, texts, httpx, np):
+        out = []
+        with httpx.Client(timeout=self.timeout if len(texts) == 1 else 60, proxy=self.proxy) as cli:
+            for i in range(0, len(texts), 32):
+                r = cli.post(f"{self.base}/embeddings", headers={"Authorization": f"Bearer {self.key}"},
+                             json={"model": self.model, "input": texts[i:i + 32], "encoding_format": "float"})
+                r.raise_for_status()
+                out += [d["embedding"] for d in sorted(r.json()["data"], key=lambda d: d.get("index", 0))]
+        v = np.asarray(out, dtype="float32")
+        v /= np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-6)
+        if len(texts) == 1:
+            if len(self._cache) > 256:
+                self._cache.clear()
+            self._cache[texts[0]] = v[0]
+        return v
+
+
+def embed_profile(cfg) -> dict | None:
+    """config 里 llm.routes.embed 的第一个接口（带上 Key）。没配返回 None。"""
+    llm = cfg.get("llm") or {}
+    names = list((llm.get("routes") or {}).get("embed") or [])
+    profiles = llm.get("profiles") or {}
+    for n in names:
+        p = dict(profiles.get(n) or {})
+        if not p:
+            continue
+        p["api_key"] = p.get("api_key") or (cfg.get("keys") or {}).get(p.get("key") or "", "")
+        if p.get("use_proxy") and cfg.get("proxy"):
+            p["_proxy"] = cfg.get("proxy")
+        if p.get("api_key") and p.get("base_url"):
+            return p
+    return None
+
+
+def load_embedder(name: str, cfg=None):
+    prof = embed_profile(cfg) if cfg is not None else None
+    if prof:
+        return APIEmbedder(prof)
     if not name:
         return None
     try:
@@ -230,6 +295,7 @@ class Memory:
             if not have:
                 return []
             qv = self.embedder.encode([query[-300:]])[0]
+            have = [i for i in have if len(got[ids[i]]) == len(qv)]     # 换过向量模型：老向量（长度不一样）不用
             sims = [(float(got[ids[i]] @ qv), i) for i in have]
             return [i for s, i in sorted(sims, reverse=True)[:k] if s > 0.35]
         except Exception:  # noqa: BLE001
@@ -245,6 +311,13 @@ class Memory:
         if not rows:
             return 0
         vecs = self.embedder.encode([r["content"][:300] for r in rows])
+        dim = int(vecs.shape[1]) if len(vecs) else 0
+        if dim and not getattr(self, "_dim_checked", False):        # 换过向量模型：长度不一样的老向量删掉，慢慢重算
+            self._dim_checked = True
+            n_old = self.db.conn.execute("DELETE FROM qq_embed WHERE length(vec)!=?", (dim * 4,)).rowcount
+            if n_old:
+                import logging
+                logging.getLogger("aigroup.memory").info("换了向量模型：%d 条老向量删掉重算", n_old)
         self.db.conn.executemany("INSERT OR REPLACE INTO qq_embed(msg_id, vec) VALUES (?,?)",
                                  [(r["id"], v.tobytes()) for r, v in zip(rows, vecs)])
         self.db.conn.commit()
