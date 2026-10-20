@@ -2,8 +2,7 @@
 
 - 私聊：只认 qq.owner_id（你自己的 QQ 号）。他的话写进聊天记录，再交给 chat/companion.py 回复；
   “/命令”包成 chat/command.py 的 Command 交给 Companion
-- 群聊不在这里：QQ 群里的角色是单独的程序 ai-life-group（https://github.com/star031104/ai-life-group），
-  用另一个 QQ 小号。这里收到的群消息一律不理
+- 群聊不在这里：QQ 群里的角色是 aigroup/（python run.py qq），用另一个 QQ 小号。这里收到的群消息一律不理
 """
 from __future__ import annotations
 

@@ -34,12 +34,13 @@ def pick_numbers(v: str, n: int) -> list[int]:
 
 def launch_hidden() -> None:
     """在后台启动她：wscript 跑 start.vbs（没有黑框，只有托盘图标）。"""
-    vbs = ROOT / "start.vbs"
+    from aigroup.core.config import CODE
+    vbs = CODE / "start.vbs"
     if sys.platform == "win32" and vbs.exists():
-        subprocess.Popen(["wscript.exe", str(vbs)], cwd=str(ROOT),
+        subprocess.Popen(["wscript.exe", str(vbs), "wechat"], cwd=str(CODE),
                          creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         return
-    subprocess.Popen(["cmd", "/c", str(ROOT / "start.bat"), "hidden"], cwd=str(ROOT),
+    subprocess.Popen(["cmd", "/c", str(CODE / "start.bat"), "wechat"], cwd=str(CODE),
                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
@@ -144,8 +145,8 @@ def build_config(old: dict, *, persona_file: str, keys: dict[str, str], owner: s
 
 
 def sibling_qq(root: Path = ROOT) -> Path | None:
-    """旁边装的 ai-life-group（QQ 群版），而且它配过大模型接口（config.llm.yaml）。"""
-    for d in (root.parent / "ai-life-group", root.parent.parent / "ai-life-group"):
+    """旁边的 QQ 群版（12.0 起是 home/qq；以前是旁边的 ai-life-group 文件夹），而且它配过大模型接口（config.llm.yaml）。"""
+    for d in (root.parent / "qq", root.parent / "ai-life-group", root.parent.parent / "ai-life-group"):
         try:
             if (d / "config.llm.yaml").exists() and d.resolve() != root.resolve():
                 return d
@@ -402,7 +403,8 @@ def main(argv: list[str] | None = None) -> int:
         pass
     print()
     if yes("开机自动启动她吗", False):
-        subprocess.run(["cmd", "/c", str(ROOT / "scripts" / "autostart_on.bat"), "nopause"], cwd=str(ROOT))
+        from aigroup.core.config import CODE
+        subprocess.run(["cmd", "/c", str(CODE / "scripts" / "autostart_on.bat"), "wechat", "nopause"], cwd=str(CODE))
     from aigroup.app import single_instance
     lk = single_instance(ROOT / "data" / "run.lock")
     if lk is None:                                           # 她正在跑：让她重启一下，用上新的设置

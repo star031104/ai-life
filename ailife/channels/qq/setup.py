@@ -38,7 +38,8 @@ def find_napcat_configs(roots: list[Path] | None = None) -> list[Path]:
         for g in NAPCAT_GLOBS:
             try:
                 for d in r.glob(g):
-                    if "ai-life-group" in str(d).lower() or d.name.lower().endswith("-group"):
+                    low = str(d).lower().replace("\\", "/")
+                    if "ai-life-group" in low or d.name.lower().endswith("-group") or "/home/qq/" in low + "/":
                         continue                         # 群聊角色（ai-life-group）那份 NapCat，是另一个号
                     for c in (d / "napcat" / "config", d / "config"):
                         if c.is_dir() and c not in found:

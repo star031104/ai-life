@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-from aigroup.core.config import ROOT
+from aigroup.core.config import CODE, ROOT
 from aigroup.core.util import ask, say, yes
 
 
@@ -241,11 +241,11 @@ def main(argv: list[str] | None = None) -> int:
     if sys.platform == "win32":
         print()
         if yes("开机自动启动她吗", False):
-            subprocess.run(["cmd", "/c", str(ROOT / "scripts" / "autostart_on.bat"), "nopause"], cwd=str(ROOT))
+            subprocess.run(["cmd", "/c", str(CODE / "scripts" / "autostart_on.bat"), "qq", "nopause"], cwd=str(CODE))
         if yes("现在就启动她吗", True):
-            subprocess.Popen(f'cmd /c start "ai-life-group" /min "{ROOT / "start.bat"}"', cwd=str(ROOT),
+            subprocess.Popen(["cmd", "/c", str(CODE / "start.bat"), "qq"], cwd=str(CODE),
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            say(True, "已经在任务栏里最小化的“ai-life-group”窗口里启动了。去群里 @ 她试试")
+            say(True, "已经启动了：任务栏右下角多了一个绿色的 G 图标。去群里 @ 她试试")
             return 0
-    print("以后双击 start.bat（Linux：bash start.sh）启动她。日志在 data/logs/group.log。")
+    print("以后双击 start.bat 选 2（或者 start.bat qq；Linux：bash start.sh qq）启动她。日志在 home/qq/data/logs/group.log。")
     return 0

@@ -136,7 +136,7 @@ def setup(root: Path = ROOT):
         from ailife.channels.qq.napcat_install import main as napcat_main
         if napcat_main([]) != 0:
             print("QQ 这一步没做完：弄好后双击 scripts\\qq_setup.bat 再来一次（已经下好的不会重新下载）。")
-    print("\n下一步：双击 start.bat（Linux / macOS：bash start.sh）启动"
+    print("\n下一步：双击 start.bat 选 1（或者 start.bat yuki；Linux / macOS：bash start.sh yuki）启动"
           + "，用你的 QQ 给她的小号发句话。")
 
 

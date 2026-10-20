@@ -170,7 +170,7 @@ async def notify(text: str) -> bool:
 def spend_today() -> dict:
     """三个程序今天各花了多少（人民币，按 llm_stats 里估算的美元），写进 budget.json 给三个程序看。"""
     day = now_cn().strftime("%Y-%m-%d")
-    c = (read_cfg(HOME / "ai-life").get("llm") or {}).get("budget") or {}
+    c = (read_cfg(bdir(BOTS[0])).get("llm") or {}).get("budget") or {}
     rate = float(c.get("usd_cny", 7.2) or 7.2)
     cap = float(os.environ.get("AILIFE_BUDGET") or c.get("daily_cny", 0) or 0)
     bots = {}

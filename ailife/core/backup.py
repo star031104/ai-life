@@ -26,6 +26,8 @@ def host_running(cfg) -> bool:
     """本机是不是正有她在运行（网页端口被占着就算）。"""
     port = int((cfg.get("web") or {}).get("port", 8765))
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if os.name != "nt":           # Linux：刚停掉的进程留下的 TIME_WAIT 连接不算“在运行”（Windows 上这个选项意思不一样，别设）
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         s.bind(("127.0.0.1", port))
         return False
