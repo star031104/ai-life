@@ -74,7 +74,7 @@ irm https://raw.githubusercontent.com/star031104/ai-life/main/get.ps1 | iex
 
 **4. 群里的她：进群前先“认识大家”**（可选，推荐）
 
-她刚进群时谁也不认识。双击 `scripts\onboard.bat wechat`（QQ 群就是 `scripts\onboard.bat qq`），一步步来：
+她刚进群时谁也不认识。双击 `scripts\onboard.bat`（默认是微信群；QQ 群在命令行里运行 `scripts\onboard.bat qq`），一步步来：
 
 1. **导出群里以前的聊天记录**（只读）：微信从电脑上开着的某个号读——一般选你自己的大号，它在群里待得最久；QQ 让她的 NapCat 往回翻每个群最近的消息。导出的文本在 `home\<名字>\data\export\`。
 2. **用你配的大模型整理成一份草稿** `home\<名字>\data\seed_draft.yaml`：每个群在聊什么、不成文的规矩、群梗，每个常说话的人的画像（大家怎么叫他、性格、说话风格、兴趣、近况、别碰的话题）；群友之间几乎不叫名字的群，顺手把“叫人名字”关掉。不记电话、住址、证件号。
