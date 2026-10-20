@@ -746,6 +746,7 @@ star:'<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.
 file:'<path d="M6 2h8l5 5v15H6Z"/><path d="M14 2v5h5"/>',route:'<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/>',
 plus:'<path d="M12 5v14M5 12h14"/>',x:'<path d="M6 6l12 12M18 6 6 18"/>',at:'<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>',
 clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',qq:'<path d="M12 3c3.5 0 5.5 2.6 5.5 6 0 1 .7 2 1.5 3.5s.5 3-.6 2.6c-.4 1-1 1.8-1.9 2.4.9.5 1.5 1 1.5 1.5 0 .8-2.2 1-4 1H10c-1.8 0-4-.2-4-1 0-.5.6-1 1.5-1.5-.9-.6-1.5-1.4-1.9-2.4-1.1.4-1.4-1.1-.6-2.6S6.5 10 6.5 9C6.5 5.6 8.5 3 12 3Z"/>',
+wechat:'<path d="M9.5 4C5.4 4 2 6.8 2 10.2c0 1.9 1 3.6 2.7 4.7L4 17.5l2.9-1.5c.8.2 1.7.4 2.6.4"/><path d="M15.5 9C19.1 9 22 11.4 22 14.3c0 1.6-.9 3-2.3 4l.6 2.2-2.5-1.3c-.7.2-1.5.3-2.3.3-3.6 0-6.5-2.4-6.5-5.2S11.9 9 15.5 9Z"/><path d="M7 8.5h0M12 8.5h0M13.5 13.5h0M17.5 13.5h0"/>',
 moonz:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>'};
 const icon=n=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]||""}</svg>`;
 function paintIcons(root=document){root.querySelectorAll("[data-i]").forEach(e=>{if(!e._i){e.innerHTML=icon(e.dataset.i);e._i=1}})}
@@ -830,14 +831,19 @@ async function loadState(){
   const p=S.persona;setAvatar(p);$("name").textContent=`${p.name}的群聊小屋`;document.title=`${p.name} · 群聊小屋`;
   const st=S.quiet?"sleep":S.busy?"busy":S.qq.ready?"on":"";
   ["ava","ava2"].forEach(id=>{$(id).className="ava"+(id==="ava2"?" big":"")+(st?" "+st:"")});
-  $("sub").textContent=(S.qq.ready?"在线":"微信没接上")+" · "+(S.quiet?"睡着了":noTime(S.activity)||S.mood);
+  const CH=S.channel==="wechat"?"wechat":"qq",CHN=CH==="wechat"?"微信":"QQ";
+  $("sub").textContent=(S.qq.ready?"在线":CHN+"没接上")+" · "+(S.quiet?"睡着了":noTime(S.activity)||S.mood);
   const h=new Date().getHours();
-  $("hello").textContent=S.quiet?`${p.name}睡着了`:`${p.name}此刻${S.busy?"在忙":"在线"}`;
+  $("hello").textContent=S.quiet?`${p.name}睡着了`:!S.qq.ready?`${p.name}掉线了`:`${p.name}此刻${S.busy?"在忙":"在线"}`;
   $("doing").textContent=S.activity?`正在：${noTime(S.activity)}`:`状态：${S.mood}`;
   const pills=[];
   const W=S.wechat||{};
-  pills.push(S.qq.ready?`<span class="pill ok">${icon("qq")}<b>${esc(S.qq.nick||"微信")}</b>${esc(S.qq.self_id||"")}</span>`
-    :`<span class="pill bad" title="${esc(W.error||"")}">${icon("qq")}${W.running===false?"微信没在运行":"微信没接上"}${W.error?"："+esc(String(W.error).slice(0,40)):""}</span>`);
+  const downHint=CH==="wechat"?(W.running===false?"微信没在运行":"微信没接上")
+    :"QQ 没接上（NapCat 断了？）";
+  const downTip=W.error||(CH==="wechat"?"打开微信并登录她的小号，会自动接上；还不行就跑 scripts\\wxdiag.bat"
+    :"程序会自己重连；NapCat 没了的话掉线 2 分钟后会自动重开。要扫码时二维码会弹出来，用她的小号扫；5 分钟还没好就看 data/logs/napcat.log，或托盘图标右键 → 重启");
+  pills.push(S.qq.ready?`<span class="pill ok" title="${CHN}">${icon(CH)}<b>${esc(S.qq.nick||CHN)}</b>${esc(S.qq.self_id||"")}</span>`
+    :`<span class="pill bad" title="${esc(downTip)}">${icon(CH)}${downHint}${W.error?"："+esc(String(W.error).slice(0,40)):""}</span>`);
   (W.groups||[]).filter(g=>g.problem).forEach(g=>pills.push(`<span class="pill bad" title="${esc(g.problem)}">「${esc(g.name)}」发不了：${esc(g.problem.slice(0,30))}…</span>`));
   (W.groups||[]).filter(g=>!g.window&&!g.problem).forEach(g=>pills.push(`<span class="pill ${W.search?"":"bad"}" title="在微信里双击这个群，让它单独开一个窗口（可以最小化，别关）">「${esc(g.name)}」没有单独窗口${W.search?"（用搜索发）":"，发不了消息"}</span>`));
   if(W.stats)pills.push(`<span class="pill" title="${esc(W.last_error||"")}">这小时发了 <b>${W.hour_sends||0}/${W.max_per_hour||"?"}</b>${W.stats.send_fail?` · 没发出去 <b>${W.stats.send_fail}</b>`:""}</span>`);

@@ -64,6 +64,8 @@ qq:
   napcat_qq: 0                   # 她的 QQ 小号（自动登录用；setup 会写）
   napcat_hidden: true            # NapCat 在后台跑（不开窗口，输出在 data/logs/napcat.log）
   napcat_autostart: true         # 启动时 NapCat 没开就帮你开
+  napcat_watchdog: true          # 运行中 QQ 掉线、NapCat 也没了：自动再开（最多连着 3 次）
+  napcat_restart_after: 120      # 掉线多少秒后才自动重开 NapCat
   group:
     owner_note: "把你拉进群的老朋友，爱和你互损"   # 她一开始怎么看你
     talkativeness: 0.3           # 话痨度 0~1：最近 1 小时里留给她的发言份额（她说多了会自动收紧；被叫到不受影响）

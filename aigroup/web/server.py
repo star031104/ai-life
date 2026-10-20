@@ -280,6 +280,7 @@ class GroupHome:
             "qq": {"ready": bool(self.ob.ready), "self_id": getattr(self.ob, "self_wxid", "") or self.ob.self_id,
                    "nick": self.nick, "ws": ""},
             "wechat": self._wechat_status(),
+            "channel": self.cfg.get("channel") or ("wechat" if hasattr(self.ob, "status") else "qq"),
             "owner_id": gc.owner_id, "uptime": now - self.started,
             "groups": groups, "hours": {"all": hours_all, "her": hours_her,
                                          "by": {str(k): v for k, v in hours_by.items()}}, "days": days,

@@ -60,6 +60,8 @@ qq:
   access_token: ""               # NapCat 里设的 token（没设就留空）
   napcat_hidden: true            # NapCat 在后台跑（不开窗口，输出在 data/logs/napcat.log）
   napcat_autostart: true         # 开 start.bat 时 NapCat 没在运行，就顺便启动它（Windows）
+  napcat_watchdog: true          # 运行中 QQ 掉线、NapCat 也没了：自动再开（最多连着 3 次）
+  napcat_restart_after: 120      # 掉线多少秒后才自动重开 NapCat
   napcat_dir: ""                 # NapCat 文件夹，比如 D:\NapCat.Shell.Windows.Node（qq_setup 会写；空着就自动找）
   napcat_qq: 0                   # 她小号的 QQ 号：启动 NapCat 时用来快速登录，不用每次扫码（qq_setup 会写）
   http_url: ""                   # 可选：NapCat 的 HTTP 服务器（比如 http://127.0.0.1:3000），关程序道别时的备用通道

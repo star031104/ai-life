@@ -36,7 +36,8 @@ def test_pick_and_args(tmp_path):
 def test_ensure_napcat_on_windows(tmp_path, monkeypatch):
     root = _napcat(tmp_path)
     cfg = {"root": str(tmp_path), "qq": {"napcat_dir": str(root), "ws_url": "ws://127.0.0.1:3001",
-                                         "napcat_qq": 2918273645, "napcat_hidden": False}}
+                                         "napcat_qq": 2918273645, "napcat_hidden": False,
+                                         "napcat_watchdog": False}}
     launched, opened = [], []
     monkeypatch.setattr(L.sys, "platform", "win32")
     monkeypatch.setattr(L, "pick_launcher", lambda r: r / "napcat.bat")
@@ -69,6 +70,65 @@ def test_ensure_napcat_on_windows(tmp_path, monkeypatch):
     cfg["qq"]["napcat_autostart"] = False
     asyncio.run(L.ensure_napcat(cfg, OB()))
     assert not launched
+
+
+def test_watchdog_relaunches_when_napcat_gone(tmp_path, monkeypatch):
+    cfg = {"root": str(tmp_path), "qq": {"ws_url": "ws://127.0.0.1:3001", "napcat_restart_after": 60}}
+    clock = [1000.0]
+    monkeypatch.setattr(L.sys, "platform", "win32")
+    monkeypatch.setattr(L.time, "time", lambda: clock[0])
+    alive = {"port": True, "pid": False}
+    monkeypatch.setattr(L, "port_open", lambda url, timeout=1.0: alive["port"])
+    monkeypatch.setattr(L, "_pid_alive", lambda c: alive["pid"])
+    launches = []
+
+    class OB:
+        ready = True
+    ob = OB()
+
+    async def fake_launch(c, o):
+        launches.append(clock[0])
+        return False
+    monkeypatch.setattr(L, "_launch_and_watch", fake_launch)
+
+    class Stop(Exception):
+        pass
+    script = []                                           # 每次 sleep 前改一下世界
+
+    async def fake_sleep(sec):
+        if not script:
+            raise Stop
+        clock[0] += sec
+        script.pop(0)()
+    monkeypatch.setattr(L.asyncio, "sleep", fake_sleep)
+
+    def down():
+        ob.ready, alive["port"] = False, False
+    # 连着，掉线，等不够 60 秒不动；超过 60 秒且 NapCat 不在 → 重开
+    script[:] = [lambda: None, down, lambda: None, lambda: None, lambda: None, lambda: None, lambda: None]
+    try:
+        asyncio.run(L.ensure_napcat(cfg, ob))
+    except Stop:
+        pass
+    assert len(launches) == 1
+
+    # NapCat 进程还在（比如在等扫码）：不开第二个
+    launches.clear(); ob.ready, alive["port"], alive["pid"] = True, True, True
+    script[:] = [down] + [lambda: None] * 10
+    try:
+        asyncio.run(L.ensure_napcat(cfg, ob))
+    except Stop:
+        pass
+    assert not launches
+
+    # 一直救不回来：最多 3 次
+    alive["pid"] = False; ob.ready, alive["port"] = True, True
+    script[:] = [down] + [lambda: None] * 200
+    try:
+        asyncio.run(L.ensure_napcat(cfg, ob))
+    except Stop:
+        pass
+    assert len(launches) == 3
 
 
 def test_auto_login_written(tmp_path):
