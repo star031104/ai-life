@@ -72,7 +72,17 @@ irm https://raw.githubusercontent.com/star031104/ai-life/main/get.ps1 | iex
 
 **3. 开机自动启动**：右键图标 → “开机自动启动”（只管这一个），或者双击 `scripts\autostart_on.bat`（全部）。关掉：再点一次，或 `scripts\autostart_off.bat`。
 
-**4. 平时**
+**4. 群里的她：进群前先“认识大家”**（可选，推荐）
+
+她刚进群时谁也不认识。双击 `scripts\onboard.bat wechat`（QQ 群就是 `scripts\onboard.bat qq`），一步步来：
+
+1. **导出群里以前的聊天记录**（只读）：微信从电脑上开着的某个号读——一般选你自己的大号，它在群里待得最久；QQ 让她的 NapCat 往回翻每个群最近的消息。导出的文本在 `home\<名字>\data\export\`。
+2. **用你配的大模型整理成一份草稿** `home\<名字>\data\seed_draft.yaml`：每个群在聊什么、不成文的规矩、群梗，每个常说话的人的画像（大家怎么叫他、性格、说话风格、兴趣、近况、别碰的话题）；群友之间几乎不叫名字的群，顺手把“叫人名字”关掉。不记电话、住址、证件号。
+3. **你看一遍、改一改**（删掉不想让她知道的），回车就灌给她，重启她就生效。
+
+灌进去的人算“事先听说的”：真正和她说上几句话以前，她不会把听来的近况、私事说出来。三步也能分开跑：`wxexport` / `qqexport` → `seedgen` → `seed`。
+
+**5. 平时**
 
 - 换 / 加大模型：小屋的“大模型”页，或 `scripts\llm.bat qq`（名字换成你要的那个）
 - 哪里没配好：`scripts\check.bat qq` / `scripts\check.bat wechat`；微信接入专门的体检：`scripts\wxdiag.bat`
@@ -117,9 +127,12 @@ Linux / macOS 桌面上不用 systemd 也行：`bash start.sh qq`（退出会自
 | `llm` | ✓ | ✓ | ✓ | 加 / 换 / 测大模型接口 |
 | `people` |  | ✓ | ✓ | 她心里每个群友的样子 |
 | `replay` / `calibrate` |  | ✓ | ✓ | 拿真实聊天回放、按扣分制评她；看质检会不会误伤 |
-| `seed` |  | ✓ | ✓ | 导入你提前写好的群友印象 |
+| `onboard` |  | ✓ | ✓ | 进群前的准备：导出聊天记录 → 整理成草稿 → 你看过 → 灌给她 |
+| `wxexport` · `qqexport` |  | ✓（qq） | ✓（wx） | 导出群里以前的聊天记录（只读） |
+| `seedgen` |  | ✓ | ✓ | 把导出的记录整理成 `data/seed_draft.yaml` |
+| `seed` |  | ✓ | ✓ | 把草稿（或你自己写的）灌给她 |
 | `qqpass` |  | ✓ |  | 存小号密码（少扫几次码） |
-| `wxdiag` · `wxkeys` · `wxtail` · `wxsend` · `wxexport` |  |  | ✓ | 微信接入：体检、拿密钥、看收到的消息、发一句试试、导出聊天 |
+| `wxdiag` · `wxkeys` · `wxtail` · `wxsend` |  |  | ✓ | 微信接入：体检、拿密钥、看收到的消息、发一句试试、导出聊天 |
 
 想把某个家放到别处：`python run.py qq --home D:\bots\qq`，或者设环境变量 `AIGROUP_HOME`（群聊）/ `AILIFE_HOME`（有希）。
 

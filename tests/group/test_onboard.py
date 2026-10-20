@@ -11,6 +11,7 @@ EXPORT = """# 画画群
 ## 成员（“我”= 导出用的这个号）
 - 我｜微信昵称 阿杰｜备注 ｜wxid_owner｜说了 1 条
 - 小王｜微信昵称 王王｜备注 王哥｜wxid_wang｜说了 6 条
+- 小满｜微信昵称 小满｜备注 ｜wxid_her｜说了 9 条
 
 ## 聊天记录
 """ + "\n".join(f"2026-10-1{i % 9} 2{i % 4}:0{i % 9} 小王：今天又画了一张猫 {i}" for i in range(6)) + """
@@ -35,7 +36,7 @@ def test_parse_and_build(tmp_path, cfg):
     f = tmp_path / "画画群.txt"
     f.write_text(EXPORT, encoding="utf-8")
     ex = parse_export(f)
-    assert ex["name"] == "画画群" and [m["id"] for m in ex["members"]] == ["wxid_owner", "wxid_wang"]
+    assert ex["name"] == "画画群" and [m["id"] for m in ex["members"]] == ["wxid_owner", "wxid_wang", "wxid_her"]
     assert len(ex["lines"]) == 8 and ex["lines"][0][1] == "小王"
     llm = LLM()
     seed = asyncio.run(build_seed(cfg, [ex], llm, "小满", progress=lambda *_: None))

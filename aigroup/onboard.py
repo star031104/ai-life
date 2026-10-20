@@ -31,7 +31,8 @@ MEMBER_RE = re.compile(r"^- (.*?)｜微信昵称 (.*?)｜备注 (.*?)｜(\S+)｜
 NOISE = re.compile(r"^\[(图片|表情|表情包|动画表情|语音|视频|文件|链接|分享|小程序|位置|名片|红包|转账|拍一拍)[^\]]*\]$")
 
 GROUP_PROMPT = """下面是一个{chan}「{name}」以前的聊天记录（节选，按时间）。你要帮一个新来的群友（{her}）提前了解这个群。
-只根据记录里看得出来的写，别编；不写电话、住址、证件号、具体的钱数这类隐私。只输出 JSON：
+只根据记录里看得出来的写，别编；不写电话、住址、证件号、具体的钱数这类隐私。
+{her} 自己说的话、大家讨论 {her} 的事（她是谁做的、是不是机器人、怎么测试她）都不要写。只输出 JSON：
 {{"notes": ["这个群最近在聊的事、约过的活动、反复出现的话题（每条 25 字以内，最多 10 条）"],
   "norms": ["这个群不成文的规矩和说话习惯（比如：大家互称 X 总 / 一句话拆好几条发 / 爱用某个表情 / 深夜最活跃；每条 25 字以内，最多 6 条）"],
   "lore": [{{"keys": ["梗的关键词"], "text": "这个梗是什么意思、怎么来的（40 字以内）"}}]}}
@@ -109,7 +110,8 @@ def _fmt(ts: float, who: str, text: str) -> str:
 
 
 # ---------------- 整理成种子 ----------------
-async def build_seed(cfg, exports: list[dict], llm, her: str, max_people: int = 15, progress=print) -> dict:
+async def build_seed(cfg, exports: list[dict], llm, her: str, max_people: int = 15, progress=print,
+                     her_names: list[str] | None = None) -> dict:
     chan = "QQ 群" if cfg.channel == "qq" else "微信群"
     key = "qq" if cfg.channel == "qq" else "wxid"
     groups = []
@@ -139,7 +141,9 @@ async def build_seed(cfg, exports: list[dict], llm, her: str, max_people: int = 
         if lore:
             entry["lore"] = [x for x in lore if x["keys"]][:8]
         people = []
-        talkers = [m for m in mem if m["n"] >= 5 and m["name"] not in ("系统",)][:max_people]
+        mine = {her, *(her_names or [])}                # 她自己（已经在群里的话）不用认识
+        talkers = [m for m in mem if m["n"] >= 5 and m["name"] not in ("系统",) and m["name"] not in mine
+                   and m["nick"] not in mine][:max_people]
         all_names = [m["name"] for m in mem] + [m["nick"] for m in mem if m["nick"]]
         for i, m in enumerate(talkers, 1):
             who = m["name"]
@@ -208,7 +212,9 @@ def seedgen_cmd(argv: list[str]) -> int:
         say(False, "还没配大模型接口：先跑 llm 加一个")
         return 1
     print(f"用大模型整理 {len(exports)} 个群的聊天记录（{src}）……")
-    seed = asyncio.run(build_seed(cfg, exports, brain.llm, brain.persona.name))
+    p = brain.persona
+    seed = asyncio.run(build_seed(cfg, exports, brain.llm, p.name,
+                                  her_names=[x for x in (getattr(p, "formal_name", ""), *((cfg.get(cfg.channel) or {}).get("aliases") or [])) if x]))
     out = ROOT / "data" / "seed_draft.yaml"
     out.parent.mkdir(parents=True, exist_ok=True)
     head = ("# 进群前的准备：她会“事先知道”的事（seedgen 整理的草稿）。\n"
