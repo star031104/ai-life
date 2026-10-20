@@ -217,6 +217,21 @@ def cmd_seed(argv: list[str]) -> int:
     return main(argv)
 
 
+def cmd_qqexport(argv: list[str]) -> int:
+    from aigroup.onboard import qqexport_cmd
+    return qqexport_cmd(argv)
+
+
+def cmd_seedgen(argv: list[str]) -> int:
+    from aigroup.onboard import seedgen_cmd
+    return seedgen_cmd(argv)
+
+
+def cmd_onboard(argv: list[str]) -> int:
+    from aigroup.onboard import onboard_cmd
+    return onboard_cmd(argv)
+
+
 def cmd_replay(argv: list[str]) -> int:
     from aigroup.eval.replay import main
     return main(argv)
@@ -228,7 +243,7 @@ def cmd_calibrate(argv: list[str]) -> int:
 
 
 # 名字 → (说明, 函数)；QQ_ONLY / WX_ONLY 里的只在那个渠道列出来
-QQ_ONLY = {"qqpass"}
+QQ_ONLY = {"qqpass", "qqexport"}
 WX_ONLY = {"wxdiag", "wxkeys", "wxsend", "wxtail", "wxexport"}
 COMMANDS = {
     "run": ("启动她（QQ：连 NapCat；微信：接上电脑上的微信）、在群里聊天；不带命令就是这个", cmd_run),
@@ -241,7 +256,10 @@ COMMANDS = {
     "wxkeys": ("重新拿微信数据库的密钥（--deep：慢，但不挑微信版本）", cmd_wxkeys),
     "wxsend": ("试发一句：python run.py wxsend 群名 要说的话（发完在库里核对）", cmd_wxsend),
     "wxtail": ("实时打印群里的新消息（只读，不回话）：python run.py wxtail [群名]", cmd_wxtail),
-    "wxexport": ("把某个号（比如你的大号）里几个小群的聊天记录导出成文本（给 Claude 写人设、认人用；只读）", cmd_wxexport),
+    "wxexport": ("把某个号（比如你的大号）里几个群的聊天记录导出成文本（给 seedgen 整理用；只读）", cmd_wxexport),
+    "onboard": ("进群前的准备（一条龙）：导出群里以前的聊天记录 → 大模型整理成“认识大家”的资料草稿 → 你看过改过 → 灌给她", cmd_onboard),
+    "qqexport": ("让她的 NapCat 往回翻每个群最近的消息，导出成文本（--max=3000）", cmd_qqexport),
+    "seedgen": ("把导出的聊天记录整理成 data/seed_draft.yaml（每个群在聊什么、群梗、每个人的画像）：python run.py seedgen [导出目录]", cmd_seedgen),
     "seed": ("把写好的“认识大家”的资料（群笔记、每个人的画像、别名、群梗、按群的开关）灌给她：python run.py seed 文件.yaml", cmd_seed),
     "replay": ("回放最近 7 天（--llm 20 用现在的模型重跑 20 条、--judge 20 评审、--export 导出脱敏包）", cmd_replay),
     "calibrate": ("拿群友自己打的字过一遍质检，看会不会误伤", cmd_calibrate),
