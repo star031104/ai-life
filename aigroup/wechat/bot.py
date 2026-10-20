@@ -661,6 +661,8 @@ class WeChatBot:
         if m.emoji_md5 or m.emoji_url:
             segs.append({"type": "image", "data": {"url": m.emoji_url, "file": m.emoji_md5, "sub_type": 1,
                                                    "summary": "[动画表情]"}})
+        elif m.type == 3 and m.img:                             # 13.1 图片：本地 .dat 解开再看（ingest 里按需取）
+            segs.append({"type": "image", "data": {"url": f"wximg:{g}:{m.img}:{m.ts}", "file": m.img}})
         elif m.type == 1 or (m.type == 49 and m.quote_id):
             segs += self.split_ats(m.text, g, m.ats)
         else:
@@ -671,6 +673,31 @@ class WeChatBot:
                 "sender": {"user_id": uid, "card": name,
                            "nickname": (d.contacts.get(m.sender) or {}).get("nick") or name},
                 "message": segs}
+
+    async def fetch_image(self, url: str, wait: float = 8.0) -> bytes | None:
+        """13.1 wximg:<群>:<文件名>:<时间> → 解开的图片字节。刚收到的图可能还没下载完：等一会儿再找。"""
+        try:
+            _, chat, name, ts = url.split(":", 3)
+        except ValueError:
+            return None
+        if self.data is None:
+            return None
+        st = getattr(self, "_images", None)
+        if st is None or st.acc != Path(self.data.account_dir):
+            from aigroup.wechat.wximg import ImageStore
+            code = self.opts.get("img_code")
+            st = self._images = ImageStore(self.data.account_dir, self.data.account_dir.name,
+                                           self.opts.get("data_dir") or None, int(code) if code else None)
+        t_end = time.monotonic() + wait
+        while True:
+            try:
+                out = await asyncio.to_thread(st.load, chat, name, float(ts or 0))
+            except Exception as e:  # noqa: BLE001
+                log.debug("读图片失败：%s", e)
+                out = None
+            if out or time.monotonic() > t_end:
+                return out
+            await asyncio.sleep(2)
 
     def split_ats(self, text: str, chat: str, ats: list[str]) -> list[dict]:
         """“@名字\\u2005”换成 at 段；@ 到自己（不管 atuserlist 有没有）都认出来。"""

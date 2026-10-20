@@ -134,6 +134,21 @@ class EvalMixin:
             self.db.set("eval_hist", hist[-26:])
             self.db.set("judge_last", {"n": res["n"], "avg": res["avg"], "kinds": res["kinds"], "ts": time.time()})
             log.info("每周评测：%d 句，平均 %s 分", res["n"], res["avg"])
+        try:                                                     # 14.0 人格一致性：facet 距离 + 幽默类型
+            from aigroup.eval.traits import trait_check
+            tr = await trait_check(self.db, self.brain.llm, self.brain.persona)
+        except Exception as e:  # noqa: BLE001
+            log.info("人格一致性检查出错：%s", e)
+            tr = None
+        if tr:
+            hist = list(self.db.get("eval_hist") or [])
+            if hist and hist[-1].get("week") == week:
+                hist[-1]["traits"] = tr
+            else:
+                hist.append({"week": week, "avg": None, "n": 0, "kinds": {}, "ts": time.time(),
+                             "persona": body_hash(self.brain.persona.body), "traits": tr})
+            self.db.set("eval_hist", hist[-26:])
+            log.info("人格一致性：和目标平均差 %s 档，幽默 %s，差得多的：%s", tr.get("dist"), tr.get("humor"), tr.get("off"))
         last = self.db.get("persona_compare_last") or {}
         old = previous_body(self.db, self.brain.persona)
         if old and last.get("new_hash") != body_hash(self.brain.persona.body):

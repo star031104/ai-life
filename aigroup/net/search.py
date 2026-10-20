@@ -65,6 +65,37 @@ def relevant(query: str, results: list[dict]) -> bool:
     return any(w in text for w in words)
 
 
+def pub_date(v) -> str:
+    """Tavily 的 published_date（RFC 2822 或 ISO）→ YYYY-MM-DD；认不出返回空。"""
+    s = str(v or "").strip()
+    if not s:
+        return ""
+    from datetime import datetime
+    from email.utils import parsedate_to_datetime
+    for f in (lambda: parsedate_to_datetime(s), lambda: datetime.fromisoformat(s.replace("Z", "+00:00"))):
+        try:
+            return f().strftime("%Y-%m-%d")
+        except Exception:  # noqa: BLE001
+            continue
+    m = re.search(r"(20\d\d)-(\d\d)-(\d\d)", s)
+    return m.group(0) if m else ""
+
+
+def text_dates(text: str, today) -> list[str]:
+    """从标题 / 摘要里认出写着的日期（2026年10月19日、10月19日、2026-10-19、10/19），
+    没写年份的按今天往前推（12 月的新闻在 1 月看到算去年）。返回 YYYY-MM-DD 列表。"""
+    out = []
+    for m in re.finditer(r"(?:(20\d\d)\s*[年\-/.]\s*)?(\d{1,2})\s*[月\-/.]\s*(\d{1,2})\s*[日号]?", text or ""):
+        y, mo, d = m.group(1), int(m.group(2)), int(m.group(3))
+        if not (1 <= mo <= 12 and 1 <= d <= 31):
+            continue
+        if not y and not re.search(r"[月]", m.group(0)):       # 光是“3.5”“10/19”这种不带“月”的，容易是比分、版本号
+            continue
+        yy = int(y) if y else today.year - (1 if (mo, d) > (today.month, today.day) else 0)
+        out.append(f"{yy:04d}-{mo:02d}-{d:02d}")
+    return out
+
+
 class WebSearch:
     def __init__(self, cfg):
         c = dict(cfg.get("net") or {})
@@ -98,17 +129,20 @@ class WebSearch:
             raise RuntimeError("要验证")
         return parse_generic(r.text, n)
 
-    async def search(self, query: str, n: int = 5) -> list[dict]:
+    async def search(self, query: str, n: int = 5, fresh_days: int = 0) -> list[dict]:
+        """fresh_days > 0：只要最近这几天的新闻（13.2 分享用）。Tavily 走新闻模式、带发布日期；
+        别的搜索引擎给不出日期，结果照旧返回，由调用方看日期再决定。"""
         q = re.sub(r"\s+", " ", query or "").strip()[:60]
         if not self.enabled or len(q) < 2:
             return []
-        if q in self._cache:
-            return self._cache[q]
+        ck = f"{q}|{fresh_days}" if fresh_days else q
+        if ck in self._cache:
+            return self._cache[ck]
         res: list[dict] = []
         tries = [(e[0], (lambda e=e: self._engine(*e, q, n))) for e in ENGINES]
         if self.tavily_key:
-            tav = ("Tavily", lambda: self._tavily(q, n))
-            tries = [tav] + tries if self.tavily_first else tries + [tav]
+            tav = ("Tavily", lambda: self._tavily(q, n, fresh_days))
+            tries = [tav] + tries if (self.tavily_first or fresh_days) else tries + [tav]
         for name, fn in tries:
             try:
                 got = await fn()
@@ -120,19 +154,23 @@ class WebSearch:
                 log.info("搜了「%s」（%s）：%d 条", q, name, len(res))
                 break
             log.info("%s搜「%s」没搜到对得上的", name, q)
-        self._cache[q] = res
+        self._cache[ck] = res
         if len(self._cache) > 200:
             self._cache.pop(next(iter(self._cache)))
         return res
 
-    async def _tavily(self, q: str, n: int) -> list[dict]:
+    async def _tavily(self, q: str, n: int, fresh_days: int = 0) -> list[dict]:
+        body = {"query": q, "max_results": n, "search_depth": "basic"}
+        if fresh_days:
+            body.update(topic="news", days=int(fresh_days))
         async with httpx.AsyncClient(timeout=self.timeout) as c:
             r = await c.post("https://api.tavily.com/search", headers={"Authorization": f"Bearer {self.tavily_key}"},
-                             json={"query": q, "max_results": n, "search_depth": "basic"})
+                             json=body)
             r.raise_for_status()
             d = r.json()
         return [{"title": _clean(x.get("title", ""))[:80], "url": x.get("url", ""),
-                 "snippet": _clean(x.get("content", ""))[:220]} for x in (d.get("results") or [])[:n]]
+                 "snippet": _clean(x.get("content", ""))[:220], "date": pub_date(x.get("published_date"))}
+                for x in (d.get("results") or [])[:n]]
 
     @staticmethod
     def block(query: str, results: list[dict], k: int = 4) -> str:

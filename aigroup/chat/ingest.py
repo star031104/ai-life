@@ -111,6 +111,11 @@ class IngestMixin:
             desc = await self._look(f.images[0], name, gid)
             if desc:
                 text = text.replace("[图片]", f"[图片：{clean_member_text(desc, 100)}]", 1)
+        if (f.stickers and self.gk(gid).get("see_stickers", True) and self.brain.llm.vision
+                and re.search(r"\[(表情包|动画表情)\]", text) and self._allow(f"stk_look_{gid}", 30)):
+            desc = await self._look_sticker(f.stickers[0], (f.sticker_files or [""])[0])   # 13.1 表情包是什么意思
+            if desc:
+                text = re.sub(r"\[(表情包|动画表情)\]", f"[表情包：{clean_member_text(desc, 30)}]", text, count=1)
         if (f.record and self.gk(gid).get("hear_voice", True) and getattr(self, "hearing", None) is not None
                 and self.hearing.ready and self._allow(f"hear_{gid}", 30)):
             heard = await self._hear(f.record, getattr(f, "record_url", None))     # 13.0 听懂语音（免费的 SenseVoice）
@@ -348,8 +353,45 @@ class IngestMixin:
             return ""
         return voice_text(txt, tags, wav_seconds(data))
 
+    async def _look_sticker(self, url: str, file: str = "") -> str:
+        """13.1 表情包：一句话说它在表达什么（同一张只看一次，按文件名 / 内容缓存）。"""
+        import base64
+        import hashlib
+        key = "qq_stkdesc_" + (re.sub(r"[^0-9a-zA-Z]", "", file)[:32] or hashlib.md5(url.encode()).hexdigest()[:16])
+        old = self.db.get(key)
+        if old:
+            return str(old)
+        data = await fetch_bytes(url, limit=2 * 1024 * 1024)
+        if not data:
+            return ""
+        if data[:3] == b"GIF":                                   # 动图：取第一帧（看图接口不一定认 GIF）
+            try:
+                import io
+
+                from PIL import Image
+                b = io.BytesIO()
+                Image.open(io.BytesIO(data)).convert("RGB").save(b, "PNG")
+                data = b.getvalue()
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            desc = (await self.brain.llm.describe_image(
+                base64.b64encode(data).decode(), "",
+                prompt="这是群聊里的一张表情包。用 12 个字以内说它在表达什么情绪 / 意思；图上有字就把字原样写进去。"
+                       "只输出这一句。"))[:30]
+        except Exception as e:  # noqa: BLE001
+            log.info("表情包没看懂：%s", e)
+            return ""
+        desc = desc.strip(" 。.\n")
+        if desc:
+            self.db.set(key, desc)
+        return desc
+
     async def _look(self, url: str, who: str = "群友", gid: int | None = None) -> str:
-        data = await fetch_bytes(url)
+        if str(url).startswith("wximg:") and hasattr(self.ob, "fetch_image"):      # 13.1 微信本地的图
+            data = await self.ob.fetch_image(url)
+        else:
+            data = await fetch_bytes(url)
         if not data:
             return ""
         import base64
@@ -360,6 +402,18 @@ class IngestMixin:
         old = self.db.get(key)
         if old:
             return str(old)
+        if len(data) > 1_200_000:                               # 13.1 太大的图先缩一下（看图模型反正会缩，省流量）
+            try:
+                import io
+
+                from PIL import Image
+                im = Image.open(io.BytesIO(data)).convert("RGB")
+                im.thumbnail((1600, 1600))
+                b = io.BytesIO()
+                im.save(b, "JPEG", quality=85)
+                data = b.getvalue()
+            except Exception:  # noqa: BLE001
+                pass
         names = "、".join(self.member_names(gid)[:12]) if gid is not None and hasattr(self, "member_names") else ""
         try:
             desc = (await self.brain.llm.describe_image(

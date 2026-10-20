@@ -55,16 +55,23 @@ DIGEST_EXTRA = """7. 好|话题|你的态度：你（“你”）在聊天里亲
 8. 约|那个人的编号（和第 1 条一样）或“群”|什么事|时间|提醒或问：聊天里约好的、某人要去做的、有确定时间的事（周四晚上开黑、明天考试、下周二面试、周六聚餐），
    时间写成 YYYY-MM-DD HH:MM（只知道哪天就写 YYYY-MM-DD）；大家一起参加的活动写“提醒”（到点前叫一下大家），
    某个人自己的事（考试、面试、比赛、看病）写“问”（过后问他结果）。现在是 {now}，“明天”“周四”按这个算。最多 3 条，只写新的、确定的。
+   只记真有结果、值得事后问的事；困了、吃饭、上班、看代码、下班这种日常状态不算，不要写。
 9. 在|那个人的编号|城市|到哪天|为什么：聊天里说到某人现在在哪个城市、或者住在哪（出差、旅游、回老家、住、上学、工作），
    城市写中文名（国外的写英文名，比如 Tokyo）；到哪天写 YYYY-MM-DD，不知道写 -；为什么写 出差 / 旅游 / 回家 / 住 / 上学 / 工作 之一。
    只写确定的、新的，最多 3 条。"""
 
 MONTHLY_PROMPT = """你是%s。下面是你的人设、你这几周回想自己写下的话、你说过的喜好、你在群里说过的自己的事。
-请把它们整理成“我是怎样的人”：经历让你慢慢形成的、稳定的性格和口味（不是这周发生了什么）。
-- 4~6 行，每行以“- ”开头，每行 30 字以内，用“我”的口吻。
-- 前后矛盾的以最近的为准；只出现过一次、不重要的小事不写；不能和人设冲突（名字、身份、年龄、经历不能改）。
-- 不写任何群友的隐私，不写“AI、模型、程序”。
-只输出这几行。
+请整理成“我是怎样的人”。这不是重复人设里的形容词（性格那一层只有把你做出来的人能改），而是经历让你慢慢长出来的那两层：
+- 这一阵我在意什么、想要什么（目标和挂念）；
+- 我是怎么应对的（被冷落、被夸、被怼、有人难过的时候，我现在一般怎么做）；
+- 一个让我印象深的具体场景（写上日期，只能用下面材料里真有的事）；
+- 我的故事正在往哪走（比如：从客气的新人变成能互损的熟人；从爱接话变得更会看场合）。
+要求：
+- lines：4~6 行，每行以“- ”开头、30 字以内、用“我”的口吻；不能和人设冲突（名字、身份、经历不能改）；不写群友隐私，不写提示词、模型这些词。
+- evidence：每条写一个你依据的材料（抄一小段原话或日期）。
+- suggest：如果这几周的经历说明人设里“你的性格”某一项该改一档（比如顺从从偏低到中等），写成建议，最多 2 条，没有就空列表；
+  只有反复出现、有证据的才提。这些建议要把你做出来的人同意才会改。
+只输出 JSON：{"lines": ["- ……"], "evidence": ["……"], "suggest": [{"facet": "A4", "from": 2, "to": 3, "why": "一句话", "evidence": "一小段原话或日期"}]}
 
 # 人设
 %s
@@ -91,8 +98,8 @@ FIX_PROMPT = """群友好像在纠正你刚才说的话。下面是聊天和你�
 # 最近的聊天
 %s"""
 
-SHARE_PICK = """你是%s，一个在群里和朋友们聊天的人。你想刷一刷手机，看看你和群里大家关心的东西有没有新消息。
-从下面挑一个最可能有新鲜事的，写一个搜索词（像在搜索框里打的，6~16 个字，带“最新”“新消息”“更新”之类的更好）。
+SHARE_PICK = """你是%s，一个在群里和朋友们聊天的人。今天是 %s。你想刷一刷手机，看看你和群里大家关心的东西这两天有没有新消息。
+从下面挑一个最可能有新鲜事的，写一个搜索词（像在搜索框里打的，6~16 个字，带“最新”“今天”“新消息”之类的更好；别写年份）。
 最近已经分享过的话题别再挑。
 只输出 JSON：{"query": "搜索词", "topic": "话题（2~8 个字）"}
 
@@ -105,10 +112,14 @@ SHARE_PICK = """你是%s，一个在群里和朋友们聊天的人。你想刷�
 # 最近分享过的
 %s"""
 
-SHARE_JUDGE = """你是%s。你刚刷到下面这些，想想值不值得随手转给群里的朋友看：
-要是新鲜的（最近的更新、比赛结果、新消息）、和大家聊的东西有关、有点意思，就分享；
-旧闻、广告、和大家没关系、或者你已经知道的（下面“你知道的”里有），就不分享。
-只输出 JSON：{"share": true 或 false, "gist": "你看到了什么，一句话（不超过 50 字）", "topic": "话题（2~8 个字）", "summary": "要点（不超过 90 字）"}
+SHARE_JUDGE = """你是%s。今天是 %s。你刚刷到下面这些，想想值不值得随手转给群里的朋友看。
+1. 先看这件事是哪天发生的：看每条后面的「发布」日期，和标题、摘要里写的日期。
+   “开战 / 开打 / 首周”这类开始了好多天的事、几天前的比赛结果，都算旧闻；看不出是哪天的，when 写 unknown。
+2. 新鲜（这两天的事）、和大家聊的东西有关、有点意思，才分享；旧闻、广告、和大家没关系、你已经知道的（下面“你知道的”里有），不分享。
+3. gist 只写原文里明明白白写着的事，别补原文没说的，别换说法：
+   主语照原文（是队伍还是选手、哪个赛事、哪一届），称号、术语照原文的词（原文说“首支两次夺冠的队伍”就别改成“双冠王”这种另有含义的叫法）；
+   原文自己就含糊的地方照样含糊，宁可少说。
+只输出 JSON：{"share": true 或 false, "when": "这件事发生的日期 YYYY-MM-DD，看不出写 unknown", "source_title": "你依据的那一条的原标题，照抄", "gist": "你看到了什么，一句话（不超过 50 字）", "topic": "话题（2~8 个字）", "summary": "要点（不超过 90 字，带上日期）"}
 
 # 你知道的
 %s
@@ -120,6 +131,38 @@ PHOTO_PROMPT = """你是%s。人设：%s
 你今天的安排：%s
 你想随手拍一张照片发进群里（像朋友在群里晒日常：吃的、桌面、窗外、宠物、路上看到的）。照片里不出现你的脸。
 只输出 JSON：{"scene": "照片拍的是什么（具体的画面，20~40 字，别写文字和人脸）", "say": "发图时配的一句话（口语，15 字以内）"}"""
+
+
+def share_age(j: dict, res: list[dict], today: datetime, fresh: int) -> int | None:
+    """13.2 刷到的东西是几天前的事：优先用判断给的 when，对不上再看搜索结果的发布日期和摘要里写的日期。
+    超过 fresh 天，或者完全看不出日期：返回 None（不分享）。"""
+    from aigroup.net.search import text_dates
+    d0 = today.date()
+
+    def days(s: str) -> int | None:
+        try:
+            return (d0 - datetime.strptime(str(s)[:10], "%Y-%m-%d").date()).days
+        except (TypeError, ValueError):
+            return None
+
+    w = days(j.get("when"))
+    src = str(j.get("source_title") or "")
+    pub, said = [], []
+    for r in res:
+        if src and src[:12] not in r.get("title", "") and r.get("title", "")[:12] not in src:
+            continue
+        if days(r.get("date")) is not None:
+            pub.append(days(r["date"]))                   # 发布日期：事情不会比它更晚
+        said += [x for x in (days(t) for t in text_dates(r.get("title", "") + " " + r.get("snippet", ""), today))
+                 if x is not None and x >= 0]
+    if w is not None and w >= -1:
+        age = max([w, *pub])
+    elif said:
+        age = max(said + pub)                             # 判断没给日期：原文写着的日期里最早的那个算（“9 月 29 日开打”）
+    else:
+        return None
+    age = max(0, age)
+    return age if age <= fresh else None
 
 
 def tier(score: float) -> str:
@@ -317,6 +360,8 @@ class GrowMixin:
         day_key = f"qq_plans_n_{gid}_{self.brain.now():%Y-%m-%d}"
         if int(self.db.get(day_key, 0) or 0) >= int(g.get("plans_per_day", 3)):
             return False
+        if now - float(self.db.get(f"qq_plans_last_{gid}", 0) or 0) < 2 * 3600:    # 13.1 两次提醒 / 追问至少隔两小时
+            return False
         hour = self.brain.now().hour
         for p in self.plans(gid):
             due = float(p["due"])
@@ -325,6 +370,7 @@ class GrowMixin:
                     and due - 18 * 3600 <= now <= due - 3 * 3600 and not self.db.get(f"qq_plan_cheer_{p['id']}")):
                 self.db.set(f"qq_plan_cheer_{p['id']}", now)
                 self.db.set(day_key, int(self.db.get(day_key, 0) or 0) + 1)
+                self.db.set(f"qq_plans_last_{gid}", now)
                 when = datetime.fromtimestamp(due, self.cfg.tz)
                 day = "今天" if when.date() == self.brain.now().date() else "明天"
                 why = (f"{p['who']}{day}要「{p['what']}」。像朋友那样给他打个气，一句话（可以带点只有你们懂的梗），"
@@ -350,6 +396,7 @@ class GrowMixin:
             self.db.conn.execute("UPDATE qq_plans SET status='done', fired=? WHERE id=?", (now, p["id"]))
             self.db.conn.commit()
             self.db.set(day_key, int(self.db.get(day_key, 0) or 0) + 1)
+            self.db.set(f"qq_plans_last_{gid}", now)
             at = f"（想 @ 他就写 [@{p['who']}]）" if p["user_id"] else ""
             if p["kind"] == "remind":
                 when = datetime.fromtimestamp(due, self.cfg.tz)
@@ -405,6 +452,35 @@ class GrowMixin:
         return True
 
     # ================= 每月整理“我是怎样的人” =================
+    def note_proposals(self, gid: int, sugg: list) -> int:
+        """14.0 每月整理时她提的“性格该改一档”的建议：只记下来等人看（小屋“她是怎样的人”下面），不自动改人格文件。"""
+        from aigroup.traits import FACETS
+        t = getattr(self.brain.persona, "traits", None)
+        out = list(self.db.get("persona_proposals") or [])
+        n = 0
+        for x in sugg[:2] if isinstance(sugg, list) else []:
+            if not isinstance(x, dict):
+                continue
+            code = str(x.get("facet") or "").upper()[:2]
+            if code not in FACETS:
+                continue
+            try:
+                to = max(1, min(5, int(x.get("to"))))
+            except (TypeError, ValueError):
+                continue
+            cur = int(((t.facets.get(code) or {}).get("level") or 0)) if t is not None else 0
+            if cur and cur == to:
+                continue
+            out.append({"id": f"{int(time.time())}{n}", "ts": time.time(), "gid": gid, "facet": code,
+                        "name": FACETS[code], "from": cur or x.get("from"), "to": to,
+                        "why": str(x.get("why") or "")[:80], "evidence": str(x.get("evidence") or "")[:120],
+                        "status": "pending"})
+            n += 1
+        if n:
+            self.db.set("persona_proposals", out[-30:])
+            log.info("群 %s：她提了 %d 条性格调整建议，等你在小屋里看", gid, n)
+        return n
+
     async def monthly_self(self, force: bool = False) -> int:
         month = f"{self.brain.now():%Y-%m}"
         n = 0
@@ -421,13 +497,15 @@ class GrowMixin:
                                        "\n".join(f"[{h.get('week')}]\n{h.get('text')}" for h in hist[-8:])[:2400] or "（没有）",
                                        prefs[:800], (self.self_notes(gid) or "（没有）")[:600])
             try:
-                raw = await self.brain.llm.chat([{"role": "user", "content": prompt}], role="helper", max_tokens=400,
-                                                temperature=0.5, background=True)
+                d = await self.brain.llm.json([{"role": "user", "content": prompt}], default={}, role="helper")
             except Exception as e:  # noqa: BLE001
                 log.info("群 %s 每月整理失败：%s", gid, e)
                 continue
-            lines = [ln.strip() for ln in (raw or "").splitlines() if ln.strip().startswith("-")][:6]
-            lines = [x for x in lines if not re.search(r"AI|模型|程序|提示词", x)]
+            d = d if isinstance(d, dict) else {}
+            lines = [("- " + str(x).strip().lstrip("-").strip()) for x in (d.get("lines") or []) if str(x).strip()][:6]
+            bad = r"模型|程序|提示词" if getattr(p, "ai_open", False) else r"AI|模型|程序|提示词"
+            lines = [x for x in lines if not re.search(bad, x)]
+            self.note_proposals(gid, d.get("suggest") or [])
             if lines:
                 self.db.set(f"qq_selfcore_{gid}", "\n".join(lines)[:500])
                 self.db.set(key, month)
@@ -481,9 +559,12 @@ class GrowMixin:
         likes = ", ".join(e["topic"] for e in sorted(kn.entries(gid, 60), key=lambda e: -int(e["hits"] or 0))[:10]) if kn else ""
         mine = ", ".join(self.interests()[:10]) if hasattr(self, "interests") else ""
         recent = ", ".join(x.get("topic") or x.get("text", "")[:12] for x in self.shares(gid)[-6:]) or "（没有）"
+        today = self.brain.now()
+        tstr = f"{today:%Y-%m-%d}（{'一二三四五六日'[today.weekday()]}）"
+        fresh = max(1, int(g.get("share_fresh_days", 3) or 3))
         try:
             d = await self.brain.llm.json([{"role": "user", "content": SHARE_PICK % (
-                p.name, f"{mine}；{likes}"[:400] or "（不太清楚）", (self.db.get(f"qq_group_notes_{gid}") or "（没有）")[:500],
+                p.name, tstr, f"{mine}；{likes}"[:400] or "（不太清楚）", (self.db.get(f"qq_group_notes_{gid}") or "（没有）")[:500],
                 recent)}], default={}, role="helper")
         except Exception as e:  # noqa: BLE001
             log.info("挑分享话题失败：%s", e)
@@ -491,13 +572,14 @@ class GrowMixin:
         q = str((d or {}).get("query") or "").strip()[:30]
         if len(q) < 2:
             return False
-        res = await self.web.search(q)
+        res = await self.web.search(q, fresh_days=fresh)
         if not res:
             return False
         known = "\n".join(f"- {e['topic']}：{e['summary']}" for e in (kn.entries(gid, 30) if kn else []))[:1200] or "（没有）"
-        found = "\n".join(f"- {r['title']}：{r['snippet']}" for r in res[:5])
+        found = "\n".join(f"- {r['title']}：{r['snippet']}" + (f"（发布：{r['date']}）" if r.get("date") else "")
+                          for r in res[:5])
         try:
-            j = await self.brain.llm.json([{"role": "user", "content": SHARE_JUDGE % (p.name, known, q, found)}],
+            j = await self.brain.llm.json([{"role": "user", "content": SHARE_JUDGE % (p.name, tstr, known, q, found)}],
                                           default={}, role="helper")
         except Exception as e:  # noqa: BLE001
             log.info("判断要不要分享失败：%s", e)
@@ -505,11 +587,21 @@ class GrowMixin:
         if not isinstance(j, dict) or not j.get("share") or not j.get("gist"):
             self._note_share(gid, "skip", q, str((d or {}).get("topic") or ""))     # 算一次：今天别再刷了
             return False
+        age = share_age(j, res, today, fresh)
+        if age is None:
+            log.info("群 %s：刷到的「%s」看不出是哪天的 / 是 %s 天以前的旧闻，不分享", gid, j.get("gist"), fresh)
+            self._note_share(gid, "skip", q, str((d or {}).get("topic") or ""))
+            return False
         topic = str(j.get("topic") or d.get("topic") or q)[:20]
         if kn is not None and j.get("summary"):
             kn.add(gid, topic, [topic, *re.split(r"\s+", q)[:3]], str(j["summary"]), "share", q)
-        why = (f"你刚在手机上刷到：{j['gist']}。觉得群里的人会感兴趣，随手分享一句（像朋友在群里说“诶你们看到没……”），"
-               "可以带一句自己的看法；别说“我搜到”“根据”，别发链接，一两句话就够")
+        when = ("今天的事" if age == 0 else "昨天的事" if age == 1 else f"{age} 天前（{j.get('when')}）的事")
+        src = str(j.get("source_title") or "").strip()[:80]
+        why = (f"你刚在手机上刷到：{j['gist']}（{when}" + (f"；原标题「{src}」" if src else "") + "）。"
+               "觉得群里的人会感兴趣，随手分享一句（像朋友在群里说“诶你们看到没……”），可以带一句自己的看法。"
+               f"这是{when}：别说成“刚刚”“开打了”这种正在发生的口气，除非就是今天的事。"
+               "只说原文写着的，主语、称号、术语照原文用，别换成意思不一样的说法（比如把队伍的成绩说成像某个选手的称号），拿不准的就别提；"
+               "别说“我搜到”“根据”，别发链接，一两句话就够")
         async with st.lock:
             try:
                 ok = await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who="", why=why,
@@ -750,6 +842,7 @@ class GrowMixin:
             "reflect": self.db.get(f"qq_reflect_{g0}") or "" if g0 else "",
             "reflect_hist": (self.db.get(f"qq_reflect_hist_{g0}") or [])[-8:] if g0 else [],
             "selfcore": self.db.get(f"qq_selfcore_{g0}") or "" if g0 else "",
+            "proposals": [x for x in (self.db.get("persona_proposals") or []) if x.get("status") == "pending"][-10:],
             "prefs": [{"topic": k, "v": v.get("v"), "ts": v.get("ts")} for k, v in
                       sorted(self.prefs().items(), key=lambda kv: -kv[1].get("ts", 0))],
             "people": people[:40],

@@ -77,6 +77,7 @@ DEFAULTS = {
     "fix_knowledge": True,         # 有人说“不对 / 其实是……”时，对一下她记的知识，对的就改
     "share_per_day": 1,            # 每个群每天最多主动分享几次刷到的东西（0 = 关）
     "share_chance": 0.6,           # 一天里会分享的概率
+    "share_fresh_days": 3,         # 13.2 只分享这么多天以内发生的事（看不出日期的不分享）
     "photo_share_chance": 0.3,     # 分享时是一张自己日常照片的概率（要配了画图接口 routes.image）
     "photo_per_day": 1,            # 每天最多发几张照片（所有群加起来）
     "watch_videos": True,          # 4.4 群友发的 B 站视频点开“看”：字幕、弹幕、热评整理成要点（每小时最多 10 个）
@@ -103,6 +104,14 @@ DEFAULTS = {
     "voice_reply": True,           # 有人让她“发语音 / 说句话听听”时发一条语音（要配 net.tts，QQ 才能发）
     "plans_cheer": True,           # 群友自己的事（考试、面试、比赛）开始前几个小时给他打个气（每件事一次）
     "birthday_card": True,         # 群友生日：祝完再发一张生日卡（要配画图接口；字是程序叠上去的）
+    "see_stickers": True,          # 13.1 群友发的表情包让看图模型看一眼是什么意思（同一张只看一次，每群每小时最多 30 张）
+    "unprompted_hours": "",        # 13.1 主动开口（插话、分享，不算被叫到、冒泡另有 active_hours）只在这个时段里；空 = 不限
+    "signatures": True,            # 14.0 每轮按情境挑 1~3 条人格签名（if-then）放在提示词最后（人设里写了 traits 才有）
+    "signature_k": 3,              # 最多挑几条
+    "persona_examples": True,      # 14.0 按关键词挑 1~2 段人设里的对话示例放进提示词
+    "example_k": 2,
+    "pester_calls": 4,             # 13.2 同一个人 15 分钟里叫她这么多次：当成在逗她，回得短、可以不回（0 = 不管）
+    "stale_batch_minutes": 30,     # 13.1 这批消息里最新的一条都是这么多分钟以前的了，没被叫到就不插话（比如补进来的旧消息）
     "mask_pii": True,              # 群友的话写进数据库前把手机号、身份证号、银行卡号、验证码、邮箱换成占位
     "keep_days": 0,                # 原始群消息留多少天（0 = 一直留；整理出的事实和画像不受影响）
 }
@@ -160,6 +169,7 @@ KNOBS = {
     "fix_knowledge": ("被纠正了就改", "bool", None, None, None, "有人说“不对 / 其实是……”时对一下她记的知识"),
     "share_per_day": ("每天最多分享几次", "int", 0, 5, 1, "刷到和大家兴趣有关的新消息，随手转进群；0 = 关"),
     "share_chance": ("一天里分享的概率", "float", 0, 1, 0.05, ""),
+    "share_fresh_days": ("只分享几天内的新消息", "int", 1, 14, 1, "事情发生在这么多天以前的算旧闻，不分享；看不出是哪天的也不分享"),
     "photo_share_chance": ("分享时发照片的概率", "float", 0, 1, 0.05, "要配了画图接口"),
     "watch_videos": ("点开群友发的 B 站视频", "bool", None, None, None, "读字幕、弹幕、热评，能聊具体哪一段"),
     "weather": ("记住群友在哪、那边天气", "bool", None, None, None, "出差、旅游、回老家；提示词里带上那边的天气"),
@@ -171,6 +181,9 @@ KNOBS = {
     "celebrate": ("生日和节日说一声", "bool", None, None, None, "生日在“她的日子”里填；节日按日历（节气只算冬至）"),
     "gate_judge": ("拿不准时问一下", "bool", None, None, None, "差一点就想插话时，让便宜模型判断“说 / 等 / 不”（只回一个字）"),
     "unprompted_per_day": ("每天主动开口最多几次", "int", 0, 200, 5, "插话、冒泡、分享加起来，不算被叫到；0 = 不限"),
+    "signatures": ("按情境想起自己一贯的做法", "bool", None, None, None, "每轮挑 1~3 条人格签名（如果……就……）放在最后提醒她；人设要配了人格文件"),
+    "persona_examples": ("按情境带上对话示例", "bool", None, None, None, "每轮按关键词挑 1~2 段人设里的对话示例，让她学口吻"),
+    "pester_calls": ("被同一个人连着叫几次就降温", "int", 0, 20, 1, "15 分钟里叫她这么多次：回得更短，可以不回；正经问事照常回；0 = 不管"),
     "rethink_max": ("新消息来了重新想几次", "int", 0, 3, 1, "想好了还没发、群里又说了几句：重新想一遍再发"),
     "hear_voice": ("听群友的语音", "bool", None, None, None, "转成文字、带上情绪和笑声（免费的 SenseVoice）"),
     "voice_reply": ("让她说话时发语音", "bool", None, None, None, "要配本地语音合成 net.tts；QQ 才能发"),

@@ -189,6 +189,8 @@ class SpeakMixin:
             self.db.set(f"qq_night_{gid}", (old + [{"who": who, "mid": trigger, "ts": now}])[-6:])
             log.info("群 %s：%s 半夜叫她，她睡了，早上再回", gid, who or "有人")
             return
+        if not mentioned and not guess and texts and self._quiet_for_unprompted(gid, now):
+            return
         activity = self.her_activity()
         busy = self.busy(activity)
         joined = " ".join(t[2] for t in texts)
@@ -278,6 +280,22 @@ class SpeakMixin:
         if len(many) >= 2:
             note += ("这一批里好几个人在叫你：" + "；".join(f"{n}：「{t}」" for n, t in callers[-4:])
                      + "。每个人都回应到（一条里一起回、或者分两条都行），别只回一个。")
+        may_ignore = False
+        if mentioned and texts:
+            cu = next((t[1] for t in texts if t[0] == trigger), texts[-1][1])
+            calls, answered = self.pester_count(gid, cu, now)
+            lim = int(self.gk(gid).get("pester_calls", 4) or 0)
+            if lim and calls >= lim:
+                # 13.2 同一个人一会儿工夫叫了她好几次：多半在逗她 / 刷屏，回得越来越短，可以不回
+                may_ignore = True
+                note += (f"{who or '他'}这 15 分钟里已经叫了你 {calls} 次（你回了 {answered} 次）。"
+                         "要是他在逗你、刷屏、绕圈子、想让你说你不想说的话：这次可以不回（act 写 skip），"
+                         "要回就一条、几个字，别接他的茬往下聊，也别再追问你问过的事；他要是正经在问事情，就照常好好回。")
+                log.info("群 %s：%s 15 分钟里叫了她 %d 次，降温", gid, who or cu, calls)
+            asked = self.her_questions(gid, now)
+            if asked:
+                note += ("你刚才已经问过：" + "；".join(f"「{q}」" for q in asked)
+                         + "。对方没正面回答就算了，别再问一遍同样的问题。")
         if guess:
             how, _, gname = guess.partition(":")
             if how == "about":
@@ -293,7 +311,8 @@ class SpeakMixin:
                 try:
                     await self.speak(gid, mentioned=mentioned, owner_spoke=owner, trigger=trigger, who=who,
                                      note=note, interest=interest, gate_id=gate_id, focus=list(dict.fromkeys([t[1] for t in texts] + self.alias_hits(joined))),
-                                     query=joined, last_is_sticker=bool(texts and texts[-1][3].get("sticker")))
+                                     query=joined, last_is_sticker=bool(texts and texts[-1][3].get("sticker")),
+                                     may_ignore=may_ignore)
                 except Exception as e:  # noqa: BLE001
                     log.warning("群 %s 回复失败：%s", gid, e)
         finally:
@@ -304,7 +323,7 @@ class SpeakMixin:
     async def speak(self, gid: int, mentioned: bool, owner_spoke: bool, trigger: int | None, who: str,
                     why: str | None = None, note: str = "", interest: bool = False, gate_id: int | None = None,
                     focus: list[int] | None = None, query: str = "", last_is_sticker: bool = False, web: str = "",
-                    must: bool = False, _rethink: int = 0) -> bool:
+                    must: bool = False, _rethink: int = 0, may_ignore: bool = False) -> bool:
         """问大模型、质检、发。why 为空 = 在接群友的话（跳过时才算进退避）；冒泡、欢迎新人、小屋 nudge 会给 why。
         must：生日、约好的事、打气这类“这次一定要说”的，不受每天主动开口的预算限制，新消息来了也照样说（会重新想）。"""
         b = self.brain
@@ -327,7 +346,8 @@ class SpeakMixin:
                 texts.insert(0, r["content"])
             web = await self.web_block(gid, texts, mentioned)
         messages = await self.build_messages(gid, mentioned, owner_spoke, who, why, note=note, interest=interest,
-                                             query=query, focus=focus, web=web)
+                                             query=query, focus=focus, web=web,
+                                             flags={"pestered"} if may_ignore else None)
         raw = await b.llm.chat(messages, role=str(self.gk(gid).get("route") or "chat"),
                                json_mode=bool(self.gk(gid).get("plan_json", True)))
         tlog.info("群 %s 原文：%s", gid, raw)
@@ -355,8 +375,9 @@ class SpeakMixin:
                 return await self.speak(gid, mentioned=mentioned, owner_spoke=owner_spoke, trigger=trigger, who=who,
                                         why=why, note=note, interest=interest, gate_id=gate_id,
                                         focus=list(dict.fromkeys([*(focus or []), *new])), query=self._recent_text(gid),
-                                        last_is_sticker=last_is_sticker, web=web, must=must, _rethink=_rethink + 1)
-        mb = int(self.gk(gid)["max_bubbles"])
+                                        last_is_sticker=last_is_sticker, web=web, must=must, _rethink=_rethink + 1,
+                                        may_ignore=may_ignore)
+        mb = 1 if may_ignore else int(self.gk(gid)["max_bubbles"])
         use_plan = bool(self.gk(gid).get("plan_json", True))
         tmap = self._tmap.get(gid, {}) if use_plan else {}
         plan = self.parse_plan(raw) if use_plan else None
@@ -428,7 +449,9 @@ class SpeakMixin:
                     st.last_reply_ts = time.time()
                     return True
                 return False
-            if plan["act"] == "skip" and not mentioned:
+            if plan["act"] == "skip" and (not mentioned or may_ignore):
+                if mentioned:
+                    log.info("群 %s：被同一个人连着叫，这次不回", gid)
                 return skip()
             cap = {"short": 1, "mid": min(2, mb), "long": mb}.get(plan["len"], mb)
             for c in plan["cands"][:max(1, int(self.gk(gid).get("candidates", 2)))]:
@@ -493,7 +516,7 @@ class SpeakMixin:
         sticker_only = bool(not bubbles and sticker and plan and plan["act"] == "say"
                             and not last_is_sticker and self.stickers.choose(gid, sticker))
         if not bubbles and not sticker_only:
-            if mentioned:                     # 被叫到却没有能发的：给一个最短的回应
+            if mentioned and not may_ignore:  # 被叫到却没有能发的：给一个最短的回应
                 bubbles = [random.choice(["？", "嗯？", "在呢"])]
             else:
                 return skip("blocked" if cands else "skip", qtxt)
@@ -642,6 +665,52 @@ class SpeakMixin:
                 if 2 <= len(w) <= 6:
                     out.append(w)
         return out[:12]
+
+    def _quiet_for_unprompted(self, gid: int, now: float) -> bool:
+        """13.1 没人叫她时先不插话的两种情况：这批最新的一条已经是好一会儿以前的了（补进来的旧消息）；
+        不在这个群的 unprompted_hours 里（比如深夜）。"""
+        g = self.gk(gid)
+        row = self.db.conn.execute("SELECT MAX(ts) t FROM qq_group_messages WHERE group_id=? AND role='user'",
+                                   (gid,)).fetchone()
+        stale = float(g.get("stale_batch_minutes", 30) or 0)
+        if stale and row and row["t"] and now - float(row["t"]) > stale * 60:
+            log.info("群 %s：最新的消息已经是 %d 分钟以前的了，不插话", gid, (now - float(row["t"])) / 60)
+            return True
+        hrs = str(g.get("unprompted_hours") or "").strip()
+        if hrs:
+            from datetime import timedelta
+
+            from aigroup.core.schedule import parse_range
+            nd = self.brain.now()
+            inside = False
+            for base in (nd, nd - timedelta(days=1)):               # 跨午夜的时段（08:30-00:30）
+                r = parse_range(hrs, base)
+                inside = inside or bool(r and r[0] <= nd < r[1])
+            if not inside:
+                log.debug("群 %s：不在主动开口的时段（%s），不插话", gid, hrs)
+                return True
+        return False
+
+    def pester_count(self, gid: int, uid, now: float, minutes: float = 15) -> tuple[int, int]:
+        """13.2 这个人最近 minutes 分钟里叫了她几次（@ 她 / 冲她说）、她这段时间说了几句。"""
+        t0 = now - minutes * 60
+        calls = int(self.db.conn.execute("SELECT COUNT(*) n FROM qq_group_messages WHERE group_id=? AND user_id=? "
+                                         "AND role='user' AND to_her=1 AND ts>?", (gid, uid, t0)).fetchone()["n"])
+        said = int(self.db.conn.execute("SELECT COUNT(*) n FROM qq_group_messages WHERE group_id=? AND role='assistant' "
+                                        "AND ts>?", (gid, t0)).fetchone()["n"])
+        return calls, said
+
+    def her_questions(self, gid: int, now: float, minutes: float = 20, k: int = 3) -> list[str]:
+        """13.2 她最近问过的问题（带问号的），提醒她别追问第二遍。"""
+        rows = self.db.conn.execute("SELECT content FROM qq_group_messages WHERE group_id=? AND role='assistant' AND ts>? "
+                                    "ORDER BY id DESC LIMIT 12", (gid, now - minutes * 60)).fetchall()
+        out = []
+        for r in rows:
+            for part in re.split(r"(?<=[？?])", str(r["content"] or "")):
+                part = part.strip()
+                if part.endswith(("？", "?")) and 3 <= len(part) <= 40 and part not in out:
+                    out.append(part)
+        return out[:k]
 
     def unprompted_today(self, gid: int) -> int:
         """今天她在这个群主动开口了几次（插话、冒泡、分享；被叫到的不算）。"""

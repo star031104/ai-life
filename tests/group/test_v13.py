@@ -404,3 +404,76 @@ def test_must_bypasses_cap(cfg, brain):
     gc._record(GROUP, 88888, "小王", "hi", 1)
     assert asyncio.run(gc.speak(GROUP, mentioned=False, owner_spoke=False, trigger=None, who="小王",
                                 why="今天是小王的生日", must=True)) is True
+
+
+# ---------------- 13.1 微信专用 ----------------
+def test_wx_image_decrypt(tmp_path):
+    import hashlib
+    import io
+
+    from cryptography.hazmat.primitives import padding
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from PIL import Image
+
+    from aigroup.wechat.wximg import ImageStore, derive, packed_image_name
+    b = io.BytesIO()
+    Image.new("RGB", (60, 40), "red").save(b, "JPEG")
+    jpg = b.getvalue()
+    code, wxid = 3941000000, "wxid_abc123"
+    key, xk = derive(code, wxid + "_b929")
+    assert key == hashlib.md5(f"{code}{wxid}".encode()).hexdigest()[:16].encode()
+    head, tail = jpg[:1024], jpg[1024:]
+    pd = padding.PKCS7(128).padder()
+    enc = Cipher(algorithms.AES(key), modes.ECB()).encryptor().update(pd.update(head[:1024]) + pd.finalize())
+    enc = enc[:1024] if len(head) == 1024 else enc
+    dat = (b"\x07\x08V2\x08\x07" + len(enc).to_bytes(4, "little") + len(tail).to_bytes(4, "little") + b"\x01"
+           + enc + b"\x00" * 16 + bytes(x ^ xk for x in tail))
+    chat, name = "123@chatroom", "a" * 32
+    acc = tmp_path / "data" / (wxid + "_b929")
+    img_dir = acc / "msg" / "attach" / hashlib.md5(chat.encode()).hexdigest() / "2026-10" / "Img"
+    img_dir.mkdir(parents=True)
+    (img_dir / f"{name}_t.dat").write_bytes(dat)
+    kv = tmp_path / "xwechat" / "net" / "kvcomm"
+    kv.mkdir(parents=True)
+    (kv / f"key_{code}_1_2.statistic").write_text("")
+    st = ImageStore(acc, acc.name, tmp_path / "data")
+    import time as _t
+    out = st.load(chat, name, _t.mktime((2026, 10, 20, 12, 0, 0, 0, 0, -1)))
+    assert out and out[:2] == b"\xff\xd8" and Image.open(io.BytesIO(out)).size == (60, 40)
+    assert packed_image_name(b'\x08\x06\x1a"" ' + name.encode() + b"X\x00") == name
+
+
+def test_stale_batch_and_hours(cfg, brain):
+    import time as _t
+    gc, ob = _gc(cfg, brain, unprompted_hours="")
+    gc._record(GROUP, 88888, "小王", "晚安", 1, ts=_t.time() - 3 * 3600)
+    assert gc._quiet_for_unprompted(GROUP, _t.time()) is True
+    gc._record(GROUP, 88888, "小王", "又来了", 2)
+    assert gc._quiet_for_unprompted(GROUP, _t.time()) is False
+    h = gc.brain.now().hour
+    gc.g["unprompted_hours"] = f"{(h + 2) % 24:02d}:00-{(h + 3) % 24:02d}:00"
+    gc.gover.pop(GROUP, None)
+    assert gc._quiet_for_unprompted(GROUP, _t.time()) is True
+    gc.g["unprompted_hours"] = f"{(h - 1) % 24:02d}:00-{(h + 1) % 24:02d}:00"
+    assert gc._quiet_for_unprompted(GROUP, _t.time()) is False
+
+
+def test_sticker_described_once(cfg, brain, monkeypatch):
+    from aigroup.chat import ingest
+    from conftest import _run
+    gc, ob = _gc(cfg, brain)
+    brain.llm.vision = True
+    monkeypatch.setattr(ingest, "fetch_bytes", lambda url, **k: asyncio.sleep(0, b"\\x89PNGxx"))
+    calls = []
+
+    async def d(b64, hint="", prompt=""):
+        calls.append(prompt)
+        return "翻白眼，无语"
+    brain.llm.describe_image = d
+    for i in (1, 2):
+        ev = {"post_type": "message", "message_type": "group", "group_id": GROUP, "user_id": 88888, "message_id": i,
+              "sender": {"card": "小王"}, "message": [{"type": "image", "data": {"url": "http://x/s.gif", "file": "abc",
+                                                                                "sub_type": 1}}]}
+        _run(gc, ev)
+    rows = [r["content"] for r in brain.db.conn.execute("SELECT content FROM qq_group_messages")]
+    assert rows == ["[表情包：翻白眼，无语]"] * 2 and len(calls) == 1

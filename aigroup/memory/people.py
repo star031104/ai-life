@@ -22,7 +22,8 @@ IMPRESSION_CHARS = 50
 PROFILE_MEMORIES = 8
 MEMORY_CHARS = 80
 
-PROFILE_FIELDS = ["称呼", "性格", "说话风格", "口头禅", "兴趣", "看法", "近况", "群里关系", "和你", "怎么聊", "别碰", "记得的事"]
+PROFILE_FIELDS = ["称呼", "性格", "说话风格", "口头禅", "兴趣", "看法", "近况", "群里关系", "和你", "怎么聊", "他的反应", "在意",
+                  "别碰", "记得的事"]      # 14.0 加了“他的反应”（他的 if-then）和“在意”（他在群里图什么）
 
 
 def familiarity(msgs: int, mentions: int) -> str:
@@ -51,7 +52,7 @@ def profile_line(name: str, prof: dict, fam: str, when: str, owner_note: str = "
         bits.append(owner_note)
     if p.get("印象"):
         bits.append(str(p["印象"]))
-    for k in ("称呼", "性格", "说话风格", "口头禅", "兴趣", "看法", "近况", "群里关系", "和你", "怎么聊"):
+    for k in ("称呼", "性格", "说话风格", "口头禅", "兴趣", "看法", "近况", "群里关系", "和你", "怎么聊", "他的反应", "在意"):
         if p.get(k):
             bits.append(f"{k}：{p[k]}")
     if p.get("记得的事"):

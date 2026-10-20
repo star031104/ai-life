@@ -102,6 +102,7 @@ class GroupHome:
         r.add_post("/api/life/pref", self.life_pref)
         r.add_post("/api/life/plan", self.life_plan)
         r.add_post("/api/life/selfcore", self.life_selfcore)
+        r.add_post("/api/life/proposal", self.life_proposal)
         r.add_post("/api/life/share", self.life_share)
         r.add_post("/api/life/birthday", self.life_birthday)
         r.add_post("/api/life/where", self.life_where)
@@ -953,6 +954,22 @@ class GroupHome:
         gid = self._gid(req, d)
         self.db.set(f"qq_selfcore_{gid}", str(d.get("text") or "").strip()[:500] or None)
         return web.json_response({"ok": True, "message": "存好了"})
+
+    async def life_proposal(self, req):
+        """14.0 她提的性格调整建议：采纳 / 不采纳（采纳只是记一笔，人格文件要人去改）。"""
+        d = await self._json(req)
+        out = list(self.db.get("persona_proposals") or [])
+        hit = None
+        for x in out:
+            if x.get("id") == str(d.get("id")):
+                x["status"] = "accepted" if d.get("accept") else "rejected"
+                hit = x
+        self.db.set("persona_proposals", out)
+        if not hit:
+            return web.json_response({"ok": False, "error": "找不到这条建议"})
+        msg = (f"记下了：去人格文件里把 {hit['facet']}（{hit['name']}）改成 {hit['to']}，重启后生效"
+               if d.get("accept") else "好，不改")
+        return web.json_response({"ok": True, "message": msg})
 
     async def eval_get(self, req):
         return web.json_response(self.gc.eval_snapshot())

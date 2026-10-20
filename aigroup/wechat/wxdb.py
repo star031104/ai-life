@@ -237,6 +237,7 @@ class WxMsg:
     pat_target: str = ""             # 拍一拍：被拍的人
     link: str = ""
     shard: str = ""
+    img: str = ""                    # 13.1 图片消息：本地 .dat 的文件名（packed_info_data 里的 32 位十六进制）
 
     @property
     def mid(self) -> int:
@@ -260,6 +261,9 @@ def parse_row(chat: str, r, self_wxid: str, name2id: dict[int, str], shard: str 
     m = WxMsg(chat=chat, local_id=int(r["local_id"] or 0), server_id=int(r["server_id"] or 0),
               seq=int(r["sort_seq"] or 0), ts=int(r["create_time"] or 0), type=base, sub=sub,
               sender=sender, raw=body, shard=shard)
+    if base == 3 and "packed_info_data" in r.keys():
+        from aigroup.wechat.wximg import packed_image_name
+        m.img = packed_image_name(r["packed_info_data"])
     src = unpack_text(r["source"]) if "source" in r.keys() else ""
     at = xml_tag(src, "atuserlist")
     if at:
@@ -587,7 +591,7 @@ class WeChatData:
     def _cols(self, c, tn) -> list[str]:
         cols = {_s(r[1]) for r in c.execute(f"PRAGMA table_info({tn})")}
         return [x for x in ("local_id", "server_id", "local_type", "sort_seq", "real_sender_id", "create_time",
-                            "message_content", "compress_content", "source") if x in cols]
+                            "message_content", "compress_content", "source", "packed_info_data") if x in cols]
 
     def last_messages(self, chat: str, count: int, until: int | None = None) -> list[WxMsg]:
         """这个群（sort_seq ≤ until 的）最后 count 条，按时间先后。"""

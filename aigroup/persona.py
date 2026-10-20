@@ -20,6 +20,7 @@
     hold_lines     网不好时先说的话（不经过大模型）
     greeting       第一次 /start 时她说的话
     ai_open        true = 大家都知道她是你做的 AI（被问到就大方承认，不装真人）；默认 false
+    traits         14.0 结构化人格文件（和人设放同一个文件夹，比如 local_xiaoman_wx.traits.yaml），见 aigroup/traits.py
 """
 from __future__ import annotations
 
@@ -37,7 +38,7 @@ GENDER_ALIASES = {"女": "female", "女生": "female", "female": "female", "f": 
 LIFE_ALIASES = {"student": "student", "学生": "student", "worker": "worker", "上班": "worker", "上班族": "worker",
                 "work": "worker", "free": "free", "自由": "free", "自由职业": "free"}
 KNOWN_KEYS = {"name", "call_name", "formal_name", "user_name", "gender", "user_gender", "age", "birthday", "identity",
-              "life", "school", "work", "home", "look", "voice", "catchphrases", "interests", "hold_lines", "greeting", "id", "ai_open"}
+              "life", "school", "work", "home", "look", "voice", "catchphrases", "interests", "hold_lines", "greeting", "id", "ai_open", "traits"}
 
 
 @dataclass
@@ -74,6 +75,7 @@ class Persona:
     hold_lines: list[str] = field(default_factory=list)
     greeting: str = ""
     ai_open: bool = False
+    traits: object = None                 # aigroup.traits.Traits（14.0）；没写 traits 就是 None
     path: str = ""
     warnings: list[str] = field(default_factory=list)
 
@@ -188,10 +190,19 @@ def parse_persona(text: str, path: str = "") -> Persona:
     voice = meta.get("voice") if isinstance(meta.get("voice"), dict) else {}
     call = str(meta.get("call_name") or "你").strip()
     body = body.strip()
+    traits = None
+    if meta.get("traits"):
+        from aigroup.traits import load_traits
+        tp = Path(path).parent / str(meta["traits"]) if path else Path(str(meta["traits"]))
+        traits = load_traits(tp)
+        warnings += [f"人格文件：{w}" for w in traits.warnings]
+        core = traits.render_core()
+        if core.strip() != "# 你的人格（说话做事都从这里出发）":
+            body = core + "\n\n" + body          # 渲染好的人格放正文最前面：人设版本、盲比、评测都会带上它
     if len(body) < 80:
         warnings.append("正文太短：多写几句她是谁、什么性格、怎么说话，她才像她")
-    if len(body) > 4000:
-        warnings.append(f"正文有 {len(body)} 字，有点长（免费模型读太长的人设会记不住重点，建议 3000 字以内）")
+    if len(body) > 6000:
+        warnings.append(f"正文有 {len(body)} 字，有点长（太长的人设模型会记不住重点，建议 5000 字以内，细节放进对话示例和人格文件）")
     if not examples:
         warnings.append("没有“# 对话示例”：写几段她平时怎么说话，效果会好很多")
     return Persona(
@@ -206,6 +217,7 @@ def parse_persona(text: str, path: str = "") -> Persona:
         voice=voice, catchphrases=lst(meta.get("catchphrases")), interests=lst(meta.get("interests")), hold_lines=lst(meta.get("hold_lines")),
         greeting=str(meta.get("greeting") or "").strip(), path=str(path), warnings=warnings,
         ai_open=str(meta.get("ai_open") or "").strip().lower() in ("true", "1", "yes", "是"),
+        traits=traits,
     )
 
 

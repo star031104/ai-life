@@ -74,16 +74,14 @@ def test_monthly_self(cfg, brain):
     gc, ob = _gc(cfg, brain)
     brain.db.set(f"qq_reflect_hist_{GROUP}", [{"week": "2026-W40", "text": "- 迷上七日世界"},
                                               {"week": "2026-W41", "text": "- 开始熬夜画图"}])
-    orig = brain.llm.chat
-
-    async def chat(messages, helper=False, **kw):
-        if "我是怎样的人" in messages[-1]["content"]:
-            return "- 我玩游戏菜但很上头\n- 我是个 AI 模型\n- 我越来越爱熬夜画图"
-        return await orig(messages, helper, **kw)
-    brain.llm.chat = chat
+    _json(brain, {"我是怎样的人": {"lines": ["- 我玩游戏菜但很上头", "- 我是个 AI 模型", "我越来越爱熬夜画图"],
+                                  "evidence": ["W41 开始熬夜画图"],
+                                  "suggest": [{"facet": "E5", "from": 3, "to": 4, "why": "越来越爱起哄", "evidence": "W40"}]}})
     assert asyncio.run(gc.monthly_self()) == 1
     core = brain.db.get(f"qq_selfcore_{GROUP}")
-    assert "熬夜画图" in core and "AI" not in core
+    assert "熬夜画图" in core and "模型" not in core and core.count("- ") == 2    # 14.0 JSON；行首补“- ”
+    assert brain.db.get("persona_proposals")[0]["facet"] == "E5"            # 性格调整只记成建议
+    assert "叙事" not in core
     assert asyncio.run(gc.monthly_self()) == 0                        # 一个月一次
     assert "你是怎样的人" in asyncio.run(gc.build_messages(GROUP, False, False, "小王"))[0]["content"]
 
@@ -91,7 +89,8 @@ def test_monthly_self(cfg, brain):
 class FakeWeb:
     enabled = True
 
-    async def search(self, q, n=5):
+    async def search(self, q, n=5, fresh_days=0):
+        self.fresh_days = fresh_days
         return [{"title": "七日世界禁忌岛今日上线", "url": "", "snippet": "全新海岛剧本，可以造船出海"}]
 
     block = staticmethod(__import__("aigroup.net.search", fromlist=["WebSearch"]).WebSearch.block)
@@ -103,15 +102,54 @@ def test_share_news(cfg, brain):
     gc.photos.per_day = 0
     _run(gc, _msg(FRIEND, "小王", "周四一起玩七日世界", 1))
     _json(brain, {"搜索词": {"query": "七日世界 最新", "topic": "七日世界"},
-                  "值不值得": {"share": True, "gist": "禁忌岛今天上线了，能造船", "topic": "禁忌岛", "summary": "海岛剧本"}})
+                  "值不值得": {"share": True, "when": f"{brain.now():%Y-%m-%d}", "source_title": "七日世界禁忌岛今日上线",
+                               "gist": "禁忌岛今天上线了，能造船", "topic": "禁忌岛", "summary": "海岛剧本"}})
     ob.sent.clear()
     assert asyncio.run(gc.share(GROUP, gc._st(GROUP))) is True
     assert ob.sent
-    assert "你刚在手机上刷到" in brain.llm.group_calls[-1][-1]["content"]
+    assert gc.web.fresh_days == 3                                           # 13.2 只搜最近几天的新闻
+    why = brain.llm.group_calls[-1][-1]["content"]
+    assert "你刚在手机上刷到" in why and "今天的事" in why and "原标题「七日世界禁忌岛今日上线」" in why
     assert gc.shares(GROUP)[-1]["kind"] == "news"
     assert any(e["topic"] == "禁忌岛" for e in gc.knowledge.entries(GROUP))
     snap = gc.life_snapshot(GROUP)
     assert snap["shares"] and snap["knowledge"]
+
+
+def test_share_skips_old_or_undated_news(cfg, brain):
+    """13.2 看日期：几天前开始的事（“9 月 29 日开打”）、看不出日期的，都不分享。"""
+    from datetime import timedelta
+    gc, ob = _gc(cfg, brain)
+    gc.web = FakeWeb()
+    gc.photos.per_day = 0
+    _run(gc, _msg(FRIEND, "小王", "周四一起玩七日世界", 1))
+    old = f"{brain.now() - timedelta(days=20):%Y-%m-%d}"
+    for when in (old, "unknown"):
+        _json(brain, {"搜索词": {"query": "七日世界 最新", "topic": "七日世界"},
+                      "值不值得": {"share": True, "when": when, "gist": "禁忌岛上线了", "topic": "禁忌岛", "summary": "海岛剧本"}})
+        ob.sent.clear()
+        assert asyncio.run(gc.share(GROUP, gc._st(GROUP))) is False
+        assert not ob.sent and gc.shares(GROUP)[-1]["kind"] == "skip"
+    assert not any(e["topic"] == "禁忌岛" for e in gc.knowledge.entries(GROUP))   # 旧闻也不记成“刚知道的事”
+
+
+def test_share_age_and_dates():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from aigroup.chat.grow import share_age
+    from aigroup.net.search import pub_date, text_dates
+    t = datetime(2026, 10, 21, 7, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    assert text_dates("擂台赛第1周9月29日开打，3.1 拿下", t) == ["2026-09-29"]
+    assert text_dates("2025年12月3日", t) == ["2025-12-03"] and text_dates("比分 3.1、10/19", t) == []
+    assert pub_date("Mon, 20 Oct 2026 08:00:00 GMT") == "2026-10-20" and pub_date("") == ""
+    kpl = [{"title": "KPL擂台赛开战", "snippet": "擂台赛第1周9月29日开打", "date": ""}]
+    assert share_age({"when": "unknown", "source_title": "KPL擂台赛开战"}, kpl, t, 3) is None
+    fresh = [{"title": "LOUD夺冠", "snippet": "", "date": "2026-10-20"}]
+    assert share_age({"when": "2026-10-20", "source_title": "LOUD夺冠"}, fresh, t, 3) == 1
+    stale = [{"title": "LOUD夺冠", "snippet": "", "date": "2026-10-05"}]
+    assert share_age({"when": "2026-10-20", "source_title": "LOUD夺冠"}, stale, t, 3) is None   # 发布日期更早：旧闻
+    assert share_age({"when": "unknown"}, [{"title": "x", "snippet": "y"}], t, 3) is None
 
 
 def test_share_photo(cfg, brain):

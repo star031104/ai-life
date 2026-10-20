@@ -201,6 +201,8 @@ class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, Pr
                 if n_old:
                     log.info("清掉了 %d 条 %d 天以前的群消息", n_old, keep)
             n_img = self.db.conn.execute("SELECT COUNT(*) FROM kv WHERE k LIKE 'qq_img_%'").fetchone()[0]
+            self.db.conn.execute("DELETE FROM kv WHERE k IN (SELECT k FROM kv WHERE k LIKE 'qq_stkdesc_%' "
+                                 "ORDER BY rowid LIMIT MAX(0, (SELECT COUNT(*) FROM kv WHERE k LIKE 'qq_stkdesc_%') - 3000))")
             if n_img > 3000:                                    # 看过的图的描述：太多了就清掉一半（只是缓存）
                 self.db.conn.execute("DELETE FROM kv WHERE k IN (SELECT k FROM kv WHERE k LIKE 'qq_img_%' LIMIT ?)",
                                      (n_img // 2,))
