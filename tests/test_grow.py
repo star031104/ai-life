@@ -1,48 +1,19 @@
-"""11.2：语音、随手拍、喜好不改口、每月整理、被纠正了就改、记 token 用量（都不联网）。"""
+"""11.2：随手拍、喜好不改口、每月整理、被纠正了就改、记 token 用量（都不联网）。"""
 import asyncio
 import time
 from datetime import datetime, timedelta
 
 
-def test_voice_tag_parsed_and_sent(env, monkeypatch):
+def test_voice_tag_ignored(env):
+    """语音已去掉：模型偶尔还打 [语音]，照样去掉、发文字；提示词里不提语音。"""
     cfg, brain, bot, fake = env
     from ailife.mind.output import parse_reply
     p = parse_reply("[语音]晚安啦|||明天见")
-    assert p.bubbles[0].voice and p.bubbles[0].text == "晚安啦" and not p.bubbles[1].voice
-
-    async def speak(text):
-        return b"ID3" + b"\x00" * 600
-    monkeypatch.setattr(brain.voice, "speak", speak)
+    assert [b.text for b in p.bubbles] == ["晚安啦", "明天见"]
     asyncio.run(bot.deliver(p))
-    kinds = [k for k, *_ in fake.sent]
-    assert kinds[0] == "voice" and "text" in kinds
-    assert brain.db.last_message("assistant")["content"] == "明天见"
-    assert brain.db.conn.execute("SELECT COUNT(*) FROM messages WHERE kind='voice'").fetchone()[0] == 1
-
-
-def test_voice_falls_back_to_text(env):
-    cfg, brain, bot, fake = env
-    from ailife.mind.output import parse_reply
-    assert not brain.voice.ready                                  # 没配：照样发文字
-    asyncio.run(bot.deliver(parse_reply("[语音]想你了")))
-    assert [k for k, *_ in fake.sent] == ["text"]
-
-
-def test_voice_limits(env):
-    cfg, brain, bot, fake = env
-    from ailife.media.voice import Voice
-    v = Voice({**cfg, "voice": {"enabled": True, "api_key": "k", "max_per_day": 2, "max_chars": 10}}, brain.db)
-    assert v.ready and v.remaining_today() == 2
-    assert Voice.speakable("好呀（笑）😊~") == "好呀~"
-    assert asyncio.run(v.speak("这句话实在是太长太长了念不完的")) is None     # 太长不念
-
-
-def test_voice_in_protocol(env):
-    cfg, brain, bot, fake = env
-    brain.voice.enabled, brain.voice.api_key = True, "k"
-    assert "[语音]" in brain.protocol("晚安呀")
-    brain.voice.enabled = False
-    assert "[语音]" not in brain.protocol("晚安呀")
+    assert [k for k, *_ in fake.sent] == ["text", "text"]
+    assert "[语音]" not in brain.protocol("晚安呀 想听你的声音")
+    assert not hasattr(fake, "send_voice")
 
 
 def test_prefs_learned_and_locked(env, monkeypatch):
@@ -166,3 +137,29 @@ def test_image_gen_siliconflow_format(env, monkeypatch):
     g.chain = [{"name": "sf", "base_url": "https://x/v1", "model": "m"}]
     assert asyncio.run(g.generate("猫", "768x1024")) == b"PNGDATA"
     assert time.time()
+
+
+def test_daily_budget(env, tmp_path):
+    cfg, brain, bot, fake = env
+    import json as _j
+    import pytest
+    from ailife.llm.budget import BudgetExceeded
+    from ailife.llm.client import LLM
+    shared = tmp_path / "budget.json"
+    day = datetime.now(cfg.tz).strftime("%Y-%m-%d")
+    shared.write_text(_j.dumps({"day": day, "bots": {"yuki": 99, "qq": 0.5}}), encoding="utf-8")   # 自己那份不算文件里的
+    from ailife.core.config import Cfg
+    c = Cfg({**cfg, "llm": {**cfg["llm"], "budget": {"daily_cny": 1, "name": "yuki", "shared_file": str(shared)}}})
+    llm = LLM(c)
+    llm.db = brain.db
+    llm.add_cost(0.07)                                     # ≈ ¥0.50，加上 qq 的 0.5 = ¥1.0
+    assert llm.budget.status(0.07, day)["over"]
+    with pytest.raises(BudgetExceeded):
+        asyncio.run(llm.chat([{"role": "user", "content": "x"}], role="helper"))       # 后台的活先停
+    with pytest.raises(RuntimeError) as e:
+        asyncio.run(llm.chat([{"role": "user", "content": "x"}], role="chat"))         # 聊天还能多一成（这里没配模型）
+    assert not isinstance(e.value, BudgetExceeded)
+    llm.add_cost(0.03)
+    with pytest.raises(BudgetExceeded):
+        asyncio.run(llm.chat([{"role": "user", "content": "x"}], role="chat"))
+    assert LLM(cfg).budget.cap == 0                         # 默认不限

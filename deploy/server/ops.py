@@ -159,6 +159,37 @@ async def notify(text: str) -> bool:
     return False
 
 
+# ---------------- 今天花了多少（共享账本） ----------------
+def spend_today() -> dict:
+    """三个程序今天各花了多少（人民币，按 llm_stats 里估算的美元），写进 budget.json 给三个程序看。"""
+    day = now_cn().strftime("%Y-%m-%d")
+    c = (read_cfg(HOME / "ai-life").get("llm") or {}).get("budget") or {}
+    rate = float(c.get("usd_cny", 7.2) or 7.2)
+    cap = float(os.environ.get("AILIFE_BUDGET") or c.get("daily_cny", 0) or 0)
+    bots = {}
+    for b in BOTS:
+        p = HOME / b["dir"] / b["db"]
+        if not p.exists():
+            continue
+        try:
+            con = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=20)
+            table = "kv" if con.execute("SELECT 1 FROM sqlite_master WHERE name='kv'").fetchone() else "state"
+            s = _kv(con, table, f"llm_stats_{day}").get(f"llm_stats_{day}") or {}
+            con.close()
+            bots[b["key"]] = round(float(s.get("usd", 0) or 0) * rate, 4) if isinstance(s, dict) else 0.0
+        except sqlite3.Error:
+            continue
+    out = {"day": day, "bots": bots, "cap": cap, "total": round(sum(bots.values()), 3), "ts": time.time()}
+    try:
+        tmp = HOME / "budget.json.tmp"
+        tmp.write_text(json.dumps(out), encoding="utf-8")
+        os.chmod(tmp, 0o644)
+        tmp.replace(HOME / "budget.json")
+    except OSError as e:
+        print("写不了 budget.json：", e, file=sys.stderr)
+    return out
+
+
 # ---------------- watch ----------------
 def http_json(port: int, path: str = "/api/state", timeout: float = 8.0) -> dict | None:
     import urllib.request
@@ -255,6 +286,14 @@ async def watch():
     if (m["disk_used"] > 90 or m["mem_used"] > 92) and time.time() - float(ms.get("alerted") or 0) > 12 * 3600:
         alerts.append(f"服务器快满了：硬盘 {m['disk_used']}%、内存 {m['mem_used']}%")
         ms["alerted"] = time.time()
+    sp = spend_today()
+    bs = st.setdefault("budget", {})
+    if sp["cap"] > 0:
+        for lvl, name in ((1.0, "到上限了，后台的活先停，聊天也快停了"), (0.8, "用到八成了")):
+            if sp["total"] >= sp["cap"] * lvl and bs.get(str(lvl)) != sp["day"]:
+                alerts.append(f"今天的花费{name}：约 ¥{sp['total']:.2f} / ¥{sp['cap']:g}")
+                bs[str(lvl)] = sp["day"]
+                break
     sent = False
     if alerts:
         sent = await notify("\n".join(alerts))
@@ -262,7 +301,7 @@ async def watch():
         st["alerts"] = st["alerts"][-30:]
     save_state(st)
     last_bk = sorted(BACKUPS.glob("ailife-*.tar.gz"))[-1:] if BACKUPS.exists() else []
-    write_www("status.json", {"ts": time.time(), "bots": bots, "machine": m,
+    write_www("status.json", {"ts": time.time(), "bots": bots, "machine": m, "spend": sp,
                               "alerts": list(reversed(st.get("alerts", [])))[:8],
                               "backup": {"last": last_bk[0].name if last_bk else "",
                                          "size_mb": round(last_bk[0].stat().st_size / 2 ** 20, 2) if last_bk else 0,
@@ -395,8 +434,6 @@ def report() -> dict:
         else:
             x["learned"] = con.execute("SELECT COUNT(*) FROM memories WHERE owner='self' AND content LIKE '我查过「%' "
                                        "AND ts>=?", (t0,)).fetchone()[0]
-            vc = _kv(con, table, "voice_")
-            x["voice"] = sum(int(v or 0) for k, v in vc.items() if k[6:] in days)
         con.close()
         out["bots"].append(x)
     out["total_usd"] = round(sum(sum(b["usd"]) for b in out["bots"]), 3)

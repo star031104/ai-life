@@ -51,11 +51,20 @@ class PhotoMaker:
         if self.remaining_today() <= 0:
             log.info("今天的照片额度用完了")
             return None
+        llm = getattr(self, "llm", None)
+        if llm is not None and hasattr(llm, "budget"):
+            from ailife.llm.budget import BudgetExceeded
+            try:
+                llm.budget.check(float(llm.stats().get("usd", 0) or 0), llm._today(), False)
+            except BudgetExceeded:
+                return None
         prompt = self.build_prompt(scene)
         t0 = time.time()
         data = await self.gen.generate(prompt, self.size)
         if not data:
             return None
+        if llm is not None and hasattr(llm, "add_cost"):
+            llm.add_cost(llm.budget.image_usd)              # 画图按张记账
         self.db.set(self._today_key(), int(self.db.get(self._today_key(), 0)) + 1)
         log.info("画好一张照片（%.1fs）：%s", time.time() - t0, scene)
         return data

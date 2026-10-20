@@ -30,7 +30,6 @@ def _fake_home(home: Path):
                     "CREATE TABLE messages(id INTEGER PRIMARY KEY, ts REAL, role TEXT, content TEXT);"
                     "CREATE TABLE memories(id INTEGER PRIMARY KEY, ts REAL, content TEXT, owner TEXT);")
     c.execute("INSERT INTO state VALUES (?,?)", (f"llm_stats_{today}", stats))
-    c.execute("INSERT INTO state VALUES (?,?)", (f"voice_{today}", "2"))
     c.executemany("INSERT INTO messages(ts, role, content) VALUES (?,?,?)",
                   [(time.time(), "user", "hi"), (time.time(), "assistant", "嗯")])
     c.commit()
@@ -69,10 +68,13 @@ def test_backup_and_report(tmp_path, monkeypatch):
     assert (tmp_path / "home" / "backups" / "latest.tar.gz").exists()
     r = ops.report()
     yuki, qq = r["bots"][0], r["bots"][1]
-    assert yuki["calls"][-1] == 10 and yuki["fail"][-1] == 1 and yuki["voice"] == 2 and yuki["her"][-1] == 1
+    assert yuki["calls"][-1] == 10 and yuki["fail"][-1] == 1 and yuki["her"][-1] == 1
     assert qq["msgs"][-1] == 2 and qq["shares"] == 1 and qq["learned"] == 1 and qq["errors"] == 3
     assert r["total_usd"] == 0.036
     assert json.loads((tmp_path / "www" / "report.json").read_text(encoding="utf-8"))["days"][-1] == r["days"][-1]
+    sp = ops.spend_today()
+    assert sp["bots"] == {"yuki": 0.0864, "qq": 0.0864, "wx": 0.0864} and sp["cap"] == 0
+    assert json.loads((tmp_path / "home" / "budget.json").read_text(encoding="utf-8"))["total"] == sp["total"]
 
 
 def test_watch_alerts_after_two_fails(tmp_path, monkeypatch):

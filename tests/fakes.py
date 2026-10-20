@@ -65,9 +65,6 @@ class FakeOut:
     async def send_photo(self, chat, photo, reply_to_message_id=None, **k):
         return self._m("photo", chat, photo, reply_to_message_id=reply_to_message_id)
 
-    async def send_voice(self, chat, data, **k):
-        return self._m("voice", chat, data)
-
     async def send_sticker_image(self, chat, data, reply_to_message_id=None):
         return self._m("sticker", chat, data, reply_to_message_id=reply_to_message_id)
 

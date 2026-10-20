@@ -66,7 +66,7 @@ svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stro
 h2{font-size:15px;margin:30px 0 12px;font-weight:650;display:flex;align-items:center;gap:8px}
 h2 .hint{font-weight:400;color:var(--ink-3);font-size:12.5px;margin-left:auto}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow)}
-.minis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.minis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
 .mini .l{color:var(--ink-3);font-size:12px} .mini .v{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
 .mini .s{color:var(--ink-3);font-size:12px}
 .meter{height:6px;border-radius:4px;background:var(--surface-3);overflow:hidden;margin-top:6px}
@@ -106,7 +106,7 @@ th:first-child,td:first-child{text-align:left}
 
   <div class="bots" id="bots"></div>
 
-  <h2>服务器<span class="hint" id="bk"></span></h2>
+  <h2>服务器和花费<span class="hint" id="bk"></span></h2>
   <div class="card"><div class="minis" id="machine"></div></div>
 
   <h2>这一周的体检<span class="hint" id="rpTs">每天凌晨算一次</span></h2>
@@ -154,8 +154,10 @@ function renderBots(st){const bots=(st&&st.bots)||DEF;
       <div class="nums"><div><b>${b.today??"-"}</b><span>${b.key==="yuki"?"今天聊了":"今天群里"}</span></div>${b.key==="yuki"?"":`<div><b>${b.her_today??"-"}</b><span>她说了</span></div>`}</div>
       <div class="go">进她的小屋 ${icon("arrow")}</div></a>`}).join("")}
 function meter(v){return `<div class="meter"><i class="${v>90?"vhi":v>75?"hi":""}" style="width:${Math.min(100,v)}%"></i></div>`}
-function renderMachine(st){const m=(st&&st.machine)||{};const b=(st&&st.backup)||{};
-  $("machine").innerHTML=`<div class="mini"><div class="l">硬盘</div><div class="v">${m.disk_used??"-"}%</div>${meter(m.disk_used||0)}<div class="s">还剩 ${m.disk_free_gb??"-"} GB</div></div>
+function renderMachine(st){const m=(st&&st.machine)||{};const b=(st&&st.backup)||{};const sp=(st&&st.spend)||{};
+  const pct=sp.cap?sp.total/sp.cap*100:0;
+  $("machine").innerHTML=`<div class="mini"><div class="l">今天花了</div><div class="v">¥${(sp.total??0).toFixed(2)}</div>${sp.cap?meter(pct):""}<div class="s">${sp.cap?`上限 ¥${sp.cap}（三个加起来）`:"没设上限"}</div></div>
+    `<div class="mini"><div class="l">硬盘</div><div class="v">${m.disk_used??"-"}%</div>${meter(m.disk_used||0)}<div class="s">还剩 ${m.disk_free_gb??"-"} GB</div></div>
     <div class="mini"><div class="l">内存</div><div class="v">${m.mem_used??"-"}%</div>${meter(m.mem_used||0)}<div class="s">共 ${m.mem_total_gb??"-"} GB</div></div>
     <div class="mini"><div class="l">负载</div><div class="v">${m.load??"-"}</div>${meter(((m.load||0)/(m.cpus||1))*100)}<div class="s">${m.cpus??"-"} 核</div></div>
     <div class="mini"><div class="l">备份</div><div class="v">${b.count??0} 份</div><div class="s" style="margin-top:6px">${b.last?esc(b.last.replace(/^ailife-|\.tar\.gz$/g,""))+" · "+b.size_mb+" MB":"还没备份过"}</div><div class="s">每天凌晨一份，留 30 天</div></div>`;
@@ -168,7 +170,7 @@ const fmtTok=n=>n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"k":Stri
 function renderReport(r){if(!r){$("rpTable").innerHTML='<tr><td class="empty">还没有体检（每天凌晨算一次）</td></tr>';return}
   $("rpTs").textContent=`${ago(r.ts)}算的 · 最近 7 天合计约 $${r.total_usd}`;
   const rows=r.bots.map(b=>{const calls=sum(b.calls),fail=sum(b.fail);
-    const extra=b.key==="yuki"?`语音 ${b.voice||0} 条`:`分享 ${b.shares||0} · 提醒 ${b.plans||0}`;
+    const extra=b.key==="yuki"?"":`分享 ${b.shares||0} · 提醒 ${b.plans||0}`;
     return `<tr><td><span class="dot" style="background:${COL[b.key]}"></span>${esc(b.label)}</td><td>${sum(b.msgs)}</td><td>${sum(b.her)}</td>
       <td>${calls}</td><td style="color:${calls&&fail/calls>.1?"var(--bad)":"inherit"}">${calls?Math.round(fail/calls*1000)/10:0}%</td>
       <td>${fmtTok(sum(b.tok_in))} / ${fmtTok(sum(b.tok_out))}</td><td>$${sum(b.usd).toFixed(3)}</td>

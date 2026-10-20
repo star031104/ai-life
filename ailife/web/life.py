@@ -57,8 +57,7 @@ class LifeWebMixin:
         sg = getattr(b, "selfgrow", None)
         if sg is not None:
             try:
-                extra["grow"] = {**sg.snapshot(), "voice_ready": bool(getattr(b, "voice", None) and b.voice.ready),
-                                 "photo_ready": bool(b.photos.enabled and b.photos.gen.ready)}
+                extra["grow"] = {**sg.snapshot(), "photo_ready": bool(b.photos.enabled and b.photos.gen.ready)}
             except Exception:  # noqa: BLE001
                 pass
         from ailife.persona.library import list_personas

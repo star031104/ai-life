@@ -37,6 +37,10 @@ persona_file: persona/linxi.md       # 自带的人设：linxi.md（林汐，温
 #                 helper 其它小活    memory 整理记忆    night 日记 / 日程 / 来信（这三个不配就用上一级，最后用 chat）
 #                 vision 看你发的图  image 画她的照片  embed 记忆检索的向量（这三个不配就不做）
 llm:
+  budget:                        # 每天的花费上限（人民币，按 token 估算，画图按张算）；到了上限后台的活先停，聊天再多一成也停，第二天恢复
+    daily_cny: 0                 # 0 = 不限；三个她放一台服务器上时，三个都写同一个数、同一个 shared_file，就是三个加起来的上限
+    name: yuki                     # 在共享账本里的名字
+    shared_file: ""              # 服务器上的小管家（deploy/server/ops.py）每 5 分钟写一次三个程序今天各花了多少
   temperature: 0.9
   max_tokens: 800
   background_yield_seconds: 25   # 聊天优先：你刚聊完的这么多秒内，后台的整理记忆、写日记先等一等
@@ -109,20 +113,6 @@ photo:
   size: 768x1344              # 竖屏手机照片
   max_per_day: 3              # 每天最多发几张
   proactive_per_week: 3       # 11.2 每周最多主动发几次“看看我在干嘛”的照片（0 = 只在他想看时发）
-
-# ---------------- 语音（11.2） ----------------
-# 很短、想让他听见声音的时候（撒娇、早安晚安、哄他）这一条用语音发。用 OpenAI 兼容的 /audio/speech 接口，
-# 默认硅基流动的 CosyVoice2（和看图同一个 Key，一条不到 1 分钱）。声音可选 FunAudioLLM/CosyVoice2-0.5B:anna / bella / claire / diana（女声）、
-# alex / benjamin / charles / david（男声）；人设里写 voice: {voice: …, speed: 1.0} 优先。
-voice:
-  enabled: false
-  # base_url: https://api.siliconflow.cn/v1   # 不写就是这个
-  api_key: ""                 # 写 ${SILICONFLOW_KEY}（Key 放 .env）
-  model: FunAudioLLM/CosyVoice2-0.5B
-  voice: FunAudioLLM/CosyVoice2-0.5B:diana
-  speed: 1.0
-  max_per_day: 6
-  max_chars: 60               # 超过这么多字的不念，照样发文字
 
 # ---------------- 小屋网页 ----------------
 web:

@@ -82,6 +82,8 @@ class LLM:
         self.db = None                     # Brain 会把数据库挂上来，用来记每天的调用统计
         self.tz = cfg.get("tz")
         self._stats: dict = {}
+        from .budget import Budget
+        self.budget = Budget(cfg)                 # 每天的花费上限（llm.budget）
 
     FOREGROUND = ("chat", "vision")
     pronoun_note = ""                      # 角色 / 用户不是默认性别时，Brain 会设成一句代词说明
@@ -139,6 +141,21 @@ class LLM:
             except Exception:  # noqa: BLE001
                 pass
 
+    def add_cost(self, usd: float, what: str = "image"):
+        """不是聊天的花费（画图按张算）也记进今天的账。"""
+        day = self._today()
+        st = self._stats.get(day)
+        if st is None:
+            st = (self.db.get(f"llm_stats_{day}") if self.db is not None else None) or {}
+            self._stats = {day: st}
+        st["usd"] = round(st.get("usd", 0.0) + float(usd), 6)
+        st[what] = st.get(what, 0) + 1
+        if self.db is not None:
+            try:
+                self.db.set(f"llm_stats_{day}", st)
+            except Exception:  # noqa: BLE001
+                pass
+
     def stats(self, day: str | None = None) -> dict:
         day = day or self._today()
         if day in self._stats:
@@ -184,6 +201,7 @@ class LLM:
     async def chat(self, messages: list[dict], helper: bool = False, role: str | None = None,
                    temperature: float | None = None, max_tokens: int | None = None, background: bool = False) -> str:
         role = role or ("helper" if helper else "chat")
+        self.budget.check(float(self.stats().get("usd", 0) or 0), self._today(), role in self.FOREGROUND and not background)
         if role in self.FOREGROUND and not background:
             self._fg_active += 1
             try:

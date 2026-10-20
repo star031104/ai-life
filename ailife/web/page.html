@@ -472,7 +472,7 @@ body.admin nav.tabs button.admbtn{color:var(--accent-ink)}
             <button class="btn sm" id="gPAdd">加一条</button></div></div>
       </div>
       <div class="card c5">
-        <div class="card-h"><h2><span data-i="spark"></span>这周的她</h2><span class="sp"></span><span class="hint">语音、随手拍、整理自己</span></div>
+        <div class="card-h"><h2><span data-i="spark"></span>这周的她</h2><span class="sp"></span><span class="hint">随手拍、整理自己</span></div>
         <div class="card-b"><dl class="kv" id="gStat"></dl></div>
       </div>
       <div class="card c12">
@@ -1146,8 +1146,7 @@ function renderGrow(){const G=S.grow;if(!G)return;
   $("gPrefs").innerHTML=(G.prefs||[]).map(p=>`<span class="pref"><b>${esc(p.topic)}</b>${esc(p.v)}<button data-pdel="${esc(p.topic)}" title="删掉">×</button></span>`).join("")||'<div class="empty" style="padding:6px 0">她还没说过自己喜欢什么、讨厌什么（每天会把昨天说过的整理一遍）</div>';
   $("gPrefs").querySelectorAll("[data-pdel]").forEach(b=>b.onclick=async()=>{const r=await post("api/self/pref",{topic:b.dataset.pdel,delete:true});toast(r.message||r.error);load()});
   const t=G.tidy||{};
-  $("gStat").innerHTML=`<dt>今天的语音</dt><dd>${G.voice_today} 条${G.voice_ready?"":"（没开：config.yaml 的 voice）"}</dd>
-    <dt>这周随手拍</dt><dd>${G.photos_week} 张${G.photo_ready?"":"（没配画图接口）"}</dd>
+  $("gStat").innerHTML=`<dt>这周随手拍</dt><dd>${G.photos_week} 张${G.photo_ready?"":"（没配画图接口）"}</dd>
     <dt>上次整理自己</dt><dd>${t.month?`${esc(t.month)}：合并 ${t.merged} 组、删掉 ${t.removed} 条`:"还没整理过（每月初，攒够十几条后）"}</dd>`;
   $("gLearned").innerHTML=(G.learned||[]).map(m=>{const mm=String(m.content).match(/^我查过「([^」]+)」：?(.*)$/);
     return `<div class="kcard"><p><b>${esc(mm?mm[1]:"")}</b>${esc(mm?mm[2]:m.content)}</p><button class="btn ghost sm danger" data-act="delMem" data-id="${m.id}" aria-label="删除">${icon("x")}</button></div>`}).join("")||'<div class="empty">还没查过什么</div>';

@@ -87,7 +87,7 @@ class SelfGrow:
         self.db.set(key, True)
         t0 = day.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         mine = [r["content"] for r in self.db.messages_between(t0, t0 + 86400)
-                if r["role"] == "assistant" and r["kind"] in ("text", "proactive", "voice")]
+                if r["role"] == "assistant" and r["kind"] in ("text", "proactive")]
         if len(mine) < 3:
             return 0
         try:
@@ -197,6 +197,5 @@ class SelfGrow:
                           sorted(self.prefs().items(), key=lambda kv: -kv[1].get("ts", 0))],
                 "learned": list(reversed(learned)),
                 "tidy": self.db.get("self_tidy_last") or {},
-                "voice_today": int(self.db.get(f"voice_{datetime.now(self.b.cfg.tz):%Y-%m-%d}", 0) or 0),
                 "photos_week": int(self.db.get(f"life_photo_{datetime.now(self.b.cfg.tz):%G-W%V}", 0) or 0)}
 

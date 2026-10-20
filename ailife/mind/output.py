@@ -12,8 +12,7 @@
     [跳过]          这次什么都不发（主动消息时用）
     [愿望:一起去看海]      记进你们的愿望清单；[完成愿望:一起去看海] 实现了
     [睡前故事:主题]        接下来单独讲一个睡前故事
-    [语音]          11.2：放在某条开头，这条用语音发（配了 voice 才念；没配照样发文字）
-    [打电话]        打电话已去掉：模型偶尔还会打这个标签，照样去掉、不做任何事
+    [语音] [打电话]        语音功能已去掉：模型偶尔还会打这两个标签，照样去掉、不做任何事
 """
 from __future__ import annotations
 
@@ -62,7 +61,6 @@ class Bubble:
     sticker: str | None = None      # 情绪名
     photo: str | None = None        # 照片画面描述
     recall: bool = False            # 发出去几秒后“撤回”
-    voice: bool = False             # 11.2 这条用语音发
 
 
 @dataclass
@@ -135,8 +133,6 @@ def parse_reply(raw: str, name: str | None = None) -> Parsed:
                 p.songs.append((t.strip().strip("《》"), a.strip()))
             elif tag == "撤回":
                 b.recall = True
-            elif tag == "语音":
-                b.voice = True
             elif tag == "回应" and arg:
                 p.reaction = arg.strip()[:8]
             elif tag == "引用":
