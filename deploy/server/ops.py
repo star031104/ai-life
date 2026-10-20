@@ -336,7 +336,9 @@ async def watch():
             x["down_since"] = s["down_since"]
             again = s.get("alerted") and time.time() - float(s["alerted"]) > 6 * 3600       # 一直没好：6 小时再说一次
             if s["fails"] >= 2 and (not s.get("alerted") or again):
-                alerts.append(f"{x['label']}掉线了：{x['why']}。打开小屋看看：{x['path']}")
+                how = (f"打开 {public_url()}/wechat/ （小屋的用户名密码），在微信窗口里点“我知道了”→“登录”，再在她的手机微信上确认"
+                       if x["key"] == "wx" and "没登录" in str(x["why"]) else f"打开小屋看看：{public_url()}{x['path']}")
+                alerts.append(f"{x['label']}掉线了：{x['why']}。{how}")
                 s["alerted"] = time.time()
     napcat_guard(bots, st, alerts)
     ms = st.setdefault("machine", {"alerted": 0})
