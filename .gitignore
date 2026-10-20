@@ -13,7 +13,7 @@ data/
 *.db-wal
 # 私人人设：只留在自己电脑上，不进仓库
 persona/yuki.md
-napcat/
+/napcat/
 NapCat.Shell.Windows.Node.zip
 config.llm.yaml
 # 12.0：她们的家（配置、密钥、数据、自己写的人设）
