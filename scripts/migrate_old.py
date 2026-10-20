@@ -20,7 +20,7 @@ from pathlib import Path
 CODE = Path(__file__).resolve().parent.parent
 SKIP = {".venv", "venv", "__pycache__", ".git", ".github", ".pytest_cache", ".ruff_cache", "aigroup", "ailife", "scripts",
         "tests", "tools", "deploy", "docs", "home"}
-CODE_FILES = {"run.py", "README.md", "CHANGELOG.md", "LICENSE", "pyproject.toml", "requirements.txt", "install.bat",
+CODE_FILES = {"run.py", "README.md", "CHANGELOG.md", "LICENSE", "NOTICE", "pyproject.toml", "requirements.txt", "install.bat",
               "install.sh", "setup.bat", "start.bat", "start.sh", "start.vbs", "get.ps1", ".gitignore", ".gitattributes",
               "config.example.yaml", "config.qq.example.yaml", "config.wechat.example.yaml"}
 

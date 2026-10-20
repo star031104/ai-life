@@ -11,7 +11,7 @@
   `install.bat`、`setup.bat` 会问配哪一个；`scripts\*.bat` 都可以带名字（`llm.bat qq`）
 - `scripts/migrate_old.py`：把旧的两个文件夹里的配置、数据、NapCat、人设复制进 `home/`（旧路径自动改）
 - 服务器：`deploy/systemd/` 三个服务文件（服务名不变），小管家 `ops.py` 认新的目录；`README.md` 重写成“怎么装、怎么启动”
-- 各角色的详细说明搬进 `docs/YUKI.md`、`docs/GROUP_QQ.md`、`docs/GROUP_WECHAT.md`；测试分三组 `tests/yuki`、`tests/group`、`tests/group_qq`
+- 各角色的详细说明搬进 `docs/YUKI.md`、`docs/GROUP_QQ.md`、`docs/GROUP_WECHAT.md`（群聊以前的更新记录：`docs/CHANGELOG_GROUP_QQ.md`、`docs/CHANGELOG_GROUP_WECHAT.md`）；测试分三组 `tests/yuki`、`tests/group`、`tests/group_qq`
 
 **群聊 5.0**（拿 10 月 20 日两个微信群一早上的真实聊天对出来的问题，都改成了对所有群、所有人设都适用的规则）：
 - **没 @ 也接追问**（`chat/address.py`）：她刚说完，同一个人接着说“你……”、或者接她刚说的词（“你小本本上都记啥了”），当成在跟她说；
