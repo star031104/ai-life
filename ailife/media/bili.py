@@ -357,4 +357,5 @@ class Bili:
             bits.append(f"最热闹的地方：{s['highlights']}")
         if s.get("vibe"):
             bits.append(f"评论区：{s['vibe']}")
+        bits = [b.rstrip("。.；; ") for b in bits]
         return "[" + "。".join(bits) + "。聊的时候像自己刚看过一样随口说，没看到的画面别编]"
