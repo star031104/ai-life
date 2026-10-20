@@ -1,0 +1,160 @@
+"""4.3 每周评测：拿真实的群聊回放看她说得怎么样，改了人设以后和上一版比一比。
+
+- 每周一（nightly 里）：挑最近一周她发出去的 10 句，让大模型按“扣分制”找毛病（eval/replay.py 的 judge），
+  记下平均分和最常见的毛病（kv eval_hist，留半年），小屋“性格开关”页能看到每周的分数
+- 人设文件改过（启动时记一份人设版本，kv persona_versions，留最近 5 版）：挑最近两周她说过话的 8 段聊天，
+  同一段分别用上一版和这一版人设重新生成一次（不发群），再让大模型盲比哪句更像群里的真朋友，
+  记下新人设赢 / 输 / 平几次（kv persona_compare_last）
+- 小屋里也能点“现在评一次”“和上一版人设比一比”；命令行：python run.py replay --compare 8
+每次评测大约花 10~25 次大模型调用（DeepSeek 不到 1 分钱）。
+"""
+from __future__ import annotations
+
+import hashlib
+import logging
+import random
+import time
+
+log = logging.getLogger("aigroup.eval")
+
+PAIR_PROMPT = """下面是 QQ 群里一个叫「{name}」的角色在同一段群聊后可能发的两种回复。她的人设（节选）：
+{persona}
+
+哪一种更像群里一个真实的朋友会随手打出来的话（自然、接得住上一句、符合她的性格和说话方式、没有 AI 腔、不啰嗦）？
+差不多就判平。只输出 JSON：{{"win": 1 或 2 或 0, "why": "一句话"}}
+
+# 群聊记录（最后几条）
+{context}
+
+# 回复 1
+{a}
+
+# 回复 2
+{b}"""
+
+
+def body_hash(body: str) -> str:
+    return hashlib.sha1((body or "").encode("utf-8")).hexdigest()[:10]
+
+
+def note_persona(db, persona) -> bool:
+    """启动时记一份人设版本（内容变了才记）。返回是不是新版本。"""
+    vs = list(db.get("persona_versions") or [])
+    h = body_hash(persona.body)
+    if vs and vs[-1].get("hash") == h:
+        return False
+    vs.append({"hash": h, "ts": time.time(), "body": persona.body})
+    db.set("persona_versions", vs[-5:])
+    return len(vs) > 1
+
+
+def previous_body(db, persona) -> str:
+    vs = [v for v in (db.get("persona_versions") or []) if v.get("hash") != body_hash(persona.body)]
+    return vs[-1]["body"] if vs else ""
+
+
+def _context(msgs: list) -> str:
+    user = next((m["content"] for m in msgs if m.get("role") == "user"), "")
+    return "\n".join(user.split("# 最近的群聊记录", 1)[-1].split("# 此刻", 1)[0].strip().splitlines()[1:][-8:])
+
+
+async def compare(db, llm, persona, old_body: str, n: int = 8, days: float = 14) -> dict:
+    """同一段聊天，用上一版和这一版人设各生成一次，盲比。"""
+    from aigroup.chat.group import GroupChat
+    from aigroup.chat.trace import trace_messages
+    new_body = persona.body
+    rows = db.conn.execute("SELECT * FROM qq_trace WHERE ts>? AND outcome='say' AND messages!='' ORDER BY id DESC LIMIT 60",
+                           (time.time() - days * 86400,)).fetchall()
+    rows = list(rows)
+    random.shuffle(rows)
+    items, tally = [], {"new": 0, "old": 0, "tie": 0}
+    for r in rows:
+        if len(items) >= n:
+            break
+        msgs = trace_messages(db, r)
+        if not msgs or msgs[0].get("role") != "system":
+            continue
+        sysm = msgs[0]["content"]
+        base = new_body if new_body in sysm else old_body if old_body and old_body in sysm else ""
+        if not base:
+            continue
+        outs = {}
+        for tag, body in (("old", old_body), ("new", new_body)):
+            m2 = [{"role": "system", "content": sysm.replace(base, body, 1)}] + msgs[1:]
+            try:
+                raw = await llm.chat(m2, role="chat", background=True)
+            except Exception as e:  # noqa: BLE001
+                log.info("评测重跑失败：%s", e)
+                break
+            plan = GroupChat.parse_plan_text(raw) or {}
+            say = [x for x in (plan.get("say") or []) if isinstance(x, str) and x.strip()]
+            if plan.get("act") not in ("say", None) or not say:
+                break
+            outs[tag] = " / ".join(say)
+        if len(outs) < 2:
+            continue
+        flip = random.random() < 0.5
+        a, b = (outs["new"], outs["old"]) if flip else (outs["old"], outs["new"])
+        try:
+            d = await llm.json([{"role": "user", "content": PAIR_PROMPT.format(
+                name=persona.name, persona=new_body[:1200], context=_context(msgs), a=a, b=b)}], default={}, role="memory")
+        except Exception as e:  # noqa: BLE001
+            log.info("评测打分失败：%s", e)
+            continue
+        w = int((d or {}).get("win") or 0) if isinstance(d, dict) else 0
+        winner = "tie" if w not in (1, 2) else ("new" if (w == 1) == flip else "old")
+        tally[winner] += 1
+        items.append({"trace": r["trace"], "old": outs["old"], "new": outs["new"], "winner": winner,
+                      "why": str((d or {}).get("why") or "")[:80]})
+    return {"n": len(items), **tally, "items": items, "ts": time.time(),
+            "old_hash": body_hash(old_body), "new_hash": body_hash(new_body)}
+
+
+class EvalMixin:
+    """挂在 GroupChat 上：每周评测 + 小屋里点的评测。"""
+
+    async def weekly_eval(self, force: bool = False, n: int = 10) -> dict | None:
+        now = self.brain.now()
+        week = f"{now:%G-W%V}"
+        if not force and (self.db.get("eval_week") == week or not self.g.get("weekly_eval", True)):
+            return None
+        self.db.set("eval_week", week)
+        from aigroup.chat.trace import Tracer
+        from aigroup.eval.replay import judge
+        Tracer(self.db)
+        res = await judge(self.db, self.brain.llm, self.brain.persona, n, 7)
+        if res["n"]:
+            hist = [h for h in (self.db.get("eval_hist") or []) if h.get("week") != week]
+            hist.append({"week": week, "avg": res["avg"], "n": res["n"], "kinds": res["kinds"],
+                         "persona": body_hash(self.brain.persona.body), "ts": time.time(),
+                         "worst": sorted(({"said": x["said"][:60], "score": x["score"],
+                                           "why": "；".join(str(y.get("type")) + "：" + str(y.get("why"))[:30]
+                                                           for y in x["defects"][:2])} for x in res["items"]),
+                                         key=lambda x: x["score"])[:3]})
+            self.db.set("eval_hist", hist[-26:])
+            self.db.set("judge_last", {"n": res["n"], "avg": res["avg"], "kinds": res["kinds"], "ts": time.time()})
+            log.info("每周评测：%d 句，平均 %s 分", res["n"], res["avg"])
+        last = self.db.get("persona_compare_last") or {}
+        old = previous_body(self.db, self.brain.persona)
+        if old and last.get("new_hash") != body_hash(self.brain.persona.body):
+            await self.compare_persona()
+        return res
+
+    async def compare_persona(self, n: int = 8) -> dict:
+        old = previous_body(self.db, self.brain.persona)
+        if not old:
+            return {"n": 0, "error": "还没有上一版人设（改过人设文件、重启以后才有）"}
+        res = await compare(self.db, self.brain.llm, self.brain.persona, old, n)
+        if res["n"]:
+            self.db.set("persona_compare_last", res)
+            log.info("人设对比：新的赢 %d、输 %d、平 %d", res["new"], res["old"], res["tie"])
+        return res
+
+    def eval_snapshot(self) -> dict:
+        vs = self.db.get("persona_versions") or []
+        cmp_ = self.db.get("persona_compare_last") or {}
+        return {"hist": self.db.get("eval_hist") or [], "compare": {k: v for k, v in cmp_.items() if k != "items"},
+                "compare_items": (cmp_.get("items") or [])[:8],
+                "versions": [{"hash": v.get("hash"), "ts": v.get("ts")} for v in vs],
+                "current": body_hash(self.brain.persona.body), "running": bool(getattr(self, "_eval_running", False))}
+

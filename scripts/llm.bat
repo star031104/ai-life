@@ -1,9 +1,11 @@
 @echo off
-rem Add your own LLM API (any OpenAI-compatible URL + key): test connection, pick a model, add it to the routes
+rem Add your own LLM API (any OpenAI-compatible URL + key): llm.bat yuki / qq / wechat
 cd /d "%~dp0.."
+set "T=%~1"
+if "%T%"=="" set "T=yuki"
 
-call "%~dp0env.bat" || exit /b 1
+call "%~dp0env.bat" %T% || exit /b 1
 
-python run.py llm
+python run.py %T% llm
 echo.
-pause
+if /i not "%~2"=="nopause" pause

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Linux / macOS 启动：bash start.sh（程序退出会自动重启；换人设时也是靠这个自动重开）
+# Linux / macOS 启动：bash start.sh [yuki|qq|wechat]（不写就是 yuki）。程序退出会自动重启；换人设时也是靠这个自动重开。
 cd "$(dirname "$0")"
+T=${1:-yuki}
 [ -f .venv/bin/activate ] && . .venv/bin/activate
-export PYTHONUTF8=1 PYTHONIOENCODING=utf-8 AILIFE_LAUNCHER=1
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8 AILIFE_LAUNCHER=1 AIGROUP_LAUNCHER=1
 while true; do
-  python run.py
+  python run.py "$T"
   code=$?
   if [ "$code" = "3" ]; then
     echo "不再自动重启（看上面的提示）。"

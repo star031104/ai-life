@@ -138,7 +138,7 @@ class SystemMixin:
 
     async def update_info(self, req):
         from ailife.core.update import current_version, load_state
-        st = load_state(self.cfg.root)
+        st = load_state(self.cfg.get("code") or self.cfg.root)
         return web.json_response({"current": current_version(), "info": self.db.get("update_info") or {},
                                   "last": {k: st.get(k) for k in ("from", "to", "state", "ts", "sha256", "source")} if st else {},
                                   "auto": bool((self.cfg.get("update") or {}).get("auto_check", True))})
@@ -164,7 +164,7 @@ class SystemMixin:
     async def update_rollback(self, req):
         from ailife.core.update import UpdateError, rollback
         try:
-            st = rollback(self.cfg.root)
+            st = rollback(self.cfg.get("code") or self.cfg.root)
         except UpdateError as e:
             return web.json_response({"ok": False, "error": str(e)})
         self._restart_soon()

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-PAGES = ["ailife/web/page.html", "deploy/server/index.html"]
+ROOT = Path(__file__).resolve().parents[2]
+PAGES = ["aigroup/web/page.html"]
 
 
 @pytest.mark.parametrize("rel", PAGES)

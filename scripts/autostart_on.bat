@@ -1,11 +1,14 @@
 @echo off
-REM Turn on autostart: put a small launcher into your Windows Startup folder (no admin needed).
+REM Turn on autostart (no admin needed, no console window): autostart_on.bat [yuki|qq|wechat|all]  (default: all that are set up)
+set "T=%~1"
+if "%T%"=="" set "T=all"
+if /i "%T%"=="nopause" set "T=all"
 set "SU=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
-(
-  echo @echo off
-  echo cd /d "%~dp0.."
-  echo start "ai-life" /min "%~dp0..\start.bat"
-) > "%SU%\ai-life.cmd"
-echo Autostart is ON. She will start when you log in to Windows.
-echo (To turn it off, double-click autostart_off.bat)
-pause
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:SU+'\ai-life-%T%.lnk'); $s.TargetPath='wscript.exe'; $s.Arguments='\"%~dp0..\start.vbs\" %T%'; $s.WorkingDirectory='%~dp0..'; $s.Save()"
+if exist "%SU%\ai-life-%T%.lnk" (
+  echo Autostart is ON ^(%T%^). It starts when you log in to Windows.
+) else (
+  echo Could not create the shortcut. Put a shortcut to start.vbs into: %SU%
+)
+echo (To turn it off: scripts\autostart_off.bat %T%)
+if /i not "%~1"=="nopause" if /i not "%~2"=="nopause" pause

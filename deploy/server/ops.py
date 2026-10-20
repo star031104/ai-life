@@ -34,18 +34,25 @@ KEEP_DAYS = int(os.environ.get("AILIFE_KEEP_DAYS") or 30)
 STATE = HOME / "ops_state.json"
 
 BOTS = [  # key, 名字, 目录, 网页端口, 服务名, 网址路径, 数据库
-    {"key": "yuki", "label": "有希", "kind": "QQ 私聊", "dir": "ai-life", "port": 8765, "svc": "ai-life", "path": "/yuki/",
+    {"key": "yuki", "label": "有希", "kind": "QQ 私聊", "dir": "ai-life", "home": "yuki", "port": 8765, "svc": "ai-life", "path": "/yuki/",
      "db": "data/ailife.db"},
-    {"key": "qq", "label": "QQ 群的小满", "kind": "QQ 群", "dir": "ai-life-group", "port": 8767, "svc": "ai-life-group",
+    {"key": "qq", "label": "QQ 群的小满", "kind": "QQ 群", "dir": "ai-life-group", "home": "qq", "port": 8767, "svc": "ai-life-group",
      "path": "/qq/", "db": "data/group.db"},
-    {"key": "wx", "label": "微信群的小满", "kind": "微信群", "dir": "ai-life-wechat", "port": 8768, "svc": "ai-life-wechat",
+    {"key": "wx", "label": "微信群的小满", "kind": "微信群", "dir": "ai-life-wechat", "home": "wechat", "port": 8768, "svc": "ai-life-wechat",
      "path": "/wx/", "db": "data/group.db"},
 ]
+CODE_DIR = Path(os.environ.get("AILIFE_CODE") or HOME / "app")   # 12.0 起三个在一个仓库里：代码在这，她们的家在 home/<名字>
 TZ_OFFSET = timedelta(hours=8)          # 北京时间
 
 
 def now_cn() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None) + TZ_OFFSET
+
+
+def bdir(b: dict) -> Path:
+    """她的家：新的（app/home/yuki）有就用新的，否则是合并以前的老目录（ailife/ai-life）。"""
+    new = CODE_DIR / "home" / b["home"]
+    return new if (new / "config.yaml").exists() else HOME / b["dir"]
 
 
 # ---------------- 读配置 ----------------
@@ -123,7 +130,7 @@ async def onebot(url: str, token: str, action: str, params: dict | None = None, 
 
 def qq_conf(key: str) -> tuple[str, str, int]:
     b = next(x for x in BOTS if x["key"] == key)
-    c = read_cfg(HOME / b["dir"])
+    c = read_cfg(bdir(b))
     q = c.get("qq") or {}
     return str(q.get("ws_url") or ""), str(q.get("access_token") or q.get("token") or ""), int(q.get("owner_id") or 0)
 
@@ -168,7 +175,7 @@ def spend_today() -> dict:
     cap = float(os.environ.get("AILIFE_BUDGET") or c.get("daily_cny", 0) or 0)
     bots = {}
     for b in BOTS:
-        p = HOME / b["dir"] / b["db"]
+        p = bdir(b) / b["db"]
         if not p.exists():
             continue
         try:
@@ -319,7 +326,7 @@ def backup() -> Path:
     with tempfile.TemporaryDirectory() as td:
         stage = Path(td)
         for b in BOTS:
-            d = HOME / b["dir"]
+            d = bdir(b)
             if not d.exists():
                 continue
             out = stage / b["dir"]
@@ -391,7 +398,7 @@ def report() -> dict:
     t0 = (datetime.combine(today - timedelta(days=6), datetime.min.time()) - TZ_OFFSET).replace(tzinfo=timezone.utc).timestamp()
     out = {"ts": time.time(), "days": days, "bots": []}
     for b in BOTS:
-        p = HOME / b["dir"] / b["db"]
+        p = bdir(b) / b["db"]
         x = {"key": b["key"], "label": b["label"], "calls": [0] * 7, "fail": [0] * 7, "usd": [0.0] * 7,
              "tok_in": [0] * 7, "tok_out": [0] * 7, "msgs": [0] * 7, "her": [0] * 7, "errors": journal_errors(b["svc"])}
         if not p.exists():

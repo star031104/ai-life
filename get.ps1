@@ -1,6 +1,7 @@
 # ai-life one-line installer for Windows (PowerShell):
 #   irm https://raw.githubusercontent.com/star031104/ai-life/main/get.ps1 | iex
-# Downloads the latest code to Documents\ai-life (keeps your config.yaml / .env / data if they exist)
+# Downloads the latest code to Documents\ai-life (keeps home\, config.yaml / .env / data if they exist)
+# One repo for all three: yuki (private QQ), qq (QQ group), wechat (WeChat group); install.bat asks which to set up.
 # and runs install.bat. GitHub too slow? It retries through public mirrors.
 $ErrorActionPreference = "Stop"
 $repo = "star031104/ai-life"
@@ -23,7 +24,7 @@ Expand-Archive -Path $zip -DestinationPath $tmp -Force
 $src = Get-ChildItem $tmp -Directory | Where-Object { $_.Name -like "ai-life*" } | Select-Object -First 1
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 # copy code over; never touch config.yaml / .env / data / napcat / .venv
-robocopy $src.FullName $dest /E /NFL /NDL /NJH /NJS /XD data napcat .venv /XF config.yaml .env | Out-Null
+robocopy $src.FullName $dest /E /NFL /NDL /NJH /NJS /XD data napcat .venv home /XF config.yaml config.llm.yaml .env | Out-Null
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "Code is in $dest"
 Start-Process -FilePath (Join-Path $dest "install.bat") -WorkingDirectory $dest

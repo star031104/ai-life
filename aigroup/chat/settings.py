@@ -1,0 +1,185 @@
+"""群聊的所有可调设置，集中在这一个文件。
+
+- DEFAULTS：每个设置的默认值（config.yaml 的 wechat.group 里写了的覆盖它；小屋里调过的再覆盖）
+- KNOBS：其中哪些能在小屋“性格开关”页拖着调（标签、类型、范围、说明）
+- DEAD_KNOBS：以前有、现在不用了的开关（启动时从小屋保存的设置里清掉）
+
+加一个新设置：在 DEFAULTS 里加一行（带注释）；想在小屋里能调，再在 KNOBS 里加一行；代码里用 self.g["名字"] 读。
+"""
+from __future__ import annotations
+
+DEFAULTS = {
+    "merge_wait_seconds": 3,       # 等连发说完再判断
+    "context_messages": 30,        # 带给模型的最近群消息条数
+    "talkativeness": 0.3,          # 话痨度 0~1：最近 1 小时里，把最想说的这么多“份额”留给她（chat/gate.py）
+    "cold_minutes": 15,            # 群里沉默超过这么久后的第一句：不太想接
+    "cooldown_seconds": 60,        # 没被叫到时两次开口的最小间隔
+    "max_per_10min": 6,            # 每个群 10 分钟最多说几轮（被叫到时放宽到两倍）
+    "max_bubbles": 2,
+    "typing_chars_per_sec": 6,     # 打字速度（每秒几个字）
+    "impression_every": 40,        # 每个群每攒这么多条群友消息，整理一次印象、群梗，顺便学说话方式
+    "profile_every": 15,           # 某个人又说了这么多句，就更新一次她心里这个人的画像
+    "route": "chat",               # 用哪条模型路线（llm.routes 里的名字）
+    "see_images": False,           # 群里的图片要不要让看图模型看（会多花调用次数）
+    "owner_note": "把你拉进群的老朋友，爱和你互损",   # 她怎么看你（wechat.owner 那个人）
+    "learn": True,                 # 跟着群里学说话方式和黑话（memory/learn.py）
+    "plan_json": True,             # 先想再说：大模型先写想法、选回哪条、说多长，再写正文
+    # 群里安静太久，她自己冒个泡（只在 active_hours 里、免打扰时段外；她上一句就是群里最后一句时不说）
+    "idle_hours": 3,               # 群里安静超过这么久才考虑
+    "idle_chance": 0.25,           # 满足条件后每小时冒泡的概率
+    "idle_gap_hours": 6,           # 两次冒泡至少隔多久
+    "active_hours": "10:00-23:30",
+    # 像真人（秒数都会乘 pace；pace: 0 就是全部立刻，测试用）
+    "pace": 1.0,
+    "read_delay": [2, 12],         # 被叫到、她有空：几秒后看到
+    "notice_delay": [5, 40],       # 没人叫她、她想插话：刷到群消息要多久
+    "busy_delay_minutes": [1, 8],  # 她正忙（上课 / 上班……）时被叫到：过几分钟偷空回
+    "repeat_chance": 0.5,          # 群里在复读时她跟着复读的概率
+    "react_chance": 0.0,           # 不说话时给那条消息点个表情的概率（微信没有这个功能，保持 0）
+    "welcome_chance": 0.7,         # 新人进群欢迎一下
+    "night_catch_up": True,        # 免打扰时段被叫到：第二天早上补一句
+    "similar_threshold": 0.75,     # 和她最近说过的话这么像就不发
+    # —— 2.0 ——
+    "talk_curve": {"09:00-11:59": 0.8, "12:00-13:59": 1.1, "14:00-17:59": 0.9, "18:00-23:59": 1.2},  # 按时段调话量
+    "quality_check": True,         # 发之前检查 AI 腔、越界说法、复读（chat/quality.py）
+    "candidates": 2,               # 让大模型多写几种说法，挑最像群友的（1 = 不多写）
+    "typo_rate": 0.03,             # 偶尔打错一个字
+    "typo_fix_chance": 0.5,        # 打错后补一句“*正确的字”
+    "stickers": True,              # 跟着群友存表情包、偶尔发
+    "memory_recall": True,         # 聊天时想起以前群里的事（memory/facts.py）
+    "profile_deep": True,          # 3.1 每天一次：这一周说话最多的几个人，拿一周的话仔细回想一遍画像
+    "profile_deep_people": 5,      # 每天仔细回想几个人
+    "profile_detail": 4,           # 提示词里最多写几个人的详细画像（其他人一句话）
+    "wait_max_seconds": 600,       # “等某人开口再说”最多等多久
+    "trace": True,                 # 每次问大模型都存一份，可以回放（chat/trace.py、eval/replay.py）
+    "explore_rate": 0.02,          # 本该拦下的批次里随机放行这么多（给重新拟合纠偏；0 = 关）
+    # —— 2.2 ——
+    "lore": True,                  # 群梗词条（聊到关键词才告诉她这个梗的意思，带冷却）
+    "mood": True,                  # 持续的心情（被夸、被怼、没人理会影响一阵子）
+    "human_latency": True,         # 按这个群群友自己的回复间隔来定她“看到消息”要多久
+    "poke_back_chance": 0.0,       # 被拍了，拍回去的概率（微信版做不到，保持 0）
+    "update_signature": False,     # 按今天的安排改签名（微信版做不到，保持关）
+    # —— 3.0 ——
+    "catch_up": True,              # 接上微信后补上她不在时群里说的话（重启、关机、微信没开期间；直接从本地库里读）
+    "catch_up_count": 200,         # 每个群往回最多补多少条
+    "people_aliases": {},          # 3.0.3 群友的别名（真名、外号）：{"群名片或昵称或微信号": "别名、别名"}；这里新加的启动时补进去，小屋里能改
+    "memory_embed_model": "",      # 语义召回用的向量模型（要装 sentence-transformers；比如 BAAI/bge-small-zh-v1.5），空 = 只用关键词
+    # —— 联网（net/）——
+    "read_links": True,            # 群友发的链接 / 分享卡片点开看（标题、简介、正文开头），不用假装看过
+    "web_search": True,            # 被问到她可能不知道的事（是什么 / 讲了什么 / 最新……）先搜一搜
+    "search_per_hour": 12,         # 每小时最多搜几次（所有群加起来）
+    "remember_web": True,          # 搜到 / 读到的要点记下来，以后聊到关键词想起来，常用到的变成她的兴趣
+    "weekly_reflect": True,        # 每周一回想这一周，写几句“这一周的我”放进提示词（人物跟着经历慢慢变）
+    # —— 4.2 人物慢慢长（chat/grow.py）——
+    "monthly_self": True,          # 每月整理一次“我是怎样的人”（把每周的回想沉淀成稳定的性格和口味）
+    "plans": True,                 # 记住群里约好的事：到点提醒大家、事后问结果
+    "plans_per_day": 3,            # 每个群每天最多提醒 / 问几次
+    "fix_knowledge": True,         # 有人说“不对 / 其实是……”时，对一下她记的知识，对的就改
+    "share_per_day": 1,            # 每个群每天最多主动分享几次刷到的东西（0 = 关）
+    "share_chance": 0.6,           # 一天里会分享的概率
+    "photo_share_chance": 0.3,     # 分享时是一张自己日常照片的概率（要配了画图接口 routes.image）
+    "photo_per_day": 1,            # 每天最多发几张照片（所有群加起来）
+    "watch_videos": True,          # 4.4 群友发的 B 站视频点开“看”：字幕、弹幕、热评整理成要点（每小时最多 10 个）
+    "weather": True,               # 4.4 记住群友在哪个城市（出差、旅游、老家），提示词里带上那边的天气
+    "weather_care": True,          # 4.4 他在外地、那边要下大雨 / 太热太冷：提醒一句（每个群每天最多一次）
+    "weekly_eval": True,           # 4.3 每周一拿真实聊天评一次分；人设改过就和上一版比一比（chat/../eval/weekly.py）
+    "celebrate": True,             # 4.3 群友生日（小屋“她的日子”里填）、节日：当天在群里说一声
+    # —— 5.0 真实群聊里测出来的 ——
+    "call_names": True,            # 叫人用称呼；关掉 = 这个群不叫任何人的名字 / 外号，直接说、要回谁就引用他那条
+    "group_note": "",              # 关于这个群你想特意交代她的话（每个群单独写，比如“大家互称 X 总”“别提考研”）
+    "guess_to_her": True,          # 没 @ 她、但她刚说完话，同一个人接着说“你……”/ 接她的词：当成在跟她说
+    "merge_bubbles": True,         # 两条都很短、或者最近老是分两条发：合成一条发（大多数时候一条）
+    "stale_hours": 3,              # 她自己的口头禅、招牌梗这么多小时内不重复
+    "pending_reply_minutes": 20,   # 重启前有人 @ 她还没回：重启后这么多分钟以内的补回
+}
+
+# 渠道不一样、默认值不一样的几个（QQ 能点表情、能戳一戳，补消息少补一点；微信做不到点表情和戳）
+CHANNEL_DEFAULTS = {"qq": {"react_chance": 0.08, "poke_back_chance": 0.4, "catch_up_count": 80}, "wechat": {}}
+
+
+def defaults_for(channel: str | None) -> dict:
+    return {**DEFAULTS, **CHANNEL_DEFAULTS.get(str(channel or "wechat"), {})}
+
+
+DEAD_KNOBS = ("interject_chance", "owner_chance", "interest_boost", "question_boost", "busy_factor",
+              "ai_voice_chance", "ai_voice_character")   # 4.3 语音去掉了
+
+# 小屋里能调的“性格开关”：键 → (标签, 类型, 最小, 最大, 步长, 说明)
+KNOBS = {
+    "talkativeness": ("话痨度", "float", 0, 1, 0.05, "最近 1 小时里留给她的发言份额；她说多了会自动收紧"),
+    "max_per_10min": ("10 分钟最多说几轮", "int", 1, 30, 1, "被叫到时放宽到两倍"),
+    "max_bubbles": ("一次最多几条", "int", 1, 5, 1, "一轮回复最多拆成几条消息"),
+    "cooldown_seconds": ("两次插话最短间隔（秒）", "int", 0, 1800, 10, "没被叫到时"),
+    "pace": ("回复节奏倍数", "float", 0, 3, 0.1, "看到消息、打字的等待时间都乘它；0 = 秒回"),
+    "typing_chars_per_sec": ("打字速度（字/秒）", "float", 1, 30, 1, "越大越快"),
+    "repeat_chance": ("跟着复读的概率", "float", 0, 1, 0.05, "群里有人在复读时"),
+    "welcome_chance": ("欢迎新人的概率", "float", 0, 1, 0.05, ""),
+    "idle_hours": ("群冷多久会冒泡（小时）", "float", 0.5, 24, 0.5, ""),
+    "idle_chance": ("冒泡概率（每小时）", "float", 0, 1, 0.05, ""),
+    "idle_gap_hours": ("两次冒泡最短间隔（小时）", "float", 1, 48, 1, ""),
+    "active_hours": ("冒泡时段", "str", None, None, None, "格式 10:00-23:30"),
+    "profile_every": ("多少句更新一次画像", "int", 5, 200, 5, "某人又说了这么多句就重新整理他的画像"),
+    "impression_every": ("多少条整理一次群里的梗", "int", 10, 500, 10, "顺便学说话方式和黑话"),
+    "learn": ("跟着群里学说话", "bool", None, None, None, "学到的在“学到的”页里，可以点不用"),
+    "plan_json": ("先想再说", "bool", None, None, None, "先写一句想法、选回哪条、说多长，再写正文"),
+    "see_images": ("看群里的图片", "bool", None, None, None, "会多花看图模型的调用次数"),
+    "night_catch_up": ("半夜被叫早上补回", "bool", None, None, None, "免打扰时段被叫到先不回，醒了补一句"),
+    "quality_check": ("发之前检查", "bool", None, None, None, "AI 腔、越界说法、和刚说过的太像的不发"),
+    "candidates": ("多写几种说法挑一条", "int", 1, 3, 1, "1 = 只写一种；2~3 会多花一点输出"),
+    "typo_rate": ("打错字的概率", "float", 0, 0.2, 0.01, "偶尔打错一个字，有时补一句“*正确的字”"),
+    "stickers": ("存表情包、偶尔发", "bool", None, None, None, "群里常用的表情包她会存下来"),
+    "memory_recall": ("想起以前的事", "bool", None, None, None, "聊到了会想起群里以前说过的话"),
+    "profile_deep": ("每天仔细回想画像", "bool", None, None, None, "每天一次，这一周说话最多的几个人，拿一周的话把画像从头梳理一遍"),
+    "profile_detail": ("详细画像最多几个人", "int", 1, 8, 1, "提示词里写详细画像的人数，其他人一句话"),
+    "lore": ("群梗词条", "bool", None, None, None, "聊到关键词才告诉她这个梗的意思，提过以后一阵子不再提"),
+    "mood": ("持续的心情", "bool", None, None, None, "被夸、被怼、没人理会影响她一阵子（半衰期 2 小时）"),
+    "human_latency": ("按群友的节奏回", "bool", None, None, None, "从这个群群友自己的回复间隔里抽“看到消息”要多久"),
+    "explore_rate": ("随机试一次的比例", "float", 0, 0.1, 0.01, "本该不说的时候偶尔说一次，让以后的自我调整不偏"),
+    "read_links": ("点开群友发的链接", "bool", None, None, None, "读标题、简介和正文开头，她能接着聊"),
+    "web_search": ("不知道的先搜一搜", "bool", None, None, None, "被问到作品、游戏、新闻、概念这类事时先上网查"),
+    "search_per_hour": ("每小时最多搜几次", "int", 0, 60, 1, "所有群加起来"),
+    "remember_web": ("记住查到的东西", "bool", None, None, None, "以后聊到关键词会想起来，常用到的会变成她的兴趣"),
+    "weekly_reflect": ("每周回想一次", "bool", None, None, None, "每周一写几句“这一周的我”，人物跟着经历慢慢变"),
+    "monthly_self": ("每月整理一次自己", "bool", None, None, None, "把每周的回想沉淀成“我是怎样的人”"),
+    "plans": ("记住约好的事", "bool", None, None, None, "到点提醒大家，考试面试这类事过后问结果"),
+    "plans_per_day": ("每天最多提醒几次", "int", 0, 10, 1, "每个群"),
+    "fix_knowledge": ("被纠正了就改", "bool", None, None, None, "有人说“不对 / 其实是……”时对一下她记的知识"),
+    "share_per_day": ("每天最多分享几次", "int", 0, 5, 1, "刷到和大家兴趣有关的新消息，随手转进群；0 = 关"),
+    "share_chance": ("一天里分享的概率", "float", 0, 1, 0.05, ""),
+    "photo_share_chance": ("分享时发照片的概率", "float", 0, 1, 0.05, "要配了画图接口"),
+    "watch_videos": ("点开群友发的 B 站视频", "bool", None, None, None, "读字幕、弹幕、热评，能聊具体哪一段"),
+    "weather": ("记住群友在哪、那边天气", "bool", None, None, None, "出差、旅游、回老家；提示词里带上那边的天气"),
+    "weather_care": ("外地要变天提醒一句", "bool", None, None, None, "大雨、暴雪、太热太冷；每个群每天最多一次"),
+    "weekly_eval": ("每周评测", "bool", None, None, None, "每周一挑 10 句她说的话找毛病打分；人设改过就和上一版盲比"),
+    "call_names": ("叫人名字 / 称呼", "bool", None, None, None, "关掉：这个群不叫任何人的名字，直接说、引用回复（适合大家平时不喊名字的群）"),
+    "group_note": ("关于这个群的交代", "str", None, None, None, "写给她看的一两句话，比如“大家互称 X 总”“别提考研”"),
+    "guess_to_her": ("没 @ 也接追问", "bool", None, None, None, "她刚说完，同一个人接着说“你……”或接她的话：当成在跟她说"),
+    "celebrate": ("生日和节日说一声", "bool", None, None, None, "生日在“她的日子”里填；节日按日历（节气只算冬至）"),
+}
+
+
+# 只能全局调的（每天一次的整体活、启动时就定下来的东西）；其余的开关每个群都能单独调（2.2）
+GLOBAL_ONLY = ("profile_every", "profile_deep", "lore", "mood", "monthly_self")
+
+
+def group_key(gid: int) -> str:
+    """小屋里给某一个群单独调的开关存在哪（只存和全局不一样的那几个）。"""
+    return f"web_overrides_g{int(gid)}"
+
+
+def clean_knob(key: str, val):
+    """把网页传来的值按类型和范围整理好；不认识 / 不合法返回 None。"""
+    if key not in KNOBS:
+        return None
+    _, kind, lo, hi, _, _ = KNOBS[key]
+    try:
+        if kind == "bool":
+            return bool(val) if not isinstance(val, str) else val.lower() in ("1", "true", "yes", "on")
+        if kind == "str":
+            s = str(val or "").strip()[:300 if key == "group_note" else 40]
+            return s or None
+        v = float(val)
+        v = max(float(lo), min(float(hi), v))
+        return int(round(v)) if kind == "int" else round(v, 3)
+    except (TypeError, ValueError):
+        return None

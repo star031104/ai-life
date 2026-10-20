@@ -78,7 +78,7 @@ async def run():
     bot.phone.start()
 
     from ailife.core.update import check_loop, confirm_later
-    confirm_later(cfg.root)                        # 刚更新过：正常跑够 2 分钟才算更新成功
+    confirm_later(cfg.get("code") or cfg.root)                        # 刚更新过：正常跑够 2 分钟才算更新成功
     update_task = asyncio.create_task(check_loop(cfg, brain.db))  # noqa: F841  每天看一次有没有新版本
 
     from ailife.web.server import Dashboard

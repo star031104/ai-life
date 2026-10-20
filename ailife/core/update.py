@@ -31,10 +31,10 @@ REPO = "star031104/ai-life"
 BRANCH = "main"
 VERSION_RE = re.compile(r'__version__\s*=\s*["\']([\d.]+)["\']')
 PROTECT_FILES = {"config.yaml", "config.llm.yaml", ".env"}
-PROTECT_DIRS = ("data/", "napcat/", ".venv/", "venv/", ".git/", "instances/")
+PROTECT_DIRS = ("data/", "napcat/", ".venv/", "venv/", ".git/", "instances/", "home/")
 MUST_HAVE = ("run.py", "ailife/__init__.py", "ailife/cli.py", "requirements.txt")
 # 新版本里已经没有的旧代码文件要拿掉（搬家、删掉的模块），只看这些地方、这些类型；拿掉前同样备份
-CODE_DIRS = ("ailife/", "tests/", "scripts/", "tools/")
+CODE_DIRS = ("ailife/", "aigroup/", "tests/", "scripts/", "tools/", "deploy/")
 CODE_EXT = (".py", ".pyw", ".html", ".bat", ".sh", ".ps1")
 LEGACY_ROOT = {"llm.bat", "qq_setup.bat", "update.bat", "selftest.bat", "pet_setup.bat", "autostart_on.bat",
                "autostart_off.bat", "start_console.bat"}
@@ -149,7 +149,7 @@ def inspect_zip(data: bytes) -> tuple[zipfile.ZipFile, str, str]:
 
 def apply(cfg, fetch=_fetch, *, pip: bool = True) -> dict:
     """下载、检查、备份、换上新版本。不重启（调用的人决定什么时候重启）。"""
-    root = Path(cfg.root)
+    root = Path(cfg.get("code") or cfg.root)          # 换的是程序目录里的代码（她的家 home/ 不动）
     info = check(cfg, fetch)
     if info["error"] and not info["latest"]:
         raise UpdateError(info["error"])

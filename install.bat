@@ -1,5 +1,7 @@
 @echo off
-rem ai-life one-click installer (Windows). Double-click it once.
+rem ai-life one-click installer (Windows). Double-click it once. One install for all three:
+rem   yuki = private QQ companion, qq = QQ group, wechat = WeChat group (install.bat qq / install.bat wechat
+rem   runs that one's setup wizard at the end; plain install.bat asks which one)
 rem  - Uses conda env "ailife" if you already have one; otherwise makes .venv here
 rem  - No Python? It installs Python 3.11 with winget (per-user, no admin)
 rem  - Installs packages (Tsinghua mirror first), ffmpeg, then runs the setup wizard
@@ -9,7 +11,7 @@ cd /d "%~dp0"
 set PYTHONIOENCODING=utf-8
 set PYTHONUTF8=1
 set "MIRROR=-i https://pypi.tuna.tsinghua.edu.cn/simple"
-echo ==== ai-life installer ====
+echo ==== ai-life installer (yuki / qq / wechat) ====
 
 rem ---------- 1. Python ----------
 if exist ".venv\Scripts\python.exe" goto :have_venv
@@ -93,12 +95,23 @@ if errorlevel 1 winget install -e --id Gyan.FFmpeg --accept-source-agreements --
 
 rem ---------- 4. Setup wizard ----------
 echo [4/4] Setup wizard ...
-if not exist config.yaml (
-  python run.py setup
+set "T=%~1"
+if "%T%"=="" (
+  echo     Which one do you want to set up first?
+  echo       1 = yuki   ^(private QQ companion^)
+  echo       2 = qq     ^(QQ group^)
+  echo       3 = wechat ^(WeChat group^)
+  set /p N=    Type 1, 2 or 3 [1]: 
+)
+if "%T%"=="" if "%N%"=="2" set "T=qq"
+if "%T%"=="" if "%N%"=="3" set "T=wechat"
+if "%T%"=="" set "T=yuki"
+if not exist "home\%T%\config.yaml" (
+  python run.py %T% setup
 ) else (
-  echo     config.yaml already exists ^(run setup.bat to redo it, scripts\qq_setup.bat for QQ^).
+  echo     home\%T%\config.yaml already exists ^(run setup.bat %T% to redo it^).
 )
 
 echo.
-echo ==== Done! Double-click start.bat to wake her up. ====
+echo ==== Done! Double-click start.bat ^(or: start.bat %T%^) to wake her up. ====
 pause

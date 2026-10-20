@@ -1,0 +1,19 @@
+# 复制到 /etc/systemd/system/（路径、用户不一样就先改），然后：
+#   sudo systemctl daemon-reload && sudo systemctl enable --now ai-life
+# 代码在 /home/ubuntu/ailife/app（这个仓库），她的家在 app/home/yuki
+[Unit]
+Description=ai-life 有希（QQ 私聊）
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ailife/app
+Environment=PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+ExecStart=/home/ubuntu/ailife/app/.venv/bin/python run.py yuki
+Restart=always
+RestartSec=10
+RestartPreventExitStatus=3
+
+[Install]
+WantedBy=multi-user.target

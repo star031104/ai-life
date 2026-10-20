@@ -1,0 +1,132 @@
+# ============================================================
+#  ai-life-group 配置文件（QQ 群聊角色）
+#  最省事：双击 setup.bat，向导会写好 config.yaml 和 .env。
+#  手动：复制一份改名为 config.yaml 再填写，带 ★ 的是必填项。
+# ============================================================
+
+# 时区（决定她的作息、免打扰的时间）
+timezone: Asia/Shanghai
+
+# 代理：只有 Groq 这类国外接口要用（国内的大模型和 QQ 都不走代理）。不需要就留空
+proxy: ""
+
+# 她的人设（persona/ 里的 Markdown 文件）
+channel: qq                         # 这是 QQ 群的配置（微信群看 config.wechat.example.yaml）
+persona_file: persona/xiaoman.md     # ★ 自带“小满”；自己写：复制 persona/template.md
+
+# 免打扰：这段时间她在睡觉，只记下谁叫了她，第二天早上补一句；也不冒泡
+# 默认空＝24 小时都在线，被叫到随时回（想让她晚上睡觉就写时间段，比如 "00:30-09:00"）
+quiet_hours: ""
+
+# ---------------- 大模型 ----------------
+# 这里不预置任何接口：装好后双击 scripts\llm.bat（或者在小屋的“大模型”页）添加你自己的——
+# 填接口地址（任何 OpenAI 兼容的，一般以 /v1 结尾）和 Key → 测连通 → 列出模型选一个 → 试聊一句 → 加进去。
+# 加的接口写在 config.llm.yaml（不改这个文件），Key 写在 .env。
+# routes：每种用途按顺序用哪些接口，前一个限流 / 出错自动换下一个：
+#   chat 群里说话；helper 其它小活；memory 整理对群友的印象；night 排她每天的安排（后两个不写就用 helper）；
+#   vision 看群里的图（要选能看图的模型，qq.group.see_images 打开时才用）
+#   image 画她偶尔晒的日常照片（OpenAI 兼容的 /images/generations，比如硅基流动的 Tongyi-MAI/Z-Image-Turbo；不写就不发照片）
+llm:
+  budget:                        # 每天的花费上限（人民币，按 token 估算，画图按张算）；到了上限后台的活先停，聊天再多一成也停，第二天恢复
+    daily_cny: 0                 # 0 = 不限；三个她放一台服务器上时，三个都写同一个数、同一个 shared_file，就是三个加起来的上限
+    name: qq                     # 在共享账本里的名字
+    shared_file: ""              # 服务器上的小管家（deploy/server/ops.py）每 5 分钟写一次三个程序今天各花了多少
+  temperature: 0.9
+  max_tokens: 800
+  background_yield_seconds: 25   # 聊天优先：刚聊完的这么多秒内，后台的整理记忆等先等一等，免得抢额度被限流
+  profiles: {}
+  #   手写的话长这样（名字随便起）：
+  #   my_model:
+  #     base_url: https://你的接口地址/v1
+  #     api_key: ${MY_MODEL_KEY}        # Key 写在 .env：MY_MODEL_KEY=...
+  #     model: 模型名
+  routes:
+    chat: []
+    helper: []
+    vision: []
+    image: []
+
+
+# ---------------- 小屋（网页） ----------------
+# 只能在这台电脑上打开：http://127.0.0.1:8767（托盘图标双击也能打开）
+web:
+  enabled: true
+  port: 8767                     # 和 ai-life 的 8765 / 8766 错开
+
+# ---------------- QQ（NapCat） ----------------
+qq:
+  ws_url: "ws://127.0.0.1:3002"  # NapCat 里的 WebSocket 服务器（setup 会建好；默认 3002，和 ai-life 的 3001 错开）
+  access_token: ""               # NapCat 里设的 token（setup 会放进 .env）
+  owner_id: 0                    # ★ 你自己的 QQ 号（她把你当群里的老朋友）
+  groups: []                     # ★ 她待的群（白名单，别的群一律不说话）
+  aliases: []                    # 群里这样叫也算叫她（人设里的名字自动算）
+  napcat_dir: ""                 # 她那份 NapCat 的文件夹（没开就自动启动；setup 会写）
+  napcat_qq: 0                   # 她的 QQ 小号（自动登录用；setup 会写）
+  napcat_hidden: true            # NapCat 在后台跑（不开窗口，输出在 data/logs/napcat.log）
+  napcat_autostart: true         # 启动时 NapCat 没开就帮你开
+  group:
+    owner_note: "把你拉进群的老朋友，爱和你互损"   # 她一开始怎么看你
+    talkativeness: 0.3           # 话痨度 0~1：最近 1 小时里留给她的发言份额（她说多了会自动收紧；被叫到不受影响）
+    max_per_10min: 6             # 每个群 10 分钟最多说几轮（被叫到时放宽到两倍）
+    max_bubbles: 2               # 一次最多几条
+    cooldown_seconds: 60         # 没被叫到时两次开口的最小间隔
+    idle_hours: 3                # 群里安静这么久以上，她可能自己冒个泡
+    idle_chance: 0.25
+    idle_gap_hours: 6
+    active_hours: "10:00-23:30"  # 只在这段时间冒泡
+    impression_every: 40         # 每个群每攒这么多条群消息，整理一次对群友的印象和群里的梗，顺便学说话方式和黑话
+    learn: true                  # 跟着群里学说话方式和黑话（小屋“学到的”页可以点不用）
+    plan_json: true              # 先想再说：大模型先写想法、选回哪条、说多长，再写要发的话
+    profile_every: 15            # 某个人又说了这么多句，就更新一次她心里这个人的画像（称呼、性格、说话风格、近况……）
+    see_images: false            # 群里的图片要不要让看图模型看（会多花调用次数）
+    typing_chars_per_sec: 6      # 打字速度（每秒几个字）
+    # 像真人的小细节（一般不用改）：
+    pace: 1.0                    # 下面这些等待时间的倍数（0＝全部立刻回）
+    read_delay: [2, 12]          # 被叫到、她有空：几秒后看到
+    notice_delay: [5, 40]        # 想插话时，刷到群消息要多久
+    busy_delay_minutes: [1, 8]   # 她正在上课 / 上班时被叫到：几分钟后偷空回
+    repeat_chance: 0.5           # 群里在复读时她跟着复读的概率
+    react_chance: 0.08           # 不说话时给消息点个表情的概率
+    welcome_chance: 0.7          # 新人进群欢迎一下
+    night_catch_up: true         # 免打扰时段被叫到先不回，早上补一句“才看到”
+    # 2.0：
+    talk_curve: {"09:00-11:59": 0.8, "12:00-13:59": 1.1, "14:00-17:59": 0.9, "18:00-23:59": 1.2}   # 按时段调话量
+    quality_check: true          # 发之前检查 AI 腔、越界说法、复读
+    candidates: 2                # 让大模型多写几种说法，挑最像群友的（1 = 只写一种）
+    typo_rate: 0.03              # 偶尔打错一个字（typo_fix_chance：补一句“*正确的字”的概率）
+    stickers: true               # 存群里常用的表情包、偶尔发
+    memory_recall: true          # 聊到了会想起以前群里的事
+    profile_detail: 4            # 提示词里最多写几个人的详细画像
+    trace: true                  # 每次“想说什么”都存一份，python run.py replay 回放
+    # 3.0：
+    lore: true                   # 群梗词条：聊到关键词才告诉她这个梗的意思（提过以后一阵子不再提）
+    mood: true                   # 持续的心情：被夸、被怼、没人理会影响一阵子
+    human_latency: true          # 她“看到消息”要多久，按这个群群友自己的回复间隔来
+    poke_back_chance: 0.4        # 被戳了戳回去的概率（每小时最多 3 次）
+    update_signature: false      # 按今天的安排改小号的 QQ 签名
+    explore_rate: 0.02           # 本该不说时偶尔随机说一次，让每晚的重新拟合不偏
+    catch_up: true               # 连上 QQ 后补上她不在时（重启、关机、掉线）群里说的话；期间被 @ 上线后补一句“才看到”
+    catch_up_count: 80           # 每个群往回最多补多少条
+    # 群友的别名（真名、外号）：群里叫真名时她知道说的是谁。左边写群名片 / QQ 昵称 / QQ 号都行；
+    # 启动连上 QQ 时把这里新写的别名加进去（这里没改就不动，小屋里删掉的不会又冒出来）；也可以在小屋“群里的人”→ 点人 →“别名”里改
+    people_aliases: {}
+    #   "2206某某": "某某、阿某"
+    #   "某个昵称": "小名"
+    memory_embed_model: ""       # 语义召回的向量模型（要装 sentence-transformers），空 = 只用关键词
+    # 联网（4.0）：读链接、不知道的先搜一搜、记住查到的东西
+    read_links: true
+    web_search: true
+    search_per_hour: 12
+    remember_web: true
+    weekly_reflect: true
+
+# ---------------- 联网（4.0） ----------------
+net:
+  search: true                   # 能不能上网搜（关掉就只读群友发的链接）
+  tavily_key: ""                 # 可选：Tavily 的 Key（写 ${TAVILY_KEY}，Key 放 .env），百度 / 360 / 搜狗都不行时兜底；每月 1000 次免费
+  asr: {}                        # 4.4 看 B 站视频时把声音转成文字：默认借你 llm 里硅基流动接口的 Key，用 FunAudioLLM/SenseVoiceSmall；
+                                 #     自己写：{base_url: ..., api_key: ${KEY}, model: ..., max_minutes: 20}；enabled: false 关掉
+  cookies: {}                    # 可选：要登录才能看的网站，填你自己浏览器里的 cookie，比如 {"zhihu.com": "z_c0=…"}（只用来读群友发的链接）
+  links:
+    enabled: true                # 读群友发的链接
+    max_chars: 500               # 网页正文最多读多少字
