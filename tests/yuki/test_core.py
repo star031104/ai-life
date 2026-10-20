@@ -103,7 +103,6 @@ def test_llm_fallback_and_cooldown():
 
 def test_persona_files_load():
     from ailife.persona.loader import load_persona
-    from ailife.core.config import ROOT
     y = load_persona(Path(__file__).resolve().parent / "fixtures" / "student.md")
     assert y.name == "小葵" and y.call_name == "哥哥" and "傲娇" in y.body
 

@@ -8,7 +8,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-555)](#放在服务器上24-小时在线)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[三个角色](#一个仓库三个角色) · [Windows 上装和启动](#windows-上装和启动) · [服务器](#放在服务器上24-小时在线) · [命令](#常用命令) · [从旧的三个文件夹搬过来](#从旧的三个文件夹搬过来) · [更新记录](CHANGELOG.md)
+[三个角色](#一个仓库三个角色) · [Windows 上装和启动](#windows-上装和启动) · [服务器](#放在服务器上24-小时在线) · [命令](#常用命令) · [更新记录](CHANGELOG.md)
 
 </div>
 
@@ -16,7 +16,7 @@
 
 ## 一个仓库，三个角色
 
-12.0 起，以前的三个仓库（ai-life、ai-life-group、ai-life-wechat）合在这一个里。代码只有一份，三个角色各有自己的“家”（配置、密钥、数据、你自己写的人设），可以只用一个，也可以三个一起开。
+代码只有一份，三个角色各有自己的“家”（配置、密钥、数据、你自己写的人设），可以只用一个，也可以三个一起开。QQ 群和微信群的她都可以同时待在好几个群里：小屋里每个群有自己的卡片、聊天记录、群友、学到的说法，开关也能每个群单独调。
 
 | 名字 | 是谁 | 在哪聊 | 她的家 | 小屋（本机网页） | 详细说明 |
 | --- | --- | --- | --- | --- | --- |
@@ -39,12 +39,11 @@ ai-life/
 │   └── wechat/  同上（没有 napcat）
 ├── start.bat · start.vbs · install.bat · setup.bat     Windows
 ├── install.sh · start.sh                               Linux / macOS
-├── scripts/               托盘、体检、换大模型、开机自启、搬家……（.bat 都可以带名字：llm.bat qq）
+├── scripts/               托盘、体检、换大模型、开机自启……（.bat 都可以带名字：llm.bat qq）
 ├── deploy/                服务器：systemd 服务、小管家（ops.py：看门、备份、日报、首页）
 └── docs/                  每个角色的详细说明、写人设、代码结构、测试清单
 ```
 
-> 有希的老安装（`config.yaml`、`data/` 直接放在仓库根目录）照样能用：没有 `home/yuki/` 的时候，`yuki` 就用根目录。想挪进去：`python scripts/migrate_old.py --yuki`。
 
 ## Windows 上装和启动
 
@@ -124,20 +123,12 @@ Linux / macOS 桌面上不用 systemd 也行：`bash start.sh qq`（退出会自
 
 想把某个家放到别处：`python run.py qq --home D:\bots\qq`，或者设环境变量 `AIGROUP_HOME`（群聊）/ `AILIFE_HOME`（有希）。
 
-## 从旧的三个文件夹搬过来
-
-以前装的是三个文件夹（`ai-life`、`ai-life-group`、`ai-life-wechat`，比如都在 `文档` 里）：
-
-1. 三个托盘图标都右键 → 退出。
-2. 把新代码放进原来的 `ai-life` 文件夹（get.ps1 / 小屋里的更新会自动做；手动的话解压覆盖，`home`、`data`、`config.yaml`、`.env` 不会被动到）。
-3. 在 `ai-life` 里运行 `python scripts\migrate_old.py`：它在旁边找到 `ai-life-group`、`ai-life-wechat`，把配置、密钥、数据、NapCat、你自己的人设**复制**进 `home\qq`、`home\wechat`（旧文件夹原样留着；路径不在旁边就加 `--qq 路径 --wechat 路径`）。有希的也想挪进 `home\yuki`：加 `--yuki`（不挪也能用）。
-4. `scripts\autostart_off.bat all` 清掉旧的开机自启，再双击 `start.vbs`，确认三个图标都绿了、小屋都打得开，旧的两个文件夹就可以删了。
-
 ## 更多
 
 - 写人设：[docs/PERSONA.md](docs/PERSONA.md) · 有希的全部功能：[docs/FEATURES.md](docs/FEATURES.md)
 - 代码结构：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)（有希）· [docs/群聊开发说明.md](docs/群聊开发说明.md)（群聊）
 - 跑测试：`python -m pytest tests/yuki`、`python -m pytest tests/group`（微信群）、`python -m pytest tests/group_qq`（QQ 群）——三组要分开跑
 - 只有发给大模型的那部分内容会经过对应的服务商；程序里不内置任何接口和 Key。
+- 致谢：QQ 接入靠 [NapCat](https://github.com/NapNeko/NapCatQQ)（OneBot 11）；设计风格参考了 [Wakuwaku](https://github.com/zhoupengjie/Wakuwaku)（MIT）；微信读库的思路见 [NOTICE](NOTICE)。
 
 MIT License

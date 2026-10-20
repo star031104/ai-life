@@ -230,6 +230,7 @@ textarea.input{height:auto;padding:9px 12px;width:100%;resize:vertical;line-heig
 .seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);flex-wrap:wrap}
 .seg button{border:0;background:none;height:28px;padding:0 12px;border-radius:7px;cursor:pointer;color:var(--ink-2);font-size:12.5px;font-weight:550;white-space:nowrap}
 .seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg.seg-sel{padding:0;background:none;border:0}
 .seg button .n{color:var(--ink-3);margin-left:4px;font-weight:500}
 .switch{position:relative;width:38px;height:22px;flex:none;display:inline-block}
 .switch input{opacity:0;width:0;height:0;position:absolute}
@@ -429,7 +430,7 @@ table.dt th{color:var(--ink-3);font-weight:500}
     </div>
   </div>
   <div class="card" id="cmpCard" hidden style="margin-top:16px">
-    <div class="card-h"><h2><span data-i="bars"></span>两个群放一起看</h2><span class="sp"></span><span class="hint">她在哪边更放得开、说完有没有人接；数字大的加粗</span></div>
+    <div class="card-h"><h2><span data-i="bars"></span>几个群放一起看</h2><span class="sp"></span><span class="hint">她在哪边更放得开、说完有没有人接；数字大的加粗</span></div>
     <div class="card-b" style="overflow:auto"><table class="cmp" id="cmp"></table></div>
   </div>
   <div class="sec-t">她待的群</div>
@@ -849,7 +850,7 @@ async function loadState(){
   if(last){$("said").hidden=false;$("saidWhen").textContent=`她 ${ago(last.ts)}在「${gname(last.group_id)}」说`;$("saidText").textContent=last.content}else $("said").hidden=true;
   const k=S.kpi;
   $("kpis").innerHTML=[["今天群消息",k.today,""],["她说了",k.her_today,"句"],["有人找她",k.mentions_today,"次"],["她说完有人接",k.effect_rate==null?"—":Math.round(k.effect_rate*100),k.effect_rate==null?"<small>还没数据</small>":`% <small>近 7 天 ${k.effect_n} 次</small>`],
-    ["认识的人",k.people,`<small>${k.profiled} 有画像${multi()&&k.both_groups?` · ${k.both_groups} 个两个群都在`:""}</small>`],["大模型调用",k.llm_calls,k.llm_limited?`<small>限流 ${k.llm_limited}</small>`:""]]
+    ["认识的人",k.people,`<small>${k.profiled} 有画像${multi()&&k.both_groups?` · ${k.both_groups} 个在不止一个群`:""}</small>`],["大模型调用",k.llm_calls,k.llm_limited?`<small>限流 ${k.llm_limited}</small>`:""]]
     .map(([l,v,u],i)=>`<div class="kpi ${i===1?"acc":""}"><div class="l">${l}</div><div class="v">${v}${u&&!u.startsWith("<")?`<small>${u}</small>`:u}</div></div>`).join("");
   if(HSEL!=="all"&&!S.groups.some(g=>String(g.id)===HSEL))HSEL="all";
   paintCharts();paintCompare();
@@ -868,8 +869,15 @@ async function loadState(){
   paintIcons();
 }
 function gname(id){const g=(S&&S.groups||[]).find(x=>x.id==id);return g?g.name:String(id)}
-/* 2.2 两个群：分段选择器 [值, 文字, 数字] */
-function mkSeg(el,opts,sel,cb){el.innerHTML=opts.map(([v,t,n])=>`<button data-v="${esc(v)}" class="${String(v)===String(sel)?"on":""}">${esc(t)}${n!=null?`<span class="n">${n}</span>`:""}</button>`).join("");
+/* 2.2 好几个群：分段选择器 [值, 文字, 数字] */
+/* 5.0 群多了（超过 SEG_MAX 个选项）就换成下拉框，按钮一排放不下 */
+const SEG_MAX=5;
+function mkSeg(el,opts,sel,cb){
+  if(opts.length>SEG_MAX){el.classList.add("seg-sel");
+    el.innerHTML=`<select class="input" style="height:30px;min-width:180px;max-width:100%">${opts.map(([v,t,n])=>`<option value="${esc(v)}" ${String(v)===String(sel)?"selected":""}>${esc(t)}${n!=null?`（${n}）`:""}</option>`).join("")}</select>`;
+    el.querySelector("select").onchange=e=>cb(e.target.value);return}
+  el.classList.remove("seg-sel");
+  el.innerHTML=opts.map(([v,t,n])=>`<button data-v="${esc(v)}" class="${String(v)===String(sel)?"on":""}">${esc(t)}${n!=null?`<span class="n">${n}</span>`:""}</button>`).join("");
   el.querySelectorAll("button").forEach(b=>b.onclick=()=>cb(b.dataset.v))}
 const multi=()=>S&&S.groups.length>1;
 const gdots=ids=>multi()&&ids&&ids.length?`<span class="gdots" title="${esc(ids.map(gname).join("、"))}">${ids.map(g=>`<i style="background:${hue(g)}"></i>`).join("")}</span>`:"";
@@ -907,9 +915,8 @@ let CH={msgs:[],more:false,q:""};
 async function loadChat(){
   if(!S)await loadState();if(!S||!S.groups.length){$("chat").innerHTML='<div class="empty">还没配置群</div>';return}
   if(!GSEL||!S.groups.some(g=>g.id===GSEL))GSEL=S.groups[0].id;
-  $("gseg").innerHTML=S.groups.map(g=>`<button data-g="${g.id}" class="${g.id===GSEL?"on":""}">${esc(g.name)}<span class="n">${g.today}</span></button>`).join("");
+  mkSeg($("gseg"),S.groups.map(g=>[String(g.id),g.name,g.today]),GSEL,v=>{GSEL=+v;CH.q="";$("cq").value="";loadChat()});
   $("gseg").hidden=S.groups.length<2;
-  $("gseg").querySelectorAll("button").forEach(b=>b.onclick=()=>{GSEL=+b.dataset.g;CH.q="";$("cq").value="";loadChat()});
   const g=S.groups.find(x=>x.id===GSEL);
   $("mute").checked=g.muted;$("muteNote").hidden=!g.muted;$("gnotes").value=g.notes||"";
   $("ginfo").innerHTML=[["群号",g.id],["累计消息",g.total+" 条"],["她说过",g.her+" 句"],["说过话的人",g.people+" 个"],["她上次说话",g.last_reply?ago(g.last_reply):"还没有"],["10 分钟内她说了",g.replies_10min+" 轮"]]
@@ -972,7 +979,7 @@ function renderPeople(){
   const view=x=>pg?(x.per||{})[pg]||{}:null;
   const has=x=>pg?!!view(x).has:Object.keys(x.profile||{}).length>0;
   $("pgseg").hidden=!multi();
-  if(multi()){const L0=P.list;mkSeg($("pgseg"),[["all","全部群",L0.length],...S.groups.map(g=>[String(g.id),g.name,L0.filter(x=>x.groups.includes(g.id)).length]),["both","两个群都在",L0.filter(x=>x.groups.length>1).length]],P.g,v=>{P.g=v;renderPeople()})}
+  if(multi()){const L0=P.list;mkSeg($("pgseg"),[["all","全部群",L0.length],...S.groups.map(g=>[String(g.id),g.name,L0.filter(x=>x.groups.includes(g.id)).length]),["both","在好几个群",L0.filter(x=>x.groups.length>1).length]],P.g,v=>{P.g=v;renderPeople()})}
   const base=P.list.filter(inG);
   $("nAll").textContent=base.length;$("nProf").textContent=base.filter(has).length;$("nNone").textContent=base.filter(x=>!has(x)).length;
   let L=base.filter(x=>P.filter==="all"||(P.filter==="prof"?has(x):!has(x)));
@@ -1069,9 +1076,8 @@ function lBtns(kind,x){return ["ok","no","new"].map(st=>`<button class="btn sm $
 async function loadLearn(){
   if(!S)await loadState();if(!S||!S.groups.length){$("exList").innerHTML='<li class="empty" style="display:block">还没配置群</li>';return}
   if(!LSEL||!S.groups.some(g=>g.id===LSEL))LSEL=S.groups[0].id;
-  $("lseg").innerHTML=S.groups.map(g=>`<button data-g="${g.id}" class="${g.id===LSEL?"on":""}">${esc(g.name)}</button>`).join("");
+  mkSeg($("lseg"),S.groups.map(g=>[String(g.id),g.name]),LSEL,v=>{LSEL=+v;loadLearn()});
   $("lseg").hidden=S.groups.length<2;
-  $("lseg").querySelectorAll("button").forEach(b=>b.onclick=()=>{LSEL=+b.dataset.g;loadLearn()});
   const [r,gt]=await Promise.all([api(`/api/learned?gid=${LSEL}`),api(`/api/gate?gid=${LSEL}`)]);
   $("learnOff").hidden=r.learn;
   const pct=v=>Math.round(v*100)+"%";
@@ -1185,7 +1191,7 @@ async function loadKnobs(){
   const r=await api("/api/settings"+(KG!=="all"?"?gid="+KG:""));K={};r.items.forEach(i=>K[i.key]=i);
   const gm=KG!=="all";$("kSegBox").hidden=!multi();
   if(multi()){mkSeg($("kseg"),[["all","所有群（全局）"],...S.groups.map(g=>[String(g.id),"只调「"+g.name+"」",(g.own_knobs||[]).length||null])],KG,v=>{KG=v;loadKnobs()});
-    $("kNote").textContent=gm?`这里调的只对「${gname(+KG)}」生效，盖在全局上面；没单独调过的跟着全局走。灰掉的只能在全局里调。`:"两个群热闹程度不一样？切到某一个群，单独调它的话痨度、冒泡时段这些。"}
+    $("kNote").textContent=gm?`这里调的只对「${gname(+KG)}」生效，盖在全局上面；没单独调过的跟着全局走。灰掉的只能在全局里调。`:"几个群热闹程度不一样？切到某一个群，单独调它的话痨度、冒泡时段这些。"}
   $("resetAll").textContent=gm?"这个群全部跟回全局":"全部恢复";
   $("knobs").innerHTML=KGROUPS.map(([t,keys])=>`<div class="sec-t" style="margin-top:6px">${t}</div><div class="knobs">${keys.filter(k=>K[k]).map(k=>{const it=K[k];
     const dis=gm&&it.global_only?"disabled":"";

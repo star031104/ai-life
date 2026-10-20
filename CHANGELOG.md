@@ -9,10 +9,11 @@
   有希的老安装（配置在仓库根目录）照样能用。`--home` / `AILIFE_HOME` / `AIGROUP_HOME` 可以放到别处
 - Windows：`start.vbs` 全部启动、`start.bat [名字]`、每个角色一个托盘图标（L / G / W）、开机自启按角色分开；
   `install.bat`、`setup.bat` 会问配哪一个；`scripts\*.bat` 都可以带名字（`llm.bat qq`）
-- `scripts/migrate_old.py`：把旧的两个文件夹里的配置、数据、NapCat、人设复制进 `home/`（旧路径自动改）
 - 有希小屋里的“软件更新”换的是三个共用的代码：换完让正在跑的 QQ 群、微信群也重启一下；启动前就留着的托盘“重启”指令不算数
 - 服务器：`deploy/systemd/` 三个服务文件（服务名不变），小管家 `ops.py` 认新的目录；`README.md` 重写成“怎么装、怎么启动”
 - 各角色的详细说明搬进 `docs/YUKI.md`、`docs/GROUP_QQ.md`、`docs/GROUP_WECHAT.md`（群聊以前的更新记录：`docs/CHANGELOG_GROUP_QQ.md`、`docs/CHANGELOG_GROUP_WECHAT.md`）；测试分三组 `tests/yuki`、`tests/group`、`tests/group_qq`
+
+- 群聊小屋接很多个群也好用：群超过 5 个时，各页的群切换从一排按钮换成下拉框；“两个群都在”“两个群放一起看”改成按“好几个群”说（对比表可以横着滑）
 
 **群聊 5.0**（拿 10 月 20 日两个微信群一早上的真实聊天对出来的问题，都改成了对所有群、所有人设都适用的规则）：
 - **没 @ 也接追问**（`chat/address.py`）：她刚说完，同一个人接着说“你……”、或者接她刚说的词（“你小本本上都记啥了”），当成在跟她说；

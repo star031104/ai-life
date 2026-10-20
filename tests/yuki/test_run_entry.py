@@ -1,4 +1,4 @@
-"""12.0 合并后的入口：run.py 选角色、找她的家；托盘、搬家脚本至少能编译。"""
+"""12.0 合并后的入口：run.py 选角色、找她的家；托盘至少能编译。"""
 import importlib.util
 import py_compile
 from pathlib import Path
@@ -31,26 +31,8 @@ def test_home_of(monkeypatch, tmp_path):
 
 
 def test_scripts_compile():
-    for p in ("scripts/tray.pyw", "scripts/migrate_old.py", "run.py", "deploy/server/ops.py"):
+    for p in ("scripts/tray.pyw", "run.py", "deploy/server/ops.py"):
         py_compile.compile(str(ROOT / p), doraise=True)
-
-
-def test_migrate_copies_only_her_things(tmp_path):
-    spec = importlib.util.spec_from_file_location("mig", ROOT / "scripts" / "migrate_old.py")
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    old = tmp_path / "old"
-    for f, t in {"config.yaml": f"qq: {{napcat_dir: {old}/napcat}}", ".env": "K=1", "data/group.db": "x",
-                 "persona/local_x.md": "mine", "aigroup/app.py": "code", "run.py": "code", "seed_a.yaml": "s"}.items():
-        (old / f).parent.mkdir(parents=True, exist_ok=True)
-        (old / f).write_text(t)
-    (old / "persona" / "template.md").write_text((ROOT / "persona" / "template.md").read_text(encoding="utf-8"),
-                                                 encoding="utf-8")
-    home = tmp_path / "home" / "qq"
-    done = {p.relative_to(home).as_posix() for p in m.migrate(old, home)}
-    assert done == {"config.yaml", ".env", "data/group.db", "persona/local_x.md", "seed_a.yaml"}
-    m.fix_paths(home / "config.yaml", old, home)
-    assert str(home) in (home / "config.yaml").read_text() and (old / "config.yaml").exists()
 
 
 def test_update_restarts_other_roles(tmp_path):
