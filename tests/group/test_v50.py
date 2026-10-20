@@ -73,12 +73,14 @@ def test_no_names_group_and_just_met(cfg, brain):
                           (FRIEND, GROUP, 30, 0, time.time(),
                            json.dumps({"称呼": "阿花", "近况": "今天最后一节课"}, ensure_ascii=False)))
     brain.db.conn.commit()
+    brain.db.set(f"qq_seeded_{GROUP}", [FRIEND])                 # 种子里事先写了他
     brain.llm.reply = J(act="say", kind="I1", to=1, len="short", say=["阿花早"], alt=[["早，起这么早"]])
     _run(gc, _msg(FRIEND, "小王", "hello", 1, at=True))
     sent = "".join(s["data"].get("text", "") for _, segs in ob.sent for s in segs)
     assert "阿花" not in sent and "起这么早" in sent
     sys = brain.llm.group_calls[-1][0]["content"]
     assert "这个群大家平时不叫名字" in sys and "刚认识" in sys and "事先跟你讲的" in sys
+    assert "最后一节课" not in sys                                # 刚认识：近况先不给她
 
 
 def test_bad_reply_when_mentioned_is_rewritten(cfg, brain):

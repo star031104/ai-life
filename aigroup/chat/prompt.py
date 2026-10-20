@@ -15,6 +15,9 @@ from aigroup.core.safety import SPOTLIGHT_NOTE, clean_member_text, quote_member
 from aigroup.memory.people import profile_line
 
 
+PRIVATE_KEYS = ("近况", "记得的事", "家", "学校", "工作", "住")    # 5.0 刚认识的人：这些先不写进提示词
+
+
 class PromptMixin:
     """GroupChat 里和提示词有关的部分。"""
 
@@ -83,7 +86,7 @@ class PromptMixin:
                 break
         return n
 
-    JUST_MET = 5          # 5.0 和她真正说过话（叫她 + 她回他）少于这么多次：算“刚认识”
+    JUST_MET = 5          # 5.0 事先听说过（种子里有）、但和她真正说过话（叫她 + 她回他）少于这么多次：算“刚认识”
 
     def met_counts(self, gid: int) -> dict[int, int]:
         """这个群里每个人和她真正说过几次话：他叫她（@、回复她、叫名字）的次数 + 她回他的次数。
@@ -123,6 +126,7 @@ class PromptMixin:
         others = [u for u in dict.fromkeys(recent + [int(x) for x in names]) if u not in active][:12]
         out = []
         met = self.met_counts(gid)
+        seeded = {int(x) for x in (self.db.get(f"qq_seeded_{gid}") or [])}     # 事先听说的人（导入的种子）
         for uid in active:
             p = self.person(uid, gid) or {"name": names.get(str(uid), str(uid)), "profile": {},
                                           "familiarity": "很熟" if uid == self.owner_id else "刚认识", "when": "", "note": ""}
@@ -135,15 +139,17 @@ class PromptMixin:
             from aigroup.core.safety import clean_name
             label = clean_name(p["name"]) + (f"（大家也叫：{'、'.join(p['aliases'])}）" if p.get("aliases") else "")
             fam = p["familiarity"]
-            just_met = uid != self.owner_id and met.get(uid, 0) < self.JUST_MET
+            just_met = uid != self.owner_id and uid in seeded and met.get(uid, 0) < self.JUST_MET
             if just_met:
                 fam = "刚认识（你们才说过几句话）"
+                for k in PRIVATE_KEYS:                  # 刚认识：他的近况、在哪、记得的私事先不给她（给了她就容易说出来）
+                    prof.pop(k, None)
             line = profile_line(label, prof, fam, p["when"], note)
             if just_met and prof and any(k != "印象" or prof[k] != "还不太了解，聊着慢慢熟" for k in prof):
                 line += f"（这些是{self.teller(gid)}事先跟你讲的：别一上来就说出来）"
             wh = getattr(self, "where", None)
-            if wh is not None and self.g.get("weather", True):
-                line += wh.note(uid)                          # 4.4 在哪、那边天气
+            if wh is not None and self.g.get("weather", True) and not just_met:
+                line += wh.note(uid)                          # 4.4 在哪、那边天气（刚认识的不写：她不该知道）
             if st.attention.get(uid) >= 0.3:
                 line += "（你们刚才正聊着）"
             out.append(line)
@@ -246,7 +252,7 @@ class PromptMixin:
 {naming}
 - 对谁说话就照着“群里的人”里写的他来：很熟的可以互损、开玩笑，刚认识的客气一点、多问两句；
   接他的说话风格和兴趣；记得的事可以自然地提一下（关心近况），但别像查户口；别碰他的雷区。
-- 刚认识的人（“群里的人”里写了“刚认识”的）：你对他的了解是事先听来的，别一上来就说出来（他在哪上学、最近在忙什么、今天有什么课），
+- 刚认识的人（“群里的人”里写了“刚认识”的）：你对他的一点了解是事先听来的，别一上来就说出来（他在哪上学、最近在忙什么、今天有什么课），
   像刚认识那样聊；他问你“怎么知道的”，就照实说是谁跟你讲过。
 - 你和群友不在同一个地方：替人上课、去找他、一起吃饭这种线下的事你做不到。可以开玩笑，但要一听就是玩笑；
   被戳穿了就认（“行吧我人不在那，答到靠你自己了”），别硬圆、别越说越真。

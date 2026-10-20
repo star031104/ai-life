@@ -80,11 +80,13 @@ def apply(seed: dict, db, ids, chat_of_name, now: float | None = None) -> dict:
         for e in g.get("lore") or []:
             if lore.add(gid, [str(k) for k in e.get("keys") or []], str(e.get("text") or ""), source="manual"):
                 st["lore"] += 1
+        seeded = set(db.get(f"qq_seeded_{gid}") or [])
         for p in g.get("people") or []:
             wxid = str(p.get("qq") or p.get("wxid") or "").strip()                 # QQ 写 qq，微信写 wxid
             if not wxid:
                 continue
             uid = ids(wxid)
+            seeded.add(int(uid))              # 5.0 记下哪些人是“事先听说的”：真正说上话以前，她不把听来的私事说出来
             name = str(p.get("name") or wxid)
             db.conn.execute("INSERT OR IGNORE INTO qq_people(user_id, name) VALUES (?, ?)", (uid, name))
             if p.get("aliases"):
@@ -100,6 +102,7 @@ def apply(seed: dict, db, ids, chat_of_name, now: float | None = None) -> dict:
                     "updated=excluded.updated", (uid, gid, js, note, now))
                 db.conn.execute("UPDATE qq_people SET profile=?, note=?, updated=? WHERE user_id=?", (js, note, now, uid))
             st["people"] += 1
+        db.set(f"qq_seeded_{gid}", sorted(seeded))
     db.conn.commit()
     return st
 
