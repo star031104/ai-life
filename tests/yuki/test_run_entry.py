@@ -51,3 +51,13 @@ def test_migrate_copies_only_her_things(tmp_path):
     assert done == {"config.yaml", ".env", "data/group.db", "persona/local_x.md", "seed_a.yaml"}
     m.fix_paths(home / "config.yaml", old, home)
     assert str(home) in (home / "config.yaml").read_text() and (old / "config.yaml").exists()
+
+
+def test_update_restarts_other_roles(tmp_path):
+    from ailife.core.update import restart_others
+    for n in ("yuki", "qq", "wechat"):
+        (tmp_path / "home" / n / "data").mkdir(parents=True)
+    out = restart_others(tmp_path, tmp_path / "home" / "yuki")
+    assert out == ["qq", "wechat"]
+    assert (tmp_path / "home" / "qq" / "data" / "tray_cmd").read_text() == "restart"
+    assert not (tmp_path / "home" / "yuki" / "data" / "tray_cmd").exists()

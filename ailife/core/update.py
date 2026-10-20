@@ -215,6 +215,7 @@ def apply(cfg, fetch=_fetch, *, pip: bool = True) -> dict:
     _save_state(root, state)
     log.info("更新到 %s：换了 %d 个文件、新加 %d 个、拿掉 %d 个旧的（备份 %s）", ver, len(overwritten), len(added),
              len(stale), backup.name)
+    restart_others(root, Path(cfg.root))
     if req_changed and pip:
         try:
             subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(root / "requirements.txt")],
@@ -223,6 +224,22 @@ def apply(cfg, fetch=_fetch, *, pip: bool = True) -> dict:
         except Exception as e:  # noqa: BLE001
             log.warning("装新依赖没成功（重启后可能缺包，可以双击 install.bat 再装一次）：%s", e)
     return state
+
+
+def restart_others(code: Path, mine: Path) -> list[str]:
+    """12.0：代码是三个共用的——换完以后，让正在跑的 QQ 群、微信群也重启一下用上新代码（往她们家里写 tray_cmd）。"""
+    out = []
+    for d in sorted((Path(code) / "home").glob("*/data")):
+        if d.parent.resolve() == Path(mine).resolve():
+            continue
+        try:
+            (d / "tray_cmd").write_text("restart", encoding="utf-8")
+            out.append(d.parent.name)
+        except OSError:
+            pass
+    if out:
+        log.info("让 %s 也重启一下，用上新代码", "、".join(out))
+    return out
 
 
 def state_path(root: Path) -> Path:

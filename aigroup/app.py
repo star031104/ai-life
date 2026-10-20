@@ -178,12 +178,15 @@ async def run(cfg):
 
     async def watch_tray():                        # 托盘里点了“重启 / 退出”：它往 data/tray_cmd 里写一个字
         p = Path(cfg.root) / "data" / "tray_cmd"
+        born = time.time() - 2
         while True:
             await asyncio.sleep(1)
             try:
                 cmd = p.read_text(encoding="utf-8").strip() if p.exists() else ""
                 if cmd:
+                    old = p.stat().st_mtime < born          # 12.0 启动前就留在那的（比如没在跑时别人写的“重启”）：不算
                     p.unlink(missing_ok=True)
+                    cmd = "" if old else cmd
             except OSError:
                 cmd = ""
             if cmd in ("stop", "restart"):

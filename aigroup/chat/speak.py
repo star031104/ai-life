@@ -45,6 +45,30 @@ class SpeakMixin:
                 out += [w for w in re.split(r"[；;，,/、（()）\s]+|她爱自称|大家都这么叫|外号", call) if w]
         return [w.strip("“”\"' ") for w in dict.fromkeys(out) if 2 <= len(w.strip("“”\"' ")) <= 12]
 
+    def names_off(self, gid: int) -> bool:
+        """5.0 这个群不叫名字吗：小屋 / 配置里明确设了 call_names 就听设的；没设就看群友自己的习惯——
+        最近 300 句里（不算 @），提到群友名字、外号、称呼的不到 4%，就当这个群“平时不喊名字”（call_names_auto）。"""
+        from aigroup.core.config import chan_group
+        if "call_names" in (self.gover.get(int(gid)) or {}) or "call_names" in (chan_group(self.cfg) or {}):
+            return not self.gk(gid).get("call_names", True)
+        if not self.gk(gid).get("call_names_auto", True):
+            return False
+        cache = self.__dict__.setdefault("_names_habit", {})
+        hit = cache.get(gid)
+        if hit and time.time() - hit[0] < 3600:
+            return hit[1]
+        rows = [r["content"] for r in self.db.conn.execute(
+            "SELECT content FROM qq_group_messages WHERE group_id=? AND role='user' ORDER BY id DESC LIMIT 300", (gid,))]
+        off = False
+        if len(rows) >= 150:
+            names = [n for n in self.member_names(gid) if len(n) >= 2]
+            said = sum(1 for t in rows if any(n in re.sub(r"@\S+|\[回复[^\]]*\]", "", t) for n in names))
+            off = said / len(rows) < 0.04
+            if off:
+                log.info("群 %s：群友之间很少叫名字（%d/%d），她也不叫", gid, said, len(rows))
+        cache[gid] = (time.time(), off)
+        return off
+
     def stale_phrases(self, gid: int) -> list[str]:
         """5.0 她这几个小时已经用过的口头禅、招牌梗（所有群一起算：人是同一个）。"""
         from aigroup.chat.address import her_phrases
@@ -360,7 +384,7 @@ class SpeakMixin:
                     cands.append(bb)
             sticker = plan.get("sticker") or ""
             quote = None
-            no_names = not self.gk(gid).get("call_names", True)
+            no_names = self.names_off(gid)
             if tgt and tgt.get("mid") and tgt["role"] == "user":
                 idx = plan["to"]
                 distance = sum(1 for k, v in tmap.items() if k > idx and v["role"] == "user")
@@ -384,12 +408,14 @@ class SpeakMixin:
             bb = parse_group_reply(raw, b.persona.name, mb)
             if bb:
                 cands = [bb]
+        if self.names_off(gid):     # 5.0 不叫名字的群：[@名字] 也不用，靠引用
+            cands = [c2 for c2 in ([b2 for b2 in (AT_RE.sub("", x).strip() for x in c) if b2] for c in cands) if c2]
         # ---- 发之前检查：挑最像群友的那条 ----
         recent = self.recent_her(gid)
         qtxt = ""
         if self.gk(gid).get("quality_check", True):
             stale = self.stale_phrases(gid)
-            no_names = [] if self.gk(gid).get("call_names", True) else self.member_names(gid)
+            no_names = self.member_names(gid) if self.names_off(gid) else []
             qargs = dict(avoid=self.avoid_words(gid, focus, target_uid), detector=self.detector,
                          ai_open=bool(getattr(b.persona, "ai_open", False)), stale=stale, no_names=no_names)
             sim = float(self.gk(gid).get("similar_threshold", 0.75))
@@ -526,6 +552,8 @@ class SpeakMixin:
         out = []
         for c in plan.get("cands") or []:
             bb = parse_group_reply("|||".join(c), self.brain.persona.name, mb)
+            if bb and self.names_off(gid):
+                bb = [x for x in (AT_RE.sub("", y).strip() for y in bb) if x]
             if bb:
                 out.append(bb)
         log.info("群 %s 重写：%s", gid, raw2)

@@ -74,10 +74,11 @@ def test_no_names_group_and_just_met(cfg, brain):
                            json.dumps({"称呼": "阿花", "近况": "今天最后一节课"}, ensure_ascii=False)))
     brain.db.conn.commit()
     brain.db.set(f"qq_seeded_{GROUP}", [FRIEND])                 # 种子里事先写了他
-    brain.llm.reply = J(act="say", kind="I1", to=1, len="short", say=["阿花早"], alt=[["早，起这么早"]])
+    brain.llm.reply = J(act="say", kind="I1", to=1, len="short", say=["阿花早"], alt=[["[@小王] 早，起这么早"]])
     _run(gc, _msg(FRIEND, "小王", "hello", 1, at=True))
     sent = "".join(s["data"].get("text", "") for _, segs in ob.sent for s in segs)
     assert "阿花" not in sent and "起这么早" in sent
+    assert not any(seg["type"] == "at" for _, segs in ob.sent for seg in segs)      # 也不 @ 人
     sys = brain.llm.group_calls[-1][0]["content"]
     assert "这个群大家平时不叫名字" in sys and "刚认识" in sys and "事先跟你讲的" in sys
     assert "最后一节课" not in sys                                # 刚认识：近况先不给她
@@ -118,3 +119,17 @@ def test_unanswered_mention_before_restart(cfg, brain):
     assert "还没回" in user and "才看到" in user                  # 提示里明确说“别说才看到”
     assert ob.sent
     _ = OWNER
+
+
+def test_names_off_follows_group_habit(cfg, brain):
+    gc, ob = _gc(cfg, brain)
+    now = time.time()
+    for i in range(160):
+        gc._record(GROUP, FRIEND if i % 2 else FRIEND2, "小王" if i % 2 else "小李", f"今天吃了{i}碗饭", 1000 + i, ts=now - 1000 + i)
+    assert gc.names_off(GROUP)                                      # 群友之间几乎不叫名字
+    gc._names_habit.clear()
+    for i in range(30):
+        gc._record(GROUP, FRIEND, "小王", f"小李你来不来{i}", 2000 + i, ts=now - 100 + i)
+    assert not gc.names_off(GROUP)                                  # 经常叫名字
+    gc.gover[GROUP] = {"call_names": False}
+    assert gc.names_off(GROUP)                                      # 小屋里明确设了：听设的

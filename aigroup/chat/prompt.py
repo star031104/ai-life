@@ -108,7 +108,7 @@ class PromptMixin:
         p = self.person(self.owner_id, gid) if self.owner_id else None
         call = str(((p or {}).get("profile") or {}).get("称呼") or "")
         call = re.split(r"[；;，,/（(]", call)[0].strip() if call else ""
-        if not self.gk(gid).get("call_names", True) or not call:
+        if (self.names_off(gid) if hasattr(self, "names_off") else False) or not call:
             return "把你拉进群的那位"
         return call
 
@@ -240,11 +240,14 @@ class PromptMixin:
 - 被人叫到（@你、叫你名字、回复你）一定要回一句，哪怕很短。""" + ("""
 - 有时候不用说话，给某条消息点个表情就够了：只输出 [回应:表情]（开心/大笑/喜欢/惊讶/无语/哭/得意 之一），点在最新那条上。"""
                     if can_react else "")
-        if self.gk(gid).get("call_names", True):
+        if not (self.names_off(gid) if hasattr(self, "names_off") else False):
             naming = "- 叫人用“群里的人”里写的称呼（大家平时怎么叫他你就怎么叫）；不知道怎么称呼就不叫，直接说。"
-        else:
-            naming = ("- 这个群大家平时不叫名字：你也不叫任何人的名字、外号、称呼，直接说话；要回谁就回复（引用）他那条——"
+        elif getattr(self.ob, "can_quote", True):
+            naming = ("- 这个群大家平时不叫名字：你也不叫任何人的名字、外号、称呼，也不用 [@名字]，直接说话；要回谁就回复（引用）他那条——"
                       "JSON 里 to 写那条的编号。")
+        else:
+            naming = ("- 这个群大家平时不叫名字：你也不叫任何人的名字、外号、称呼，也不用 [@名字]，直接说话。"
+                      "要回的不是最新那条时，顺口带一下他说的事（“中午吃啥那个：……”），让人知道你在接哪句；JSON 里 to 照样写编号。")
         rules = f"""# 在群里怎么相处
 - 群里其他人都是你关系很好的朋友：自然、放松，会接梗、开玩笑、吐槽，也会关心人；不客气、不端着、不刻意讨好。性格还是你自己的性格，只是对朋友的样子。
 {secret}{fmt}
