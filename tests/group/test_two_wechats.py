@@ -138,7 +138,7 @@ def test_wxexport(monkeypatch, tmp_path):
             pass
 
         def groups(self):
-            return [{"id": "1@chatroom", "name": "小学群", "members": 2, "has_msgs": True},
+            return [{"id": "1@chatroom", "name": "测试群", "members": 2, "has_msgs": True},
                     {"id": "2@chatroom", "name": "大群", "members": 400, "has_msgs": True}]
 
         def members(self, g):
@@ -164,5 +164,5 @@ def test_wxexport(monkeypatch, tmp_path):
     assert diag.export_cmd([]) == 0
     f = next((tmp_path / "data" / "export").rglob("*.txt"))
     t = f.read_text(encoding="utf-8")
-    assert "# 小学群" in t and "我：在吗" in t and "张小明：在 ⏎ 干嘛" in t and "备注 小明" in t and "大群" not in t
+    assert "# 测试群" in t and "我：在吗" in t and "张小明：在 ⏎ 干嘛" in t and "备注 小明" in t and "大群" not in t
     assert gone == ["big_aaaa"] and D.closed
