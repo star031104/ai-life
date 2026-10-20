@@ -67,7 +67,8 @@ class IdleMixin:
             self.db.set(f"qq_idle_{gid}", now)
             hours = (now - last["ts"]) / 3600
             why = (f"群里已经安静了 {hours:.0f} 个多小时。你想冒个泡：可以分享你今天遇到的事、正在做的事，"
-                   "或者接着之前大家聊过的话题随口问一句。一两句话，自然一点，别说“大家好”“怎么没人说话”这种")
+                   "或者接着之前大家聊过的话题随口问一句。一两句话，自然一点，别说“大家好”“怎么没人说话”这种。"
+                   f"聊天记录里最后那些话已经是 {hours:.0f} 个多小时以前的了，提到时别说成“刚才”“刚说”")
             async with st.lock:
                 try:
                     await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who="", why=why)
@@ -91,7 +92,8 @@ class IdleMixin:
             why = (f"{who}刚才叫你的话你还没回（刚才手机卡了一下）。看聊天记录里他说了什么，直接回应他，"
                    "不用解释为什么慢，也别说“才看到”")
         elif all(x.get("kind") in ("offline", "pending") for x in night):
-            why = (f"你刚才有一阵子没看手机（在忙 / 手机没电），这期间{who}叫过你，你现在才看到。"
+            busy = ("没顾上看群" if getattr(self.brain.persona, "ai_open", False) else "没看手机（在忙 / 手机没电）")
+            why = (f"你刚才有一阵子{busy}，这期间{who}叫过你，你现在才看到。"
                    "看看聊天记录里他们说了什么，回应一下（可以带一句“才看到”之类的，自然一点，别解释为什么不在）")
         else:
             why = (f"昨晚你睡着以后{who}叫过你，你刚醒才看到。回应一下他说的事"

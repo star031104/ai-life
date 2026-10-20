@@ -20,7 +20,7 @@ from aigroup.chat.settings import (  # noqa: F401  （测试从这里拿 clean_k
     KNOBS,
     clean_knob,
 )
-from aigroup.memory.people import PROFILE_KEYS
+from aigroup.memory.people import MEMORY_CHARS, PROFILE_CHARS, PROFILE_KEYS, PROFILE_MEMORIES
 
 log = logging.getLogger("aigroup.web")
 PAGE = Path(__file__).with_name("page.html")
@@ -426,11 +426,11 @@ class GroupHome:
             v = prof_in.get(k)
             if k == "记得的事":
                 items = v if isinstance(v, list) else str(v or "").split("\n")
-                items = [str(i).strip()[:70] for i in items if str(i).strip()][:6]
+                items = [str(i).strip()[:MEMORY_CHARS] for i in items if str(i).strip()][:PROFILE_MEMORIES]
                 if items:
                     prof[k] = items
             else:
-                s = str(v or "").strip()[:100]
+                s = str(v or "").strip()[:PROFILE_CHARS]
                 if s:
                     prof[k] = s
         self.db.conn.execute("UPDATE qq_people SET profile=?, note=?, updated=? WHERE user_id=?",

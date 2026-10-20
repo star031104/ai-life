@@ -106,6 +106,14 @@
 
 不想让程序自动重开 NapCat：`config.yaml` 的 `qq:` 里写 `napcat_watchdog: false`；想改等待时间就写 `napcat_restart_after: 300`（秒）。
 
+**放在 Linux 服务器上（Docker 里跑 NapCat）时：**
+- 两个号（有希、群里的她）各一个 NapCat 容器时，**每个容器要有自己的 machine-id**，主机名和 MAC 也要固定，
+  不然 QQ 把两个号当成同一台设备，一个登录就把另一个踢下线（“你的账号当前登录已失效”）。`docker run` 加
+  `--hostname 固定名 --mac-address 固定MAC -v 自己的machine-id文件:/etc/machine-id:ro`，以后都用同一条命令重建。
+- 被踢下线后不想扫码：存好小号密码的 MD5，让服务器小管家自动用密码重登；QQ 要短信验证时它会在 QQ 上提醒你去 NapCat 网页里验证，
+  见 [deploy/server/README.md](../deploy/server/README.md)。
+- 新号挂在机房 IP 上，QQ 隔几个小时就让登录失效是常有的事：在手机上正常用几天、做好实名和密保会好很多。
+
 </details>
 
 <details>

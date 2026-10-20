@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 from aigroup.core.config import chan_name, id_label
 from aigroup.core.safety import looks_like_order
-from aigroup.memory.people import PROFILE_FIELDS
+from aigroup.memory.people import IMPRESSION_CHARS, MEMORY_CHARS, PROFILE_CHARS, PROFILE_FIELDS, PROFILE_MEMORIES
 
 log = logging.getLogger("aigroup.group")
 
@@ -261,7 +261,7 @@ class DigestMixin:
                 "- 和你：你们之间的关系和互动方式\n"
                 "- 怎么聊：跟他聊天怎么接他会高兴、什么样的话他会冷场（一句话，给你自己看的）\n"
                 "- 别碰：他不喜欢被提起的话题、会让他不高兴的玩笑，没有就留空\n"
-                f"- 记得的事：值得记住的具体小事，最多 6 条，每条前面写日期，比如“[{today}] 养了只橘猫叫团子”\n"
+                f"- 记得的事：值得记住的具体小事，最多 {PROFILE_MEMORIES} 条，每条前面写日期，比如“[{today}] 养了只橘猫叫团子”\n"
                 "怎么更新：新信息跟原来的冲突，以新的为准；原来的没被推翻就保留（照抄，日期也别改）；只出现过一次、没把握的推测写“好像…”。"
                 "别人损他、开他玩笑的话（“××是路边一条”）是群里的互损，不要当成他的性格或事实。\n"
                 "不要写住址、电话、真实姓名、学校公司全名这类隐私（“大家也叫他”里的名字你知道就行，不用写进去）。"
@@ -291,10 +291,10 @@ class DigestMixin:
                     continue
                 val = v[f]
                 if f == "记得的事":
-                    val = [str(x)[:70] for x in (val if isinstance(val, list) else [val])
-                           if str(x).strip() and not looks_like_order(str(x))][:6]
+                    val = [str(x)[:MEMORY_CHARS] for x in (val if isinstance(val, list) else [val])
+                           if str(x).strip() and not looks_like_order(str(x))][:PROFILE_MEMORIES]
                 else:
-                    val = str(val or "").strip()[:40 if f == "印象" else 100]
+                    val = str(val or "").strip()[:IMPRESSION_CHARS if f == "印象" else PROFILE_CHARS]
                     if looks_like_order(val):
                         continue
                 prof[f] = val

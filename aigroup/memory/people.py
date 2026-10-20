@@ -16,6 +16,12 @@ from aigroup.core.safety import clean_name
 log = logging.getLogger("aigroup.group")
 
 
+# 12.1 画像写得更细：每个字段最多多少字、记得几件事（以前是 100 字、6 件）
+PROFILE_CHARS = 160
+IMPRESSION_CHARS = 50
+PROFILE_MEMORIES = 8
+MEMORY_CHARS = 80
+
 PROFILE_FIELDS = ["称呼", "性格", "说话风格", "口头禅", "兴趣", "近况", "群里关系", "和你", "怎么聊", "别碰", "记得的事"]
 
 
@@ -50,7 +56,7 @@ def profile_line(name: str, prof: dict, fam: str, when: str, owner_note: str = "
             bits.append(f"{k}：{p[k]}")
     if p.get("记得的事"):
         v = p["记得的事"]
-        bits.append("记得：" + ("；".join(map(str, v[:6])) if isinstance(v, list) else str(v)))
+        bits.append("记得：" + ("；".join(map(str, v[:PROFILE_MEMORIES])) if isinstance(v, list) else str(v)))
     if p.get("别碰"):
         bits.append(f"别碰：{p['别碰']}")
     bits.append(f"熟悉度：{fam}" + (f"，{when}" if when else ""))

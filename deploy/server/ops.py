@@ -270,6 +270,55 @@ async def check_bot(b: dict) -> dict:
     return out
 
 
+# ---------------- NapCat 掉登录后不用扫码 ----------------
+NAPCATS = {"qq": "group", "yuki": "yuki"}     # 小屋里的名字 → NapCat 容器 napcat-<名字>、目录 $AILIFE_HOME/napcat/<名字>
+WEBUI = {"group": "/webui/"}                   # 在 nginx 里开放到公网的 NapCat 网页（目前只有小满的）
+GUARD_EVERY = 30 * 60                          # 同一个 NapCat 最多 30 分钟自动重启一次（每次重启 QQ 可能会发一条验证短信）
+
+
+def public_url() -> str:
+    """小屋的公网地址：$AILIFE_PUBLIC_URL，或者 $AILIFE_HOME/public_url 里写的那一行。"""
+    u = os.environ.get("AILIFE_PUBLIC_URL") or ""
+    if not u:
+        try:
+            u = (HOME / "public_url").read_text(encoding="utf-8").strip()
+        except OSError:
+            u = ""
+    return u.rstrip("/") or "http://你的服务器地址"
+
+
+def napcat_guard(bots: list, st: dict, alerts: list) -> None:
+    """QQ 被踢下线后，NapCat 会停在“请扫描二维码”。存了密码（napcat/<名字>/password.md5）的话，
+    就用 up.sh 重启它：先快速登录，不行再用密码登录；QQ 要短信验证时，提醒你去 NapCat 网页里点一下发短信、填验证码。"""
+    nd = HOME / "napcat"
+    for x in bots:
+        name = NAPCATS.get(x["key"])
+        if not name or not (nd / "up.sh").exists():
+            continue
+        g = st.setdefault("napcat_guard", {}).setdefault(name, {})
+        if x["ok"]:
+            g["sms_alerted"] = 0                  # 登上了：下次再要验证码时重新提醒
+            continue
+        try:
+            r = subprocess.run(["docker", "logs", "--since", "3h", f"napcat-{name}"], capture_output=True,
+                               text=True, errors="replace", timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        log = (r.stdout + r.stderr)[-300000:]
+        qr, sms = log.rfind("请扫描下面的二维码"), log.rfind("需要验证码")
+        if qr > sms and (nd / name / "password.md5").is_file() and time.time() - float(g.get("restart") or 0) > GUARD_EVERY:
+            try:
+                subprocess.run(["sudo", "-u", "ubuntu", str(nd / "up.sh"), name], cwd=str(nd), capture_output=True, timeout=180)
+                g["restart"], g["sms_alerted"] = time.time(), 0
+                print(f"napcat-{name} 在等扫码：已经用密码重启它")
+            except (OSError, subprocess.SubprocessError) as e:
+                print(f"napcat-{name} 重启失败：{e}", file=sys.stderr)
+        elif sms > qr and name in WEBUI and not g.get("sms_alerted"):
+            alerts.append(f"{x['label']}要短信验证才能登回来（不用扫码）：打开 {public_url()}{WEBUI[name]} ，"
+                          "先输小屋的用户名密码，再输 NapCat 口令，按页面提示收短信、填验证码")
+            g["sms_alerted"] = time.time()
+
+
 async def watch():
     st = load_state()
     bots = [await check_bot(b) for b in BOTS]
@@ -289,6 +338,7 @@ async def watch():
             if s["fails"] >= 2 and (not s.get("alerted") or again):
                 alerts.append(f"{x['label']}掉线了：{x['why']}。打开小屋看看：{x['path']}")
                 s["alerted"] = time.time()
+    napcat_guard(bots, st, alerts)
     ms = st.setdefault("machine", {"alerted": 0})
     if (m["disk_used"] > 90 or m["mem_used"] > 92) and time.time() - float(ms.get("alerted") or 0) > 12 * 3600:
         alerts.append(f"服务器快满了：硬盘 {m['disk_used']}%、内存 {m['mem_used']}%")

@@ -77,3 +77,19 @@ def test_parse_plan_tolerant(cfg, brain):
     assert p["act"] == "say" and p["to"] == 3 and p["say"] == ["好耶"]
     assert gc.want_quote(mentioned=False, target_is_trigger=False, target_last=False, distance=3, rand=0.99)
     assert not gc.want_quote(mentioned=False, target_is_trigger=False, target_last=True, distance=0, rand=0.5)
+
+
+def test_life_ask_ai_open():
+    """12.1：大家都知道她是 AI 时，她的一天写线上的事，不编上课吃饭。"""
+    from types import SimpleNamespace
+
+    from aigroup.brain import GroupBrain as Brain
+    assert "没有身体" in Brain._life_ask(SimpleNamespace(ai_open=True))
+    assert "高数课" in Brain._life_ask(SimpleNamespace(ai_open=False))
+
+
+def test_profile_limits_seed():
+    from aigroup.memory.people import PROFILE_CHARS, PROFILE_MEMORIES
+    from aigroup.seed import _clean_profile
+    p = _clean_profile({"性格": "好" * 300, "记得的事": [f"第{i}件" for i in range(20)]})
+    assert len(p["性格"]) == PROFILE_CHARS and len(p["记得的事"]) == PROFILE_MEMORIES

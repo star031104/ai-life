@@ -113,7 +113,8 @@ def test_watchdog_relaunches_when_napcat_gone(tmp_path, monkeypatch):
     assert len(launches) == 1
 
     # NapCat 进程还在（比如在等扫码）：不开第二个
-    launches.clear(); ob.ready, alive["port"], alive["pid"] = True, True, True
+    launches.clear()
+    ob.ready, alive["port"], alive["pid"] = True, True, True
     script[:] = [down] + [lambda: None] * 10
     try:
         asyncio.run(L.ensure_napcat(cfg, ob))
@@ -122,7 +123,8 @@ def test_watchdog_relaunches_when_napcat_gone(tmp_path, monkeypatch):
     assert not launches
 
     # 一直救不回来：最多 3 次
-    alive["pid"] = False; ob.ready, alive["port"] = True, True
+    alive["pid"] = False
+    ob.ready, alive["port"] = True, True
     script[:] = [down] + [lambda: None] * 200
     try:
         asyncio.run(L.ensure_napcat(cfg, ob))

@@ -36,17 +36,17 @@ from aigroup.core.util import say
 
 
 def _clean_profile(prof: dict) -> dict:
-    from aigroup.memory.people import PROFILE_KEYS
+    from aigroup.memory.people import MEMORY_CHARS, PROFILE_CHARS, PROFILE_KEYS, PROFILE_MEMORIES
     out = {}
     for k in PROFILE_KEYS:
         v = (prof or {}).get(k)
         if k == "记得的事":
             items = v if isinstance(v, list) else str(v or "").split("\n")
-            items = [str(i).strip()[:70] for i in items if str(i).strip()][:6]
+            items = [str(i).strip()[:MEMORY_CHARS] for i in items if str(i).strip()][:PROFILE_MEMORIES]
             if items:
                 out[k] = items
         elif v:
-            out[k] = str(v).strip()[:100]
+            out[k] = str(v).strip()[:PROFILE_CHARS]
     return out
 
 
