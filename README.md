@@ -68,7 +68,7 @@ irm https://raw.githubusercontent.com/star031104/ai-life/main/get.ps1 | iex
 | `start.bat qq` | 只开这一个（快捷方式的“目标”里也可以这么写） |
 | `scripts\start_console.bat wechat` | 在窗口里跑、能看实时输出（排查问题用） |
 
-每个角色在任务栏右下角一个小图标（可能藏在 `^` 里）：粉色 **L** = 有希，绿色 **G** = QQ 群，微信绿 **W** = 微信群。双击打开她的小屋；右键：状态、看日志、体检、换大模型、重启、开机自动启动、退出。程序意外退出 10 秒后自动重开；同一个角色只会跑一份。
+每个角色在任务栏右下角一个小图标（可能藏在 `^` 里）：粉色 **L** = 有希，绿色 **G** = QQ 群，微信绿 **W** = 微信群。双击打开她的小屋（每一页、每个开关的说明见 [docs/小屋.md](docs/小屋.md)）；右键：状态、看日志、体检、换大模型、重启、开机自动启动、退出。程序意外退出 10 秒后自动重开；同一个角色只会跑一份。
 
 **3. 开机自动启动**：右键图标 → “开机自动启动”（只管这一个），或者双击 `scripts\autostart_on.bat`（全部）。关掉：再点一次，或 `scripts\autostart_off.bat`。
 
@@ -138,6 +138,7 @@ Linux / macOS 桌面上不用 systemd 也行：`bash start.sh qq`（退出会自
 
 ## 更多
 
+- **小屋每一页、每个开关是干什么的**：[docs/小屋.md](docs/小屋.md)（第一次打开先看这个）
 - 写人设：[docs/PERSONA.md](docs/PERSONA.md) · 有希的全部功能：[docs/FEATURES.md](docs/FEATURES.md)
 - 代码结构：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)（有希）· [docs/群聊开发说明.md](docs/群聊开发说明.md)（群聊）
 - 跑测试：`python -m pytest tests/yuki`、`python -m pytest tests/group`（微信群）、`python -m pytest tests/group_qq`（QQ 群）——三组要分开跑
