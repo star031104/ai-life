@@ -157,7 +157,7 @@ function meter(v){return `<div class="meter"><i class="${v>90?"vhi":v>75?"hi":""
 function renderMachine(st){const m=(st&&st.machine)||{};const b=(st&&st.backup)||{};const sp=(st&&st.spend)||{};
   const pct=sp.cap?sp.total/sp.cap*100:0;
   $("machine").innerHTML=`<div class="mini"><div class="l">今天花了</div><div class="v">¥${(sp.total??0).toFixed(2)}</div>${sp.cap?meter(pct):""}<div class="s">${sp.cap?`上限 ¥${sp.cap}（三个加起来）`:"没设上限"}</div></div>
-    `<div class="mini"><div class="l">硬盘</div><div class="v">${m.disk_used??"-"}%</div>${meter(m.disk_used||0)}<div class="s">还剩 ${m.disk_free_gb??"-"} GB</div></div>
+    <div class="mini"><div class="l">硬盘</div><div class="v">${m.disk_used??"-"}%</div>${meter(m.disk_used||0)}<div class="s">还剩 ${m.disk_free_gb??"-"} GB</div></div>
     <div class="mini"><div class="l">内存</div><div class="v">${m.mem_used??"-"}%</div>${meter(m.mem_used||0)}<div class="s">共 ${m.mem_total_gb??"-"} GB</div></div>
     <div class="mini"><div class="l">负载</div><div class="v">${m.load??"-"}</div>${meter(((m.load||0)/(m.cpus||1))*100)}<div class="s">${m.cpus??"-"} 核</div></div>
     <div class="mini"><div class="l">备份</div><div class="v">${b.count??0} 份</div><div class="s" style="margin-top:6px">${b.last?esc(b.last.replace(/^ailife-|\.tar\.gz$/g,""))+" · "+b.size_mb+" MB":"还没备份过"}</div><div class="s">每天凌晨一份，留 30 天</div></div>`;

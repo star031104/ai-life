@@ -326,6 +326,26 @@ body.admin nav.tabs button.admbtn{color:var(--accent-ink)}
 .kcard{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--surface);display:flex;gap:8px;align-items:flex-start}
 .kcard p{margin:0;color:var(--ink-2);font-size:13px;flex:1} .kcard b{display:block;color:var(--ink);font-size:13.5px;margin-bottom:2px}
 @media (max-width:640px){.frow .input{min-width:100%}}
+
+/* ============ 11.4 回忆录 ============ */
+.mbooks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.mbook{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface);cursor:pointer;text-align:left;padding:0;font:inherit;color:inherit;display:flex;flex-direction:column}
+.mbook:hover{border-color:var(--line-2)}
+.mbook .cv{height:120px;background:linear-gradient(140deg,var(--accent-soft),var(--surface-2));background-size:cover;background-position:center}
+.mbook .bd{padding:11px 13px} .mbook b{font-size:15px;display:block} .mbook .q{font-size:12px;color:var(--ink-3)}
+.mbook .ch{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.6}
+.mreader{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--bg) 55%,transparent);backdrop-filter:blur(6px);overflow:auto;padding:28px 16px}
+.mreader .pg{max-width:720px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:34px 36px 40px;box-shadow:0 14px 36px rgba(0,0,0,.14)}
+.mreader h1{font-size:26px;margin:0 0 4px;letter-spacing:1px} .mreader .q{color:var(--ink-3);font-size:13px}
+.mreader .pre{margin:22px 0 6px;color:var(--ink-2);font-style:italic;line-height:1.9;white-space:pre-wrap}
+.mreader h2{font-size:17px;margin:30px 0 4px} .mreader .mo{font-size:12px;color:var(--accent-ink);font-family:var(--mono)}
+.mreader p{white-space:pre-wrap;line-height:2;margin:10px 0 0;font-size:15px}
+.mreader .ph{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:12px}
+.mreader .ph figure{margin:0} .mreader .ph img{width:100%;border-radius:10px;display:block;aspect-ratio:3/4;object-fit:cover}
+.mreader figcaption{font-size:11.5px;color:var(--ink-3);margin-top:3px}
+.mreader .end{margin-top:30px;padding-top:18px;border-top:1px dashed var(--line);line-height:1.9;white-space:pre-wrap}
+.mreader .x{position:sticky;top:0;float:right;margin:-18px -20px 0 0}
+@media (max-width:640px){.mreader .pg{padding:24px 18px 30px}.mreader h1{font-size:22px}}
 </style>
 </head>
 <body>
@@ -474,6 +494,11 @@ body.admin nav.tabs button.admbtn{color:var(--accent-ink)}
       <div class="card c5">
         <div class="card-h"><h2><span data-i="spark"></span>这周的她</h2><span class="sp"></span><span class="hint">随手拍、整理自己</span></div>
         <div class="card-b"><dl class="kv" id="gStat"></dl></div>
+      </div>
+      <div class="card c12">
+        <div class="card-h"><h2><span data-i="book"></span>回忆录</h2><span class="sp"></span><span class="hint">每三个月她把你们写成一本小书（1、4、7、10 月初）</span>
+          <button class="btn sm" id="mWrite">先写一份</button></div>
+        <div class="card-b"><div class="mbooks" id="mBooks"></div></div>
       </div>
       <div class="card c12">
         <div class="card-h"><h2><span data-i="search"></span>她最近查过、知道的事</h2><span class="sp"></span><span class="hint">你问到她不知道的事时她先搜一下；你纠正过的会改掉</span></div>
@@ -1041,6 +1066,7 @@ function renderCapsules(){
 }
 function renderHerWorld(){
   try{renderGrow()}catch(e){console.error(e)}
+  loadMemoirs();
   const hw=S.her_world||{goals:[],people:[]};
   $("goals").innerHTML=hw.goals.length?hw.goals.map(g=>`<div class="goal ${g.status==="done"?"done":""}"><div class="title">${esc(g.title)} <span class="tag ${g.status==="done"?"ok":""}">${g.status==="done"?"结束了":g.progress+"%"}</span></div>
       <div class="meta">${esc(g.why||"")}${g.why?" · ":""}${esc(g.start.slice(5))} 开始，打算 ${esc(g.end.slice(5))} 前完成</div>
@@ -1158,6 +1184,30 @@ if((location.hash||"")==="#set")ADM=true;
 setAdmin(ADM);
 $("admbtn").onclick=()=>{ADM=!document.body.classList.contains("admin");setAdmin(ADM);if(ADM)go("set");else if(location.hash==="#set")go("home")};
 if(/^\/(yuki|qq|wx)\//.test(location.pathname)){$("hub").hidden=false;$("hub").innerHTML=icon("home")}
+
+
+/* ============ 11.4 回忆录 ============ */
+async function loadMemoirs(){let M;try{M=await (await fetch("api/memoirs",{headers:H()})).json()}catch(e){return}
+  const it=M.items||[];
+  $("mBooks").innerHTML=it.length?it.map(b=>`<button class="mbook" data-mq="${esc(b.quarter)}"><div class="cv" style="${b.cover?`background-image:url(photos/${encodeURIComponent(b.cover)})`:""}"></div>
+    <div class="bd"><b>《${esc(b.title)}》</b><div class="q">${esc(b.quarter.replace("-Q"," 年第 "))} 季${b.draft?" · 草稿":""}</div>
+    <div class="ch">${(b.chapters||[]).slice(0,4).map(esc).join(" · ")}</div></div></button>`).join("")
+    :`<div class="empty">${M.writing?"正在写……":"还没有。每个季度初她会写一本；想先看看，点“先写一份”"}</div>`;
+  $("mWrite").disabled=!!M.writing;
+  document.querySelectorAll("[data-mq]").forEach(b=>b.onclick=()=>openMemoir(b.dataset.mq));
+}
+async function openMemoir(q){let m;try{m=await (await fetch("api/memoir?q="+encodeURIComponent(q),{headers:H()})).json()}catch(e){return toast("打不开")}
+  const el=document.createElement("div");el.className="mreader";
+  el.innerHTML=`<div class="pg"><button class="iconbtn x" aria-label="关上">${icon("x")}</button>
+    <h1>《${esc(m.title)}》</h1><div class="q">${esc(String(m.quarter).replace("-Q"," 年第 "))} 季${m.draft?" · 草稿（这个季度还没过完）":""} · ${esc(S&&S.name||"")}写给你</div>
+    ${m.preface?`<div class="pre">${esc(m.preface)}</div>`:""}
+    ${(m.chapters||[]).map((c,i)=>`<h2>${"一二三四五六"[i]||i+1}、${esc(c.title)}</h2><div class="mo">${esc(c.month||"")}</div><p>${esc(c.text)}</p>
+      ${(c.photos||[]).length?`<div class="ph">${c.photos.map(p=>`<figure><img loading="lazy" src="photos/${encodeURIComponent(p.file)}" alt="${esc(p.scene||"照片")}"><figcaption>${esc(p.scene||"")}</figcaption></figure>`).join("")}</div>`:""}`).join("")}
+    ${m.ending?`<div class="end"><b>给以后的我们</b>\n${esc(m.ending)}</div>`:""}</div>`;
+  const close=()=>{el.remove();document.removeEventListener("keydown",esc_)};const esc_=e=>{if(e.key==="Escape")close()};
+  el.querySelector(".x").onclick=close;el.onclick=e=>{if(e.target===el)close()};document.addEventListener("keydown",esc_);
+  document.body.appendChild(el)}
+$("mWrite").onclick=async()=>{const r=await post("api/memoir/write",{});toast(r.message||r.error);loadMemoirs();setTimeout(loadMemoirs,60000)};
 
 /* ============ 事件 ============ */
 function go(p){if(!$("p-"+p))p="home";

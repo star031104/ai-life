@@ -79,7 +79,7 @@ class Scheduler(EventsMixin):
         except Exception as e:  # noqa: BLE001
             log.warning("回来后补消息出错：%s", e)
         # 打卡提醒是他自己定的时间（可能在深夜），纪念册是一个月一次的事：都不受主动开关 / 安静时段影响
-        for fn in (self._habits, self._monthly_recap, self._capsules, self._weekly_report):
+        for fn in (self._habits, self._monthly_recap, self._quarterly_memoir, self._capsules, self._weekly_report):
             try:
                 await fn(now)
             except Exception as e:  # noqa: BLE001

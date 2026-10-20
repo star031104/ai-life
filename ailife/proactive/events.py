@@ -191,6 +191,26 @@ class EventsMixin:
             else:
                 log.warning("纪念册没发出去")
 
+    # ---------------- 11.4 季度回忆录 ----------------
+    async def _quarterly_memoir(self, now: datetime):
+        """1、4、7、10 月的前 10 天：把上个季度写成一本回忆录，写好了跟他说一声（失败了隔 3 小时再试）。"""
+        if now.month not in (1, 4, 7, 10) or now.day > 10 or now.hour < 11 or in_quiet(now, self.cfg.proactive.quiet_hours):
+            return
+        mem = getattr(self.brain, "memoir", None)
+        if mem is None:
+            return
+        from ailife.mind.memoir import prev_quarter, qkey
+        y, q = prev_quarter(now.date())
+        key = qkey(y, q)
+        old = mem.get(key)
+        if (old and not old["draft"]) or time.time() - float(self.db.get(f"memoir_try_{key}") or 0) < 3 * 3600:
+            return
+        self.db.set(f"memoir_try_{key}", time.time())
+        res = await mem.write(y, q)
+        if res and self.bot.owner_id:
+            await self._send_proactive(f"你刚把你们这三个月写成了一本小小的回忆录《{res['title']}》，放在小屋“她的日子”里了。"
+                                       "告诉他去看（有点不好意思也行），别把内容全说出来，可以透露一章的小标题")
+
     # ---------------- 时间胶囊：到日子拆开 ----------------
     async def _capsules(self, now: datetime):
         if now.hour < 9 or in_quiet(now, self.cfg.proactive.quiet_hours):

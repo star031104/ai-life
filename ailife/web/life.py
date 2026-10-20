@@ -22,6 +22,9 @@ class LifeWebMixin:
         a.router.add_post("/api/persona/new", self.persona_new)
         a.router.add_post("/api/routine/delete", self.routine_delete)
         a.router.add_post("/api/self/pref", self.self_pref)             # 11.2 她说过的喜好
+        a.router.add_get("/api/memoirs", self.memoirs)                  # 11.4 季度回忆录
+        a.router.add_get("/api/memoir", self.memoir_get)
+        a.router.add_post("/api/memoir/write", self.memoir_write)
 
     def life_state(self) -> dict:
         b = self.brain
@@ -119,6 +122,42 @@ class LifeWebMixin:
         text = str(d.get("text") or "")
         self.db.set("disliked", [x for x in (self.db.get("disliked") or []) if x.get("text") != text])
         return web.json_response({"ok": True})
+
+    async def memoirs(self, req):
+        mem = self.brain.memoir
+        from ailife.mind.memoir import prev_quarter, qkey, quarter_of
+        d = self.brain.now().date()
+        return web.json_response({"items": mem.list(), "writing": bool(getattr(self, "_memoir_busy", False)),
+                                  "current": qkey(*quarter_of(d)), "previous": qkey(*prev_quarter(d))})
+
+    async def memoir_get(self, req):
+        m = self.brain.memoir.get(str(req.query.get("q") or ""))
+        return web.json_response(m or {"error": "没有这一本"}, status=200 if m else 404)
+
+    async def memoir_write(self, req):
+        """小屋里点“先写一份”：这个季度到现在的草稿（上个季度还没写的话先写上个季度）。后台写，一两分钟。"""
+        if getattr(self, "_memoir_busy", False):
+            return web.json_response({"ok": False, "error": "正在写，等一两分钟再刷新"})
+        mem = self.brain.memoir
+        from ailife.mind.memoir import prev_quarter, quarter_of, qkey
+        d = self.brain.now().date()
+        py, pq = prev_quarter(d)
+        prev = mem.get(qkey(py, pq))
+        y, q, draft = (py, pq, False) if not prev and mem.span(py, pq)[0] > 0 and \
+            sum(mem.stats(mem.span(py, pq)[2]).get(k, 0) for k in ("他发的消息", "她发的消息")) >= 20 else (*quarter_of(d), True)
+        import asyncio
+
+        async def go():
+            self._memoir_busy = True
+            try:
+                await mem.write(y, q, draft=draft)
+            finally:
+                self._memoir_busy = False
+        t = asyncio.get_running_loop().create_task(go())
+        self._bg_refs = getattr(self, "_bg_refs", set())
+        self._bg_refs.add(t)
+        t.add_done_callback(self._bg_refs.discard)
+        return web.json_response({"ok": True, "message": f"开始写{qkey(y, q)}{'（草稿）' if draft else ''}了，一两分钟后刷新看看"})
 
     async def self_pref(self, req):
         d = await req.json()

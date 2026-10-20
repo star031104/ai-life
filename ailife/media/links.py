@@ -177,6 +177,17 @@ class LinkReader:
         self.cookies = {str(k).lower().lstrip("."): str(v) for k, v in (c.get("cookies") or {}).items() if v}
         self.brain = brain
         self._cache: dict[str, tuple[float, dict]] = {}
+        self._videos: list[dict] = []                    # 刚读到的 B 站视频（等着“点开看”：读字幕、弹幕、热评）
+
+    async def fetch_bytes(self, url: str, headers: dict | None = None) -> bytes:
+        """给 B 站“看视频”用：一样只访问公网、带 cookie，最多 24MB（弹幕 XML、视频的音频）。"""
+        _, buf, _ = await self._get(url, headers=headers, max_bytes=24 * 1024 * 1024)
+        return buf
+
+    def take_videos(self) -> list[dict]:
+        """拿走刚读到的 B 站视频（每个只给一次）。"""
+        out, self._videos = self._videos, []
+        return out
 
     async def _get(self, url: str, headers: dict | None = None, max_bytes: int = MAX_BYTES,
                    proxy_first: bool = False) -> tuple[httpx.Response, bytes, str]:
@@ -269,10 +280,11 @@ class LinkReader:
             if "视频去哪了" in page["title"] or "{$" in page.get("desc", ""):
                 raise RuntimeError("B站这会儿不让看（风控）")
             page["desc"] = re.sub(r",\s*视频播放量.*$", "", page.get("desc", "")).strip()
+            page["bv"] = bv
             return page
         dur = int(d.get("duration") or 0)
         stat = d.get("stat") or {}
-        return {"ok": True, "kind": "B站视频", "title": d.get("title", ""), "author": (d.get("owner") or {}).get("name", ""),
+        return {"ok": True, "kind": "B站视频", "bv": bv, "title": d.get("title", ""), "author": (d.get("owner") or {}).get("name", ""),
                 "duration": f"{dur // 60}:{dur % 60:02d}" if dur else "", "category": d.get("tname", ""),
                 "desc": (d.get("desc") or "").strip()[:300],
                 "views": stat.get("view")}
@@ -344,7 +356,8 @@ class LinkReader:
                 bits.append(f"（{meta}）")
             if info.get("desc") and info["desc"] not in ("-", "无"):
                 bits.append(f"，简介：{info['desc'][:200]}")
-            return f"[他分享了一个{k}：" + "".join(bits) + "。你只看到了标题和简介，没看过视频本身]"
+            more = "，你正在点开看" if info.get("bv") else "。你只看到了标题和简介，没看过视频本身"
+            return f"[他分享了一个{k}：" + "".join(bits) + more + "]"
         if k == "图片":
             return f"[他分享了一张网上的图片：{info.get('desc', '')}]"
         if k == "PDF 文件":
@@ -370,4 +383,5 @@ class LinkReader:
                 host = (urlparse(u).hostname or "").lower()
                 return {"url": u, "site": site_name(host), "ok": False, "error": "超时"}
         infos = await asyncio.gather(*(one(u) for u in urls))
+        self._videos += [i for i in infos if i.get("ok") and i.get("bv")]
         return "\n".join(self.describe(i) for i in infos)

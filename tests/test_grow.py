@@ -1,5 +1,6 @@
 """11.2：随手拍、喜好不改口、每月整理、被纠正了就改、记 token 用量（都不联网）。"""
 import asyncio
+import json
 import time
 from datetime import datetime, timedelta
 
@@ -163,3 +164,112 @@ def test_daily_budget(env, tmp_path):
     with pytest.raises(BudgetExceeded):
         asyncio.run(llm.chat([{"role": "user", "content": "x"}], role="chat"))
     assert LLM(cfg).budget.cap == 0                         # 默认不限
+
+
+
+def _fake_fetch():
+    pages = {
+        "web-interface/view": {"data": {"aid": 1, "cid": 2, "title": "七日世界禁忌岛实测", "owner": {"name": "某UP"},
+                                        "duration": 600, "tname": "游戏", "desc": "带你看看新剧本", "stat": {"view": 9}}},
+        "web-interface/nav": {"data": {"wbi_img": {"img_url": "https://i0/7cd084941338484aae1ad9425b84077c.png",
+                                                    "sub_url": "https://i0/4932caff0ff746eab6f01bf08b70ac45.png"}}},
+        "player/wbi/v2": {"data": {"subtitle": {"subtitles": [{"lan": "ai-zh", "subtitle_url": "//sub/x.json"}]}}},
+        "sub/x.json": {"body": [{"from": 0, "content": "今天来试试禁忌岛"}, {"from": 190, "content": "这船开不动啊"}]},
+        "v2/reply": {"data": {"replies": [{"content": {"message": "船那段笑死"}, "like": 99}]}},
+    }
+
+    async def fetch(url, headers=None):
+        if "dm/list.so" in url:
+            return ("".join(f'<d p="{190 + i},1">笑死</d>' for i in range(10))).encode()
+        for k, v in pages.items():
+            if k in url:
+                return json.dumps(v).encode()
+        raise RuntimeError("没有")
+    return fetch
+
+
+def test_watch_video(env, monkeypatch):
+    """11.4 他发了 B 站视频：点开看完记成她看过的，跟他说两句。"""
+    cfg, brain, bot, fake = env
+    brain.links.fetch_bytes = _fake_fetch()
+
+    async def js(messages, default=None, role="helper"):
+        return {"gist": "博主试玩禁忌岛，造船出海", "points": ["03:10 船开不动"], "highlights": "03:10 船开不动",
+                "vibe": "都在笑", "keys": ["禁忌岛"], "seen": "full"}
+    monkeypatch.setattr(brain.llm, "json", js)
+    brain.db.add_message("user", "你看这个 https://www.bilibili.com/video/BV1xx411c7mD")
+    res = asyncio.run(bot.watch_video({"bv": "BV1xx411c7mD", "ok": True}))
+    assert res["subtitle"] and "船开不动" in brain.db.last_message("event")["content"]
+    assert any("我看过「七日世界禁忌岛实测」" in m["content"] for m in brain.db.all_memories("self"))
+    assert fake.sent                                                     # 看完说了感想
+
+
+def test_quarterly_memoir(env, monkeypatch):
+    """11.4 季度回忆录：拿这三个月的材料写成分章节的小书，配上那个月的照片；1、4、7、10 月初自动写，写好了跟他说。"""
+    cfg, brain, bot, fake = env
+    from ailife.mind.memoir import prev_quarter, qkey
+    tz = cfg.tz
+    y, q = 2026, 3
+    t = datetime(2026, 8, 12, 21, tzinfo=tz).timestamp()
+    for i in range(30):
+        brain.db.add_message("user" if i % 2 == 0 else "assistant", f"那天聊天第{i}句 {'我们去看海吧' if i == 14 else ''}", ts=t + i * 60)
+    (cfg.root / "data" / "photos").mkdir(parents=True, exist_ok=True)
+    (cfg.root / "data" / "photos" / f"{int(t + 100)}.jpg").write_bytes(b"jpg")
+    brain.db.add_message("assistant", "[照片:海边的落日]", "photo", ts=t + 101)
+    brain.db.set_recap("2026-08", "八月我们一起追完了一部番。", {})
+    seen = {}
+
+    async def chat(messages, helper=False, **kw):
+        seen["p"] = messages[-1]["content"]
+        return json.dumps({"title": "夏天的尾巴", "preface": "写给你。", "ending": "以后也要一起。",
+                           "chapters": [{"title": "去看海的约定", "month": "2026-08", "text": "你说“我们去看海吧”。"},
+                                        {"title": "九月", "month": "2026-09", "text": "开学了。"}]}, ensure_ascii=False)
+    monkeypatch.setattr(brain.llm, "chat", chat)
+    res = asyncio.run(brain.memoir.write(y, q))
+    assert res["title"] == "夏天的尾巴" and len(res["chapters"]) == 2
+    assert "我们去看海吧" in seen["p"] and "八月我们一起追完了一部番" in seen["p"] and "海边的落日" in seen["p"]
+    assert res["chapters"][0]["photos"][0]["scene"] == "海边的落日" and res["chapters"][1]["photos"] == []
+    assert brain.memoir.list()[0]["cover"].endswith(".jpg") and brain.memoir.get("2026-Q3")["ending"] == "以后也要一起。"
+    assert prev_quarter(datetime(2026, 10, 2).date()) == (2026, 3) and qkey(2027, 1) == "2027-Q1"
+
+    from ailife.proactive.scheduler import Scheduler
+    sch = Scheduler(cfg, brain, bot)
+    sent = []
+
+    async def send(reason, note_reply=False):
+        sent.append(reason)
+        return True
+    sch._send_proactive = send
+    brain.db.conn.execute("DELETE FROM memoirs")
+    asyncio.run(sch._quarterly_memoir(datetime(2026, 10, 3, 15, tzinfo=tz)))
+    assert sent and "夏天的尾巴" in sent[0]
+    asyncio.run(sch._quarterly_memoir(datetime(2026, 10, 4, 15, tzinfo=tz)))
+    assert len(sent) == 1                                               # 写过了不再写
+
+
+def test_memoir_too_little(env):
+    cfg, brain, bot, fake = env
+    assert asyncio.run(brain.memoir.write(2026, 1)) is None              # 聊得太少不写
+
+
+def test_memoir_api(env):
+    cfg, brain, bot, fake = env
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from ailife.web.server import Dashboard
+    brain.db.conn.execute("INSERT INTO memoirs(quarter, ts, title, body, stats, draft) VALUES (?,?,?,?,?,?)",
+                          ("2026-Q3", time.time(), "夏天", json.dumps({"preface": "p", "chapters": [{"title": "一", "text": "t",
+                                                                                                   "photos": []}],
+                                                                       "ending": "e"}), "{}", 0))
+    brain.db.conn.commit()
+
+    async def go():
+        async with TestClient(TestServer(Dashboard(cfg, brain, bot).app())) as c:
+            L = await (await c.get("/api/memoirs")).json()
+            assert L["items"][0]["title"] == "夏天" and L["items"][0]["chapters"] == ["一"]
+            m = await (await c.get("/api/memoir?q=2026-Q3")).json()
+            assert m["ending"] == "e"
+            assert (await c.get("/api/memoir?q=1999-Q1")).status == 404
+            page = await (await c.get("/")).text()
+            assert 'id="mBooks"' in page
+    asyncio.run(go())

@@ -153,6 +153,8 @@ class Brain:
         self.photos = PhotoMaker(cfg, self.db)
         self.photos.persona = self.persona
         self.photos.llm = self.llm
+        from ailife.mind.memoir import Memoir
+        self.memoir = Memoir(self)                              # 11.4 季度回忆录
         from ailife.mind.selfgrow import SelfGrow
         self.selfgrow = SelfGrow(self)                          # 11.2 喜好不改口、每月整理自己、被纠正了就改
         self.weather_info: dict | None = None

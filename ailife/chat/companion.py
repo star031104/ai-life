@@ -129,6 +129,38 @@ class Companion(CommandsMixin, LifeCommandsMixin, DeliveryMixin):
         self._waiting = True
         self._pending = self.spawn(self._reply_after(wait))
 
+    async def watch_video(self, info: dict) -> dict | None:
+        """11.4 他发了 B 站视频：点开“看”——字幕、弹幕、热评整理成要点，记成她看过的；看完跟他说两句感想。"""
+        bv = info.get("bv")
+        if not bv or not (self.cfg.get("links") or {}).get("watch_videos", True):
+            return None
+        cache = self.db.get(f"video_{bv}")
+        if not cache:
+            from ailife.media.bili import ASR, Bili
+            b = Bili(self.brain.links.fetch_bytes, self.brain.llm, ASR(self.cfg))
+            try:
+                w = await b.watch(bv)
+                s = await b.summarize(w)
+            except Exception as e:  # noqa: BLE001
+                log.info("视频 %s 没看成：%s", bv, e)
+                return None
+            if not s.get("gist"):
+                return None
+            cache = {"title": w["title"], "block": Bili.describe(w, s), "gist": str(s["gist"])[:80],
+                     "subtitle": bool(w.get("subtitle") or w.get("heard")), "ts": time.time()}
+            self.db.set(f"video_{bv}", cache)
+            log.info("看了他发的视频《%s》（%s）", cache["title"][:30], "有字幕" if cache["subtitle"] else "没字幕")
+            self.db.add_memory(f"我看过「{cache['title'][:30]}」：{cache['gist']}"[:200], 2, "self")
+        self.db.add_message("event", cache["block"])
+        lu = self.db.last_message("user")
+        if lu and time.time() - float(lu["ts"]) < 20 * 60:          # 他刚发的：看完说说感想
+            async with self._lock:
+                p = await self.brain.proactive(f"你刚看完他发的视频《{cache['title']}》（上面有你看到的内容），"
+                                               "跟他说说感想，可以提到具体哪一段、哪个梗，像刚看完那样一两句；没看到的画面别编")
+                if not p.skip and p.bubbles:
+                    await self.deliver(p, kind="proactive")
+        return cache
+
     async def _maybe_search(self):
         """他刚问到她可能不知道的事：先在手机上搜一下（写成一条事件给她看），搜到的要点记成她自己知道的事。"""
         if not (self.cfg.get("net") or {}).get("search", True):

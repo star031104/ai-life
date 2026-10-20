@@ -241,6 +241,8 @@ class QQ:
         if links.enabled and (find_links(text) or f.links):
             async def read():
                 extra = await links.enrich(text)
+                for v in links.take_videos():                   # 11.4 B 站视频：点开看（字幕、弹幕、热评），看完跟他说两句
+                    bot.spawn(bot.watch_video(v))
                 return text + ("\n" + extra if extra else "")
             self._later(prefix, "text", text + "\n[他发了个链接，你正在点开看]", read, qmid)
             return
