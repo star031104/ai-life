@@ -18,17 +18,17 @@ Windows 版要电脑一直开着、不锁屏。放到一台 Linux 服务器（2 
 
 ## 步骤
 
-1. 服务器装好 Docker 和 Python 3.10+（Ubuntu 24.04 自带 3.12），把代码放到比如 `~/ailife/ai-life-wechat`：
+1. 服务器装好 Docker 和 Python 3.10+（Ubuntu 24.04 自带 3.12），把代码放到比如 `~/ailife/app`：
 
    ```bash
-   git clone https://github.com/star031104/ai-life-wechat.git ~/ailife/ai-life-wechat
-   cd ~/ailife/ai-life-wechat && bash install.sh      # 建 .venv、装依赖（向导可以先 Ctrl+C 跳过，下面直接用电脑上的配置）
+   git clone https://github.com/star031104/ai-life.git ~/ailife/app
+   cd ~/ailife/app && bash install.sh wechat      # 建 .venv、装依赖（向导可以先 Ctrl+C 跳过，下面直接用电脑上的配置）
    ```
 
 2. 起微信容器（第一次会构建一个加了 xdotool / xclip 的镜像）：
 
    ```bash
-   bash scripts/linux/wechat_up.sh                   # 数据放在 ~/ailife/wechat，可以用 WECHAT_DIR=… 换
+   bash deploy/wechat/wechat_up.sh                   # 数据放在 ~/ailife/wechat，可以用 WECHAT_DIR=… 换
    ```
 
 3. 扫码：网页 VNC 只开在服务器的 127.0.0.1:5800，在**自己电脑**上开隧道再打开：
@@ -40,7 +40,7 @@ Windows 版要电脑一直开着、不锁屏。放到一台 Linux 服务器（2 
    浏览器打开 http://127.0.0.1:5800 ，用**她的小号**扫码登录。登录后在微信里**双击每个她待的群，让它单独开一个窗口**
    （和 Windows 版一样：没有单独窗口不发，保证不会发错群）。
 
-4. 配置：把电脑上的 `config.yaml`、`config.llm.yaml`、`.env`、`persona/`、`data/`（她的记忆）复制过去，
+4. 配置：把电脑上 `home/wechat/` 里的 `config.yaml`、`config.llm.yaml`、`.env`、`persona/`、`data/`（她的记忆）复制到服务器的 `~/ailife/app/home/wechat/`，
    然后在 `config.yaml` 的 `wechat:` 下面加上：
 
    ```yaml

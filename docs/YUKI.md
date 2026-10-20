@@ -42,7 +42,7 @@ ai-life 不是一个“问一句答一句”的聊天机器人。TA 有自己的
 | 🎧 | **一起做的事** | 打卡、追番、听歌、愿望清单、时间胶囊、每月纪念册、睡前故事 |
 | 🔗 | **看得懂你发的东西** | 图片、表情包（动图也行）、合并转发的聊天记录、分享卡片，B 站 / YouTube / 公众号 / 网页链接（先点开读完再回你）；视频、文件知道你发了什么 |
 | 🐧 | **QQ** | 一键自动下载配置 NapCat，扫一次码以后自动登录；戳一戳、撤回、合并转发、分享卡片都认得，个性签名每天跟着她的心情变 |
-| 👥 | **群聊角色**（另一个仓库） | 想要一个待在 QQ 群里的角色：用 **[ai-life-group](https://github.com/star031104/ai-life-group)**（另一个小号、另一个人设，一键部署，可以和这里同时开） |
+| 👥 | **群聊角色**（同一个仓库） | 想要一个待在 QQ 群、微信群里的角色：`python run.py qq` / `python run.py wechat`（另一个小号、另一个人设，可以和这里同时开），见 [GROUP_QQ.md](GROUP_QQ.md)、[GROUP_WECHAT.md](GROUP_WECHAT.md) |
 
 每个功能的详细说明见 **[docs/FEATURES.md](FEATURES.md)**。
 
@@ -165,7 +165,7 @@ python run.py yuki setup                       # 配置向导；或者把 config
 
 - **小屋**：电脑上浏览器打开 `http://127.0.0.1:8765`（托盘图标双击也行），QQ 里发 `/小屋` 会告诉你地址。小屋只在本机能打开，不对外公开；放在服务器上时怎么看，见下面。
 - **开机自启**：托盘图标右键“开机自动启动”，或者双击 `scripts\autostart_on.bat yuki`。关闭用 `scripts\autostart_off.bat yuki`。
-- **QQ 群**：ai-life 只管私聊。群里的角色是单独的程序 **[ai-life-group](https://github.com/star031104/ai-life-group)**：另一个 QQ 小号、另一个人设，一行命令部署，它会从这里的 NapCat 克隆一份给自己用，两边可以同时开。
+- **QQ 群**：有希只管私聊。群里的角色是同一个仓库里的 `qq`（`setup.bat qq`）：另一个 QQ 小号、另一个人设，配置向导会从这里的 NapCat 克隆一份给它用，两边可以同时开。
 - **QQ 的更多说明**：见 [docs/QQ.md](QQ.md)。
 
 ### 让 TA 一直在线
@@ -177,7 +177,7 @@ python run.py yuki setup                       # 配置向导；或者把 config
 
 ### 放在 Linux 服务器上（24 小时在线）
 
-电脑不用一直开着，TA 也一直在。一台 2 核 4G 的云服务器（比如腾讯云轻量）就够：同一台上可以同时跑 ai-life（私聊）、[ai-life-group](https://github.com/star031104/ai-life-group)（QQ 群）和 ai-life-wechat（微信群），NapCat 用 Docker 跑。下面以 Ubuntu、用户 `ubuntu` 为例。
+电脑不用一直开着，TA 也一直在。一台 2 核 4G 的云服务器（比如腾讯云轻量）就够：同一台上可以同时跑有希（私聊）、QQ 群和微信群三个角色（一份代码、三个 systemd 服务，见根目录 README），NapCat 用 Docker 跑。下面以 Ubuntu、用户 `ubuntu` 为例。
 
 **1. 装程序**
 

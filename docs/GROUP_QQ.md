@@ -1,27 +1,8 @@
-> 这是 ai-life 仓库里“QQ 群”这个角色的说明（12.0 起三个合在一个仓库）。总的怎么装、怎么启动看 [根目录 README](../README.md)；她的家在 `home/qq/`。
+# QQ 群里的她（`python run.py qq`）
 
-<div align="center">
-
-# ai-life-group
-
-**住在 QQ 群里的 AI 朋友：有自己的人设和日常，像真人一样在群里聊天**
-
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![QQ](https://img.shields.io/badge/QQ-NapCat-12B7F5?logo=tencentqq&logoColor=white)](https://github.com/NapNeko/NapCatQQ)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-[部署](#部署) · [她在群里是什么样](#她在群里是什么样) · [配置](#配置) · [常见问题](#常见问题)
-
-</div>
-
----
-
-ai-life-group 是 [ai-life](https://github.com/star031104/ai-life) 的群聊版，**单独的程序、单独的 QQ 小号、单独的数据**：
-
-- [ai-life](https://github.com/star031104/ai-life)：一对一的 AI 伴侣（QQ 私聊 / Telegram），有长期记忆、情绪、主动找你、桌宠、小屋。
-- **ai-life-group**（本仓库）：一个待在 QQ 群里的角色，把你当群里的老朋友，和群友一起聊天。
-
-两个可以同时开在一台电脑上，互不影响；也可以只用其中一个。
+这是 ai-life 里“QQ 群”这个角色的说明：一个待在 QQ 群里的角色，用单独的 QQ 小号，把你当群里的老朋友，和群友一起聊天。
+代码在 `aigroup/`（和微信群共用同一个大脑，QQ 那一层在 `aigroup/qq/`），她的家在 `home/qq/`。
+怎么装、怎么启动、放服务器，看[根目录的 README](../README.md)；配置项的完整说明在 `config.qq.example.yaml`。
 
 ## 她在群里是什么样
 
@@ -48,71 +29,15 @@ ai-life-group 是 [ai-life](https://github.com/star031104/ai-life) 的群聊版�
 | 🏠 **群聊小屋** | 浏览器打开 http://127.0.0.1:8767（双击托盘图标）：她此刻在干嘛、今天的安排、每个群今天聊了多少（按小时 / 最近两周的图）、完整的聊天记录（能搜）、每个群友的画像卡片（熟悉度、常在什么时候出现，点开能改、能让她重新整理）；她感兴趣的话题、记得的梗都能改；“性格开关”拖一下马上生效（插话概率、回复节奏、复读、冒泡……）；某个群可以先“闭麦”；替她说一句或者让她现在开口；管大模型接口、看日志。只能在这台电脑上打开 |
 | 🛡️ **守规矩** | 只进白名单里的群；不 @全体成员；不聊政治、不掺和吵架、不说别人隐私；有人让她“换个角色”当玩笑带过 |
 
-## 部署
-
-### 你需要准备
-
-| 项目 | 说明 |
-| --- | --- |
-| 一台 Windows 10/11 电脑 | 一键部署只支持 Windows（Linux 见下文）。不需要显卡。电脑关机时她不在线 |
-| 一个 QQ **小号** | 给她用。NapCat 是非官方协议端，有封号风险，**别用主号**。也不要和 ai-life 用同一个号 |
-| 把小号拉进群 | 用你自己的 QQ 把小号拉进想让她待的群 |
-| 一个大模型接口 | 程序里**不预置任何接口**，用你自己的：任何 OpenAI 兼容的接口都行（云端的、本机跑的都可以）。准备好**接口地址**（一般以 `/v1` 结尾，在你用的平台文档里叫 base_url）和 **Key** |
-
-### 一键部署
-
-在开始菜单搜 “PowerShell”，打开后粘贴这一行回车：
-
-```powershell
-irm https://raw.githubusercontent.com/star031104/ai-life-group/main/get.ps1 | iex
-```
-
-它会把代码下载到 `文档\ai-life-group`（GitHub 慢时自动换加速地址），然后打开 `install.bat`，剩下的全自动：
-
-| 步骤 | 自动做了什么 | 你要做的 |
-| --- | --- | --- |
-| Python | 有 conda 的 `ailife` 环境（ai-life 建的）就用它；否则在项目里建 `.venv`；连 Python 都没有就用 `winget` 装 3.11 | 无 |
-| 依赖 | 清华镜像装依赖，失败自动换默认源 | 无 |
-| NapCat | 电脑上已经有 NapCat（比如 ai-life 那份）就**克隆**一份给她（程序文件用硬链接，几乎不占空间，账号配置不带过来）；没有就从官方发布页下载。WebSocket 开在 **3002**、WebUI 在 **6100**，和 ai-life 的 3001 / 6099 不冲突 | 无 |
-| 登录 | 启动她的 NapCat，弹出二维码 | 用**她的小号**扫一次码 |
-| 自动登录 | 把小号写进 NapCat 的自动登录，以后启动不用再扫 | 无 |
-| 选群和人设 | 列出小号在的群让你选（白名单）；问你的 QQ 号、用哪个人设、群里大家怎么叫她、她怎么看你 | 回答几个问题 |
-| 大模型接口 | 问接口地址和 Key → 测连通 → 列出这个接口的模型让你选 → 试聊一句 | 粘贴地址和 Key，选一个模型 |
-| 启动 | 可以设开机自启、马上启动 | 选 y / n |
-
-之后双击 **`start.bat qq`** 启动她：**不会开黑窗口**，她和她的 NapCat 都在后台跑（NapCat 自动登录），任务栏右下角多一个绿色的小图标（可能藏在 ^ 里）。右键图标：看状态、打开小屋、看日志、检查哪里没配好、换大模型、重新配置、重启、开机自动启动、退出；双击图标打开小屋（http://127.0.0.1:8767）。程序意外退出 10 秒后自动重启；同一个角色只会跑一份。想看实时输出排查问题就用 `scripts\start_console.bat qq`。
-
-> 不想用 PowerShell：在 GitHub 上 **Code → Download ZIP**，解压后双击 `install.bat`，效果一样。
->
-> 想重新选群 / 换人设：再双击 `setup.bat qq`，已经弄好的（NapCat、登录）不会重来，回车保留原来的选择。
->
-> 检查一下哪里没配好：双击 `scripts\check.bat qq`（连一下 NapCat 和大模型，看她在不在你选的群里）。
->
-> 换 / 加大模型：小屋的“大模型”页，或者双击 `scripts\llm.bat qq`。看她心里群里每个人的样子：小屋的“群友”页（命令行版：`scripts\people.bat qq`）。
-
-### Linux / macOS
-
-```bash
-git clone https://github.com/star031104/ai-life-group.git && cd ai-life-group
-bash install.sh          # 建 .venv、装依赖，然后 python run.py qq setup --manual
-bash start.sh
-```
-
-NapCat 用它的 [Docker 版](https://github.com/NapNeko/NapCat-Docker)：小号登录后在 WebUI 的“网络配置”里新建一个 WebSocket 服务器（消息格式选 array、设个 token），`setup --manual` 时填它的地址和 token。
-
-放在服务器上 24 小时在线：NapCat 的端口只绑 `127.0.0.1`（`-p 127.0.0.1:3002:3002`），程序用 systemd 托管
-（`deploy/systemd/ai-life-group.service`，崩了 10 秒后自动重启、退出码 3 不重启）。小屋只开在服务器本机的 8767 端口，
-在自己电脑上 `ssh -N -L 8767:127.0.0.1:8767 用户@服务器` 以后打开 http://127.0.0.1:8767 。
-
 ## 人设
 
-人设是 `persona/` 里的一个 Markdown 文件。自带 **小满**（`persona/xiaoman.md`：20 岁，大二视觉传达，嘴毒心软、自称“本小满”）。想换成自己的：复制 `persona/template.md`，改好放进 `persona/`，再跑一次 `setup.bat qq` 选它。写法和 ai-life 的人设一样，见 [ai-life 的 PERSONA.md](https://github.com/star031104/ai-life/blob/main/PERSONA.md)。
+人设是 `persona/` 里的一个 Markdown 文件。自带 **小满**（`persona/xiaoman.md`：20 岁，大二视觉传达，嘴毒心软、自称“本小满”）。想换成自己的：复制 `persona/template.md`，改好放进 `persona/`，再跑一次 `setup.bat qq` 选它。写法和有希的人设一样，见 [PERSONA.md](PERSONA.md)。自己写的人设放进 `home/qq/persona/` 就不会进 git。
 
 她每天会按人设排一份自己的安排（比如“09:40-11:50 素描课”），群里聊起来前后一致，忙的时候回得慢。
 
 ## 配置
 
-`setup.bat qq` 写的 `config.yaml` 只包含和默认值不一样的项；想调别的，从 `config.example.yaml` 里抄过来改。密钥都在 `.env` 里（**别发给别人**）。常用的在 `qq.group` 下：
+`setup.bat qq` 写的 `home/qq/config.yaml` 只包含和默认值不一样的项；想调别的，从 `config.qq.example.yaml` 里抄过来改。密钥都在 `.env` 里（**别发给别人**）。常用的在 `qq.group` 下：
 
 | 设置 | 默认 | 作用 |
 | --- | --- | --- |
@@ -151,14 +76,14 @@ NapCat 用它的 [Docker 版](https://github.com/NapNeko/NapCat-Docker)：小号
 <details>
 <summary><b>她不说话</b></summary>
 
-双击 `scripts\check.bat qq` 看哪一项是 ❌。常见原因：她的小号不在你选的群里；NapCat 没登录（看任务栏里的 NapCat 窗口）；大模型接口没配（双击 `scripts\llm.bat qq` 加一个）、Key 填错或者被限流（可以再加一个接口当备用）。日志在 `data/logs/group.log`。
+双击 `scripts\check.bat qq` 看哪一项是 ❌。常见原因：她的小号不在你选的群里；NapCat 没登录（看任务栏里的 NapCat 窗口）；大模型接口没配（双击 `scripts\llm.bat qq` 加一个）、Key 填错或者被限流（可以再加一个接口当备用）。日志在 `home/qq/data/logs/group.log`。
 
 </details>
 
 <details>
 <summary><b>电脑重启后 NapCat 又要扫码</b></summary>
 
-NapCat 会先用上次的登录“快速登录”；QQ 那边判定登录失效时（日志 `data/logs/napcat.log` 里是“你的用户身份已失效，请你重新登录”）就只能扫码。常见原因：这个小号在别的电脑、或这台电脑的 QQ 客户端上登录过（电脑端同一时间只能在一处登录），在手机 QQ 的“登录设备管理”里删过这台设备，改过密码，或者 QQ 对新号的风控。
+NapCat 会先用上次的登录“快速登录”；QQ 那边判定登录失效时（日志 `home/qq/data/logs/napcat.log` 里是“你的用户身份已失效，请你重新登录”）就只能扫码。常见原因：这个小号在别的电脑、或这台电脑的 QQ 客户端上登录过（电脑端同一时间只能在一处登录），在手机 QQ 的“登录设备管理”里删过这台设备，改过密码，或者 QQ 对新号的风控。
 
 想少扫几次码：双击 **`scripts\qqpass.bat`** 存一下小号的密码（只存 MD5，在 `.env` 里）。之后快速登录失败时，NapCat 会先用密码登录；QQ 要求滑块或手机确认时还是会弹二维码。
 
@@ -202,54 +127,6 @@ NapCat 会先用上次的登录“快速登录”；QQ 那边判定登录失效�
 
 ## 隐私
 
-- 程序和数据（群聊记录、对群友的印象）都在你自己的电脑上：`data/`、`config.yaml`、`.env`、`napcat/` 都在 `.gitignore` 里。
+- 程序和数据（群聊记录、对群友的印象）都在你自己的电脑上：`home/qq/data/`、`config.yaml`、`.env`、`napcat/` 都在 `.gitignore` 里。
 - 发给大模型的只有拼提示词需要的那部分：人设、最近的群聊、她对群友的印象和画像。画像里不记住址、电话、真名、学校公司全名这类隐私。
 - 只在白名单里的群说话；你私下的事她不知道，也不会在群里说。
-
-## 开发
-
-```bash
-pip install -r requirements.txt pytest ruff
-python -m pytest            # 不联网：假的大模型、假的 NapCat
-ruff check .                # 代码检查（规则在 pyproject.toml）
-```
-
-分层、一条消息怎么走、怎么加命令 / 设置 / 数据表，见 **[docs/开发说明.md](开发说明.md)**；改了什么见 [CHANGELOG.md](CHANGELOG.md)。
-
-```
-ai-life-group/
-├── run.py                  入口：python run.py qq [命令]（python run.py qq help 看全部）
-├── aigroup/
-│   ├── cli.py              命令注册表：run / setup / check / llm / people / qqpass / replay / calibrate
-│   ├── app.py              运行时装配：连 NapCat、小屋、每分钟的空闲检查、每天备份、单实例锁
-│   ├── wizard.py           配置向导
-│   ├── brain.py · persona.py   人设 + 大模型 + 数据库 + 她自己的一天
-│   ├── chat/               群聊主流程（GroupChat）
-│   │   ├── group.py        总装（各个 Mixin 拼起来）
-│   │   ├── ingest.py       收消息、补上她不在时的消息
-│   │   ├── speak.py        判断要不要说、说话、复读、点表情
-│   │   ├── idle.py         冒泡、早上补回、戳回去
-│   │   ├── feedback.py     说完的效果、回复节奏、每晚的活
-│   │   ├── life.py         她此刻在干嘛、感兴趣的话题
-│   │   ├── prompt.py       提示词
-│   │   ├── plan.py         判断和解析的纯函数
-│   │   ├── settings.py     所有设置的默认值 + 小屋能调的开关
-│   │   ├── gate.py · quality.py · detector.py · mood.py · state.py · trace.py
-│   ├── memory/             她记得的东西：people（群友、别名）· digest（整理、画像）· facts（以前的事）
-│   │                       · learn（说法、黑话）· lore（群梗词条）· stickers（表情包）
-│   ├── llm/                大模型：client（路线、限流换下一个）· custom（添加自己的接口）
-│   ├── qq/                 QQ：onebot（OneBot v11 客户端）· napcat/（查找、安装、启动、自动登录）
-│   ├── web/                小屋：server.py（后端）· page.html（前端）
-│   ├── core/               配置、密钥、存储、群友的话消毒、作息时段、小工具
-│   └── eval/               回放、评审、质检误伤统计（离线工具）
-├── tests/                  按功能分文件（test_speak、test_people、test_gate……），共用的假对象在 conftest.py
-├── persona/                人设（xiaoman.md、template.md）
-├── docs/                   开发说明
-├── scripts/                不常用的脚本：check / llm / people / qqpass / start_console / autostart_on / off，托盘 tray.pyw
-├── config.example.yaml     所有设置和说明（qq.group 的默认值和 chat/settings.py 一致，有测试守着）
-└── install.bat · setup.bat qq · start.bat qq · get.ps1 · install.sh · start.sh
-```
-
-## 许可
-
-[MIT](LICENSE)

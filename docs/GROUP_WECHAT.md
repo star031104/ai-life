@@ -1,22 +1,7 @@
-> 这是 ai-life 仓库里“微信群”这个角色的说明（12.0 起三个合在一个仓库）。总的怎么装、怎么启动看 [根目录 README](../README.md)；她的家在 `home/wechat/`。
+# 微信群里的她（`python run.py wechat`）
 
-<div align="center">
-
-# ai-life-wechat
-
-**住在微信群里的 AI 朋友：有自己的人设和日常，像真人一样在群里聊天**
-
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![WeChat](https://img.shields.io/badge/微信-4.x%20Windows-07C160?logo=wechat&logoColor=white)](https://pc.weixin.qq.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-[怎么接微信的](#怎么接微信的) · [部署](#部署) · [配置](#配置) · [常见问题](#常见问题)
-
-</div>
-
----
-
-ai-life-wechat 是 [ai-life-group](https://github.com/star031104/ai-life-group)（QQ 群版）的微信版：群聊的“大脑”和 QQ 群版 **3.3** 完全一样（什么时候说话、先想再说、画像、记忆、群梗词条、心情、跟群里学说话、回放评审、小屋……），只是把 QQ 换成了电脑上的**微信 4.x**。单独的程序、单独的微信小号、单独的数据，可以和 QQ 群版同时开。
+这是 ai-life 里“微信群”这个角色的说明：和 QQ 群里的她是同一个大脑（`aigroup/`），只是把 QQ 换成了微信 4.x（`aigroup/wechat/`），用单独的微信小号。
+她的家在 `home/wechat/`。怎么装、怎么启动看[根目录的 README](../README.md)；放在 Linux 服务器上见 [WECHAT_LINUX.md](WECHAT_LINUX.md)；配置项的完整说明在 `config.wechat.example.yaml`。
 
 ## 怎么接微信的
 
@@ -24,7 +9,7 @@ ai-life-wechat 是 [ai-life-group](https://github.com/star031104/ai-life-group)�
 
 | | 做法 | 微信更新后 |
 | --- | --- | --- |
-| **收消息** | 读电脑上微信自己的本地数据库（只读）。库是加密的（SQLCipher 4），密钥用 `ReadProcessMemory` 从微信进程内存里**只读**找出来，每个候选都用库第 1 页的 HMAC 验过才用（零误报）。拿到后存在 `data/wechat/keys.json`——微信更新不会重新加密库，所以一直能用。之后每秒看一眼库变没变，变了只解密变了的页（主库 + `-wal` 增量），找出白名单群里的新消息 | 基本不用管。新建的消息分片库（`message_1.db`…）需要再拿一次密钥：找不到时 `python run.py wechat wxkeys --deep` 用“把内存整个筛一遍”的办法，不挑版本 |
+| **收消息** | 读电脑上微信自己的本地数据库（只读）。库是加密的（SQLCipher 4），密钥用 `ReadProcessMemory` 从微信进程内存里**只读**找出来，每个候选都用库第 1 页的 HMAC 验过才用（零误报）。拿到后存在 `home/wechat/data/wechat/keys.json`——微信更新不会重新加密库，所以一直能用。之后每秒看一眼库变没变，变了只解密变了的页（主库 + `-wal` 增量），找出白名单群里的新消息 | 基本不用管。新建的消息分片库（`message_1.db`…）需要再拿一次密钥：找不到时 `python run.py wechat wxkeys --deep` 用“把内存整个筛一遍”的办法，不挑版本 |
 | **发消息** | 普通的 Windows 窗口操作：找到这个群的**单独聊天窗口**（标题就是群名）→ 切到前台 → 点一下输入框 → 剪贴板粘贴 → 回车 → 把前台还给你原来的窗口。发完去库里核对：**看到自己刚发的那条才算发出去** | 不依赖界面控件树，界面改版影响小 |
 | **@ / 引用 / 拍一拍 / 进群** | 从库里的 `atuserlist`、引用消息的 `refermsg`、拍一拍的系统消息、群成员表的变化读出来 | — |
 
@@ -60,66 +45,15 @@ ai-life-wechat 是 [ai-life-group](https://github.com/star031104/ai-life-group)�
 | 🏠 **群聊小屋** | 浏览器打开 http://127.0.0.1:8768（双击托盘图标）：她此刻在干嘛、今天的安排、每个群今天聊了多少（按小时 / 最近两周的图）、完整的聊天记录（能搜）、每个群友的画像卡片（熟悉度、常在什么时候出现，点开能改、能让她重新整理）；她感兴趣的话题、记得的梗都能改；“性格开关”拖一下马上生效（插话概率、回复节奏、复读、冒泡……）；某个群可以先“闭麦”；**两个群分开看**：概览里两个群放一起比（她在哪边说得多、说完有没有人接、谁找她、心情），图能按群切；群友页能按群筛、看谁两个群都在，点开一个人按群分开看她在每个群里对他的了解（画像、在这个群说了多少、常和谁接话、什么时候出现），改的时候只改这个群的或者一起改；性格开关可以只调某一个群（比如一个群热闹、一个群安静）；替她说一句或者让她现在开口；管大模型接口、看日志；顶上显示微信接没接上、哪个群没开单独窗口、这小时发了多少条。只能在这台电脑上打开 |
 | 🛡️ **守规矩** | 只进白名单里的群；不 @全体成员；不聊政治、不掺和吵架、不说别人隐私；有人让她“换个角色”当玩笑带过 |
 
-## 部署
-
-### 你需要准备
-
-| 项目 | 说明 |
-| --- | --- |
-| 一台 Windows 10/11 电脑 | 微信 4.x（4.1.15 实测格式），**64 位 Python 3.10+**。电脑关机 / 锁屏时她不在线（可以关显示器，别锁屏） |
-| 或者一台 Linux 服务器 | 微信跑在 Docker 里，24 小时在线，见 [docs/LINUX.md](LINUX.md) |
-| 一个微信**小号** | 给她用，在这台电脑的微信上登录。自动化操作有被限制的风险，**别用主号** |
-| 把小号拉进群 | 用你自己的微信把小号拉进想让她待的群 |
-| 大模型接口 | 程序里不预置任何接口：旁边装了 [ai-life-group](https://github.com/star031104/ai-life-group)（QQ 群版）的话，向导会问要不要直接用你在那边配好的；没有就填你自己的（任何 OpenAI 兼容的，DeepSeek 等） |
-
-### 一键部署
-
-1. 下载代码放到 `文档\ai-life-wechat`（`git clone https://github.com/star031104/ai-life-wechat.git`，或者 GitHub 上 **Code → Download ZIP** 解压）
-2. 电脑上的微信登录她的小号
-3. 双击 **`install.bat`**：装 Python 依赖，然后进配置向导
-
-| 向导步骤 | 做什么 |
-| --- | --- |
-| 大模型 | 旁边有 QQ 群版就问要不要直接用它那一套（`config.llm.yaml` 和 Key）；否则最后一步让你填自己的接口地址和 Key |
-| 找微信 | 找到微信的数据目录和她的账号，从微信内存里只读拿数据库密钥（十几秒）。拿不到时可以选深度扫描（几分钟，不挑版本） |
-| 选群 | 列出她在的群（白名单，别的群一律不说话） |
-| 你 | 在群成员里找到你（她把你当群里的老朋友） |
-| 人设、名字 | 用哪个人设、群里大家怎么叫她（她的微信昵称、群昵称自动算） |
-| 发消息 | 检查每个群有没有单独窗口；群名会搜到别的会话时提醒你一定要开单独窗口 |
-
-4. **在微信里双击每个她待的群，让它单独开一个窗口**（可以最小化，别关）。**没有单独窗口她发不了消息**（保证不会发错群）
-5. 双击 **`start.vbs`** 启动（完全没有黑窗口；`start.bat wechat` 也行，但会闪一下窗口；右键托盘图标 → “微信接入体检”随时能查）：不开黑窗口，任务栏右下角多一个绿色的 W 图标。右键看状态、打开小屋（http://127.0.0.1:8768）、看日志、重启、开机自启、退出
-
-> 想让她进群第一天就认识大家：开着大号双击 `scripts\export_chats.bat wechat` 导出几个小群的聊天记录，交给 Claude 整理成 `data/seed_groups.yaml`（群笔记、每个人的画像、群梗），再 `python run.py wechat seed data/seed_groups.yaml`。大家都知道她是 AI 的话，人设里写 `ai_open: true`。
-
-> 你的大号和她的小号可以同时开（用微信自带的多开或别的多开方式都行）：配置向导会问哪个是她，之后她只用小号那个微信的窗口发消息，大号那边开着同名的群窗口也不会被用上。
-
-> 微信重启或更新后单独窗口会关掉，记得再双击打开（小屋顶上会提示哪个群没开）。
-
-### 放在 Linux 服务器上（24 小时在线）
-
-电脑不用一直开着：微信（Linux 版 4.x）跑在服务器的 Docker 里，网页 VNC 扫码登录，她照样读本地库、照样切窗口粘贴发消息。
-config.yaml 里写上 `wechat.container: wechat` 就走 Linux 方式，Windows 版不受影响。步骤见 **[docs/LINUX.md](LINUX.md)**。
-
-### 微信相关的小工具
-
-| 命令 | 作用 |
-| --- | --- |
-| `python run.py wechat wxdiag` | 体检：微信版本、数据目录、密钥、能不能读到群消息、窗口、锁屏。**有问题就把它的输出整个发给 Claude** |
-| `python run.py wechat wxkeys --deep` | 重新拿密钥；`--deep` 是不挑版本的深度扫描（慢） |
-| `python run.py wechat wxtail 群名` | 实时打印群里的新消息（只读，不回话），看收消息正不正常 |
-| `python run.py wechat wxsend 群名 一句话` | 试发一句，发完在库里核对 |
-| `scripts\check.bat wechat` · `scripts\wxdiag.bat` | 检查配置、微信、大模型 / 微信接入体检（双击用） |
-
 ## 人设
 
-人设是 `persona/` 里的一个 Markdown 文件。自带 **小满**（`persona/xiaoman.md`：20 岁，大二视觉传达，嘴毒心软、自称“本小满”）。想换成自己的：复制 `persona/template.md`，改好放进 `persona/`，再跑一次 `setup.bat wechat` 选它。写法和 ai-life 的人设一样，见 [ai-life 的 PERSONA.md](https://github.com/star031104/ai-life/blob/main/PERSONA.md)。
+人设是 `persona/` 里的一个 Markdown 文件。自带 **小满**（`persona/xiaoman.md`：20 岁，大二视觉传达，嘴毒心软、自称“本小满”）。想换成自己的：复制 `persona/template.md`，改好放进 `persona/`，再跑一次 `setup.bat wechat` 选它。写法和有希的人设一样，见 [PERSONA.md](PERSONA.md)。自己写的人设放进 `home/wechat/persona/` 就不会进 git。
 
 她每天会按人设排一份自己的安排（比如“09:40-11:50 素描课”），群里聊起来前后一致，忙的时候回得慢。
 
 ## 配置
 
-`setup.bat wechat` 写的 `config.yaml` 只包含和默认值不一样的项；想调别的，从 `config.example.yaml` 里抄过来改。密钥都在 `.env` 里（**别发给别人**）。群聊的设置在 `wechat.group` 下（和 QQ 群版一样）：
+`setup.bat wechat` 写的 `home/wechat/config.yaml` 只包含和默认值不一样的项；想调别的，从 `config.wechat.example.yaml` 里抄过来改。密钥都在 `.env` 里（**别发给别人**）。群聊的设置在 `wechat.group` 下（和 QQ 群版一样）：
 
 | 设置 | 默认 | 作用 |
 | --- | --- | --- |
@@ -168,7 +102,7 @@ config.yaml 里写上 `wechat.container: wechat` 就走 Linux 方式，Windows �
 <details>
 <summary><b>她不说话</b></summary>
 
-双击 `scripts\check.bat wechat` 看哪一项是 ❌；再双击 `scripts\wxdiag.bat`（或 `python run.py wechat wxdiag`）。常见原因：微信没开 / 没登录她的小号；密钥没拿到（`wxkeys --deep`）；屏幕锁了；大模型 Key 填错或者限流。日志在 `data/logs/group.log`。
+双击 `scripts\check.bat wechat` 看哪一项是 ❌；再双击 `scripts\wxdiag.bat`（或 `python run.py wechat wxdiag`）。常见原因：微信没开 / 没登录她的小号；密钥没拿到（`wxkeys --deep`）；屏幕锁了；大模型 Key 填错或者限流。日志在 `home/wechat/data/logs/group.log`。
 
 </details>
 
@@ -182,7 +116,7 @@ config.yaml 里写上 `wechat.container: wechat` 就走 Linux 方式，Windows �
 <details>
 <summary><b>微信更新了</b></summary>
 
-一般什么都不用做：密钥存在 `data/wechat/keys.json` 里，更新不会换。偶尔微信新建了消息分片（`message_1.db`），程序会自动去找它的密钥；找不到时日志会提示跑 `python run.py wechat wxkeys --deep`。
+一般什么都不用做：密钥存在 `home/wechat/data/wechat/keys.json` 里，更新不会换。偶尔微信新建了消息分片（`message_1.db`），程序会自动去找它的密钥；找不到时日志会提示跑 `python run.py wechat wxkeys --deep`。
 
 </details>
 
@@ -209,42 +143,6 @@ config.yaml 里写上 `wechat.container: wechat` 就走 Linux 方式，Windows �
 
 ## 隐私
 
-- 程序和数据（群聊记录、对群友的印象、数据库密钥）都在你自己的电脑上：`data/`、`config.yaml`、`.env` 都在 `.gitignore` 里。解密出来的库副本在 `data/wechat/cache/`，只有白名单里的群会被读出来给她看。
+- 程序和数据（群聊记录、对群友的印象、数据库密钥）都在你自己的电脑上：`home/wechat/data/`、`config.yaml`、`.env` 都在 `.gitignore` 里。解密出来的库副本在 `home/wechat/data/wechat/cache/`，只有白名单里的群会被读出来给她看。
 - 发给大模型的只有拼提示词需要的那部分：人设、最近的群聊、她对群友的印象和画像。
 - 只在白名单里的群说话。
-
-## 开发
-
-```bash
-pip install -r requirements.txt pytest ruff
-python -m pytest            # 不联网、不需要真微信：测试里自己造了一份同格式的加密库（主库 + wal）
-ruff check .
-```
-
-群聊大脑的分层、一条消息怎么走、怎么加命令 / 设置 / 数据表，见 **[docs/开发说明.md](开发说明.md)**；改了什么见 [CHANGELOG.md](CHANGELOG.md)。
-`aigroup/` 里除了 `wechat/`、`app.py`、`cli.py`、`wizard.py`，其余文件和 QQ 群版尽量保持一致（方便以后把 QQ 版的改进搬过来）。
-
-```
-ai-life-wechat/
-├── run.py                  入口：python run.py wechat [命令]（python run.py wechat help 看全部）
-├── aigroup/
-│   ├── wechat/             微信接入（不 hook）
-│   │   ├── crypto.py       SQLCipher 4 页解密、HMAC 校验
-│   │   ├── dbview.py       加密库（主库 + wal）→ 明文副本的增量同步
-│   │   ├── keys.py         只读微信内存拿密钥：缓存 → Config.Cipher → 明文 x'…' → 深度扫描
-│   │   ├── wxdb.py         群、群成员、群名片、消息的解析（zstd、@、引用、表情、拍一拍）
-│   │   ├── wxui.py         发消息：找窗口、切前台、剪贴板、按键；等你停手、确认前台
-│   │   ├── bot.py          对上装成 OneBot：收发、补消息、成员、重连、限速、wxid ↔ 数字编号
-│   │   └── diag.py         wxdiag / wxkeys / wxsend / wxtail
-│   ├── cli.py · app.py · wizard.py   命令注册表 / 运行时装配 / 配置向导
-│   ├── chat/ · memory/ · eval/ · llm/ · core/ · web/   群聊大脑（同 QQ 群版 3.3）
-│   └── qq/onebot.py        OneBot 消息段的格式和工具（chat/ 用它）
-├── tests/                  wxfake.py 造假的微信库；test_wechat*.py 测接入，其余同 QQ 群版
-├── persona/ · docs/ · scripts/（check / wxdiag / llm / people / start_console / autostart，托盘）
-├── config.example.yaml
-└── install.bat · setup.bat wechat · start.vbs · start.bat wechat
-```
-
-## 许可
-
-[MIT](LICENSE)。`aigroup/wechat/keys.py` 的 Config.Cipher 结构和异或掩码参考了 wechatauto-replica（Apache-2.0），见 [NOTICE](NOTICE)。
