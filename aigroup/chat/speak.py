@@ -85,7 +85,9 @@ class SpeakMixin:
         others = [r["content"] for r in self.db.conn.execute(
             "SELECT content FROM qq_group_messages WHERE group_id=? AND role='user' ORDER BY id DESC LIMIT 40", (gid,))]
         p = self.brain.persona
-        names = [p.name, getattr(p, "formal_name", "") or "", *self.aliases, *self.member_names(gid)]
+        names = [p.name, getattr(p, "formal_name", "") or "", *self.aliases]
+        for g in self.groups:                                   # 所有群的群友名字都不算“梗”（她在别的群叫过的称呼也是）
+            names += self.member_names(g)
         return her_phrases(recent, day, others, list(p.catchphrases or []), names=names)
 
     def recent_sizes(self, gid: int, n: int = 3) -> list[int]:

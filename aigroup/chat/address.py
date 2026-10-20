@@ -104,6 +104,7 @@ def her_phrases(her_recent: list[str], her_day: list[str], others: list[str], ca
             for b in set(_blocks(day[i], day[j])):
                 counts[b] = counts.get(b, 0) + 1
     cand = [g for g in counts if g in recent_txt and g not in others_txt and not (len(g) == 2 and g in COMMON2)
+            and not (len(g) == 2 and counts[g] < 3)            # 两个字的：至少三句里都说过才算她的“招牌”
             and not all(ch in "了的吗呢啊吧嘛呀哦哈么" for ch in g)
             and not (len(g) <= 4 and g[0] in "你我他她这那就也都还")
             and not any(n and (g in n or n in g and len(g) - len(n) <= 1) for n in (names or []))]
