@@ -51,6 +51,11 @@ class IdleMixin:
                 continue
             if hasattr(self, "plans_tick") and await self.plans_tick(gid, st):     # 约好的事：到点提醒 / 事后问
                 continue
+            if hasattr(self, "feed_tick"):                       # 20.2 后台攒“刷到的”候选（不调大模型）
+                try:
+                    self.feed_tick(gid, now)
+                except Exception as e:  # noqa: BLE001
+                    log.info("群 %s 刷候选出错：%s", gid, e)
             if hasattr(self, "share_due") and self.share_due(gid, now, step_minutes):  # 偶尔分享刷到的东西
                 try:
                     await self.share(gid, st)

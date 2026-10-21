@@ -27,6 +27,7 @@ from collections import ChainMap
 
 from aigroup.agent.mixin import AgentMixin
 from aigroup.chat.feedback import SCHEMA as EFFECT_SCHEMA
+from aigroup.chat.feed import FeedMixin
 from aigroup.chat.feedback import FeedbackMixin
 from aigroup.chat.gate import GateLog, active_weights
 from aigroup.chat.grow import GrowMixin
@@ -79,7 +80,7 @@ MSG_COLUMNS = {"to_her": "INTEGER NOT NULL DEFAULT 0",   # 这条是在叫她（
                "reply_to": "INTEGER"}                    # 引用了哪条消息（QQ 消息 id）
 
 
-class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, PromptMixin, PeopleMixin, DigestMixin,
+class GroupChat(FeedMixin, IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, PromptMixin, PeopleMixin, DigestMixin,
                 NetMixin, GrowMixin, EvalMixin, StyleMixin, InsightMixin, AgentMixin, HumaneMixin):
     """她在群里的一切：收消息 → 判断要不要说 → 说 → 看效果；空闲时冒泡、整理记忆。
 

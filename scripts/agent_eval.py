@@ -85,6 +85,8 @@ def check_route(case: dict, r: dict, now: datetime) -> tuple[bool, str]:
     c = r["calls"][0] if r["calls"] else {}
     if got == "research" and case.get("depth") and c["args"].get("depth") != case["depth"]:
         return True, f"力度该 {case['depth']}，实际 {c['args'].get('depth')}（不算错）"
+    if got == "research" and case.get("window") and not (c["args"].get("after") or c["args"].get("before")):
+        return False, "问题里有相对时间，该换成具体日期填 after / before"
     if got == "reminder_set" and case.get("when"):
         want = fill_when(case["when"], now)
         if str(c["args"].get("when") or "").strip() != want:
@@ -119,6 +121,7 @@ async def main():
     ap.add_argument("--research", action="store_true", help="判断层选了 research 的题真去查，并打分")
     ap.add_argument("--only", default="", help="只跑这几题（id，用逗号隔开）")
     ap.add_argument("--out", default="", help="结果另存成 JSON")
+    ap.add_argument("--engine", default="", help="20.1 只用哪个搜索：deepseek / tavily（比较两个时各跑一次）")
     a = ap.parse_args()
     if a.home:
         os.environ["AIGROUP_HOME"] = str(Path(a.home).expanduser().resolve())   # 要在 import config 之前设
@@ -142,7 +145,14 @@ async def main():
     if a.research:
         from aigroup.net.links import LinkReader
         from aigroup.net.search import WebSearch
+        if a.engine == "tavily":
+            cfg["net"] = {**dict(cfg.get("net") or {}), "deepseek_search": False}
+        elif a.engine == "deepseek":
+            cfg["net"] = {**dict(cfg.get("net") or {}), "tavily_key": "", "search_first": "deepseek"}
         web, links = WebSearch(cfg), LinkReader(cfg)
+        lk = getattr(links, "web", None)
+        if lk is not None:
+            links.web = web
     rows, quick_s = [], []
     for c in cases:
         try:
@@ -155,16 +165,30 @@ async def main():
         if a.research and ok and call and call["name"] == "research":
             depth = "deep" if call["args"].get("depth") == "deep" else "quick"
             try:
-                rr = await research(llm, P, web, links, str(call["args"].get("goal") or ""), depth, now, name,
+                from aigroup.agent.mixin import time_window, window_text
+                from aigroup.agent.tools import QUESTION
+                QUESTION.set(c["chat"][-1].partition("：")[2][:128])
+                goal = str(call["args"].get("goal") or "") + window_text(time_window(call["args"].get("after"),
+                                                                                     call["args"].get("before")))
+                rr = await research(llm, P, web, links, goal, depth, now, name,
                                     transcript(c["chat"], now), cfg)
                 if depth == "quick":
                     quick_s.append(r["seconds"] + rr["seconds"])
                 prem = ("这道题的前提本身有问题（比如人已经退役 / 东西还没出），简报（premise 或要点里）没指出来就不能通过。"
                         if c.get("premise") else "")
+                if c.get("answerable") is False:
+                    prem += "这道题网上基本查不到：简报 answerable=false 或者 unknown 里老实写了查不到就算对；拿不相干的资料凑答案不能通过。"
+                if c.get("conflict"):
+                    prem += "这道题网上说法不一：简报的 conflict 写了不同说法（或者要点里讲清了新旧说法）才能通过。"
+                b = rr["brief"]
+                if c.get("answerable") is False and b.get("answerable") is False:
+                    row_abst = True
+                else:
+                    row_abst = False
                 j = parse_json(await llm.chat([{"role": "user", "content": JUDGE.format(
                     now=f"{now:%Y-%m-%d}", premise=prem, q=c["chat"][-1], brief=json.dumps(rr["brief"], ensure_ascii=False))}],
                     role="helper", temperature=0.1, max_tokens=400), {}) or {}
-                row.update(research=rr, judge=j)
+                row.update(research=rr, judge=j, abstained=row_abst)
                 if not j.get("pass", False):
                     row["ok"], row["why"] = False, f"简报没过：{j.get('why', '')}"
             except Exception as e:  # noqa: BLE001
@@ -180,6 +204,12 @@ async def main():
     print(f"\n通过 {passed}/{n}（{passed / max(1, n):.0%}，目标 ≥ 85%）；不该查的误查 {false_search}/{len(nones)}"
           f"（{false_search / max(1, len(nones)):.0%}，目标 ≤ 5%）"
           + (f"；快查 P50 {statistics.median(quick_s):.1f} 秒（目标 ≤ 12）" if quick_s else ""))
+    ab = [x for x in rows if x.get("research") and next((c for c in cases if c["id"] == x["id"]), {}).get("answerable") is False]
+    if ab:
+        print(f"该说查不到的 {len(ab)} 题里，简报老实写了 answerable=false 的 {sum(1 for x in ab if x.get('abstained'))} 题")
+    if web is not None:
+        print(f"搜索引擎：{a.engine or '默认顺序'}；DeepSeek 用了 {web.ds_used() if web.ds_key else '（没开）'}，"
+              f"Tavily 这个月 {web.tavily_used()} 次")
     if a.out:
         Path(a.out).write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0 if passed / max(1, n) >= 0.85 else 1

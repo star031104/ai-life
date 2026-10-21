@@ -8,6 +8,7 @@ self.memory / self.knowledge（她的记忆）、grow.py 里的提醒（remind_s
 from __future__ import annotations
 
 import json
+import re
 import logging
 import random
 import time
@@ -25,19 +26,41 @@ def _date_key(r: dict) -> str:
     return str(r.get("date") or "")
 
 
+def _bigr(t: str) -> set:
+    t = re.sub(r"\s+", "", t or "")
+    return {t[i:i + 2] for i in range(len(t) - 1)}
+
+
+def same_source(rows: list[dict], th: float = 0.6) -> set[int]:
+    """20.1 几条结果的摘要几乎一样（互相转载同一段话）：都标“同源”，别当成几个独立来源互相印证。"""
+    bs = [_bigr(str(r.get("snippet") or "")) for r in rows]
+    out = set()
+    for i in range(len(bs)):
+        for j in range(i + 1, len(bs)):
+            a, b = bs[i], bs[j]
+            if len(a) >= 20 and len(b) >= 20 and len(a & b) / max(1, len(a | b)) > th:
+                out |= {i, j}
+    return out
+
+
 def format_results(results: list[dict], engine: str) -> str:
     """搜索结果 → 给研究员看的一段：有日期的按日期从旧到新排（最新的放最后），每条包在 <资料> 里。"""
     if not results:
         return "（没搜到东西：换个说法、换中英文、或者放宽 days 再试）"
     from aigroup.net.links import site_name
     rows = sorted(results, key=lambda r: (bool(_date_key(r)), _date_key(r)))
+    same = same_source(rows)
     out = []
-    for r in rows:
+    for i, r in enumerate(rows):
         host = (urlparse(r.get("url") or "").hostname or "").lower()
-        site = site_name(host) if host else ""
-        out.append(f'<资料 来源="{site or host or "未知"}" 日期="{_date_key(r) or "无"}">\n'
+        site = r.get("site") or (site_name(host) if host else "")
+        auth = r.get("authority")
+        # DeepSeek 的 authority 是按整个网站打的（同站每页一样、软文站也可能高），只当“这个网站一般靠不靠谱”的参考
+        cred = f' 网站权威="{["很低", "低", "一般", "高", "很高"][auth]}"' if isinstance(auth, int) and 0 <= auth <= 4 else ""
+        dup = ' 同源="是"' if i in same else ""
+        out.append(f'<资料 来源="{site or host or "未知"}" 日期="{_date_key(r) or "无"}"{cred}{dup}>\n'
                    f'{r.get("title", "")}\n{r.get("snippet", "")}\n链接：{r.get("url", "")}\n</资料>')
-    tail = "" if engine in ("Tavily", "缓存") else (
+    tail = "" if engine in ("Tavily", "DeepSeek", "缓存") else (
         f"\n（这次用的是{engine}，结果没有发布日期：别把它们当成“最近”的事，需要日期就 read_url 打开看）")
     return "\n".join(out) + tail
 
@@ -51,20 +74,68 @@ def format_page(info: dict, url: str, offset: int) -> str:
             f'{info.get("title", "")}\n{info.get("text", "")}\n</资料>{more}')
 
 
+def time_window(after, before) -> tuple[str, str] | None:
+    """判断层给的 after / before（YYYY-MM-DD）→ (起, 止)；格式不对的丢掉。"""
+    def ok(x):
+        x = str(x or "").strip()[:10]
+        return x if re.fullmatch(r"20\d\d-\d\d-\d\d", x) else ""
+    a, b = ok(after), ok(before)
+    return (a, b) if a or b else None
+
+
+def window_text(w: tuple[str, str] | None) -> str:
+    if not w:
+        return ""
+    a, b = w
+    return f"（时间范围：{a or '不限'} 到 {b or '现在'}；搜的时候按这个填 days，旧的不能当成这段时间的事）"
+
+
+def stale_check(d: dict, w: tuple[str, str] | None) -> dict:
+    """20.1 简报的“信息截至”比要的时间段还早：标出来，让她说“这是 x 号的信息”。"""
+    if not w or not w[0]:
+        return d
+    asof = str(d.get("as_of") or "")[:10]
+    if re.fullmatch(r"20\d\d-\d\d-\d\d", asof) and asof < w[0]:
+        extra = f"查到的信息只到 {asof}，比要问的 {w[0]} 之后还早：说的时候讲明是 {asof} 的情况，之后的不知道"
+        d["unknown"] = (str(d.get("unknown") or "") + "；" + extra).strip("；")
+        if d.get("confidence") == "high":
+            d["confidence"] = "medium"
+    return d
+
+
+def _point_text(x) -> str:
+    if isinstance(x, dict):
+        return str(x.get("text") or "").strip()
+    return str(x or "").strip()
+
+
 def parse_brief(text: str) -> dict:
+    """研究员交的 JSON → 简报。20.1 第 2 版（要点带来源编号、conflict、counter、answerable、facts）；旧版也认。"""
     from aigroup.chat.plan import lenient_json
     d = lenient_json(text or "")
-    if not isinstance(d, dict) or ("answer_points" not in d and not d.get("premise")):
+    if not isinstance(d, dict) or ("answer_points" not in d and not d.get("premise") and "answerable" not in d):
         t = (text or "").strip()
         return {"answer_points": [t[:400]] if t else [], "premise": "", "as_of": "", "sources": [],
-                "confidence": "low", "unknown": "" if t else "没查到"}
+                "confidence": "low", "unknown": "" if t else "没查到", "conflict": [], "counter": [], "facts": [],
+                "answerable": bool(t), "points": []}
     pts = d.get("answer_points") or []
-    d["answer_points"] = [str(x).strip() for x in (pts if isinstance(pts, list) else [pts]) if str(x).strip()][:6]
+    pts = pts if isinstance(pts, list) else [pts]
+    d["points"] = [p if isinstance(p, dict) else {"text": str(p)} for p in pts if _point_text(p)][:6]
+    d["answer_points"] = [_point_text(p) for p in d["points"]]          # 老代码、小屋都按字符串列表用
+    d["conflict"] = [c for c in (d.get("conflict") or []) if isinstance(c, dict) and c.get("sides")][:3]
+    d["counter"] = [str(x).strip() for x in (d.get("counter") or []) if str(x).strip()][:3] \
+        if isinstance(d.get("counter"), list) else ([str(d["counter"])] if d.get("counter") else [])
+    d["facts"] = [f for f in (d.get("facts") or []) if isinstance(f, dict) and f.get("entity") and f.get("value")][:5] \
+        if isinstance(d.get("facts"), list) else []
+    ans = d.get("answerable")
+    d["answerable"] = not (ans is False or str(ans).lower() in ("false", "no", "0")) or bool(d.get("premise"))
+    if not d["answer_points"] and not d.get("premise"):
+        d["answerable"] = False
     return d
 
 
 def brief_block(goal: str, d: dict, fresh: bool = True) -> str:
-    """简报 → 放进她提示词里的一段。"""
+    """简报 → 放进她提示词里的一段。20.1：按情况（前提、查不到、冲突、辟谣、把握）给她一句该怎么说。"""
     head = (f"# 你刚在手机上查了一下：{goal}" if fresh else f"# 你刚才查过的（还记得）：{goal}")
     if d.get("as_of"):
         head += f"（信息截至 {d['as_of']}）"
@@ -74,6 +145,12 @@ def brief_block(goal: str, d: dict, fresh: bool = True) -> str:
     lines += [f"- {p}" for p in d.get("answer_points") or []]
     if not d.get("answer_points") and not d.get("premise"):
         lines.append("- （什么都没查到）")
+    for c in d.get("conflict") or []:
+        sides = "；".join(str(x.get("say") or "") for x in c.get("sides") or [] if isinstance(x, dict))
+        if sides:
+            lines.append(f"说法不一样（{c.get('type') or '口径不同'}）：{sides}")
+    for x in d.get("counter") or []:
+        lines.append(f"辟谣 / 反证：{x}")
     if d.get("unknown"):
         lines.append(f"没查到 / 不确定：{d['unknown']}")
     conf = {"high": "比较有把握", "medium": "大概对", "low": "把握不大"}.get(str(d.get("confidence") or ""), "")
@@ -83,6 +160,21 @@ def brief_block(goal: str, d: dict, fresh: bool = True) -> str:
     if srcs:
         lines.append("来源：" + "；".join(f"{s.get('site') or s.get('title', '')[:20]}"
                                          f"{'（' + str(s.get('date')) + '）' if s.get('date') else ''}" for s in srcs))
+    say = []
+    if d.get("premise"):
+        say.append(P.BRIEF_SAY["premise"])
+    if d.get("answerable") is False and not d.get("premise"):
+        say.append(P.BRIEF_SAY["unanswerable"])
+    for c in d.get("conflict") or []:
+        t = str(c.get("type") or "口径不同")
+        if t in P.BRIEF_SAY and P.BRIEF_SAY[t] not in say:
+            say.append(P.BRIEF_SAY[t])
+    if d.get("counter"):
+        say.append(P.BRIEF_SAY["counter"])
+    if str(d.get("confidence") or "") == "low" or (d.get("unknown") and d.get("answerable") is not False):
+        say.append(P.BRIEF_SAY["low"])
+    if say:
+        lines.append("这次怎么说：" + "；".join(say) + "。")
     lines.append(P.BRIEF_HOWTO)
     return "\n".join(lines)
 
@@ -109,6 +201,31 @@ class AgentMixin:
         bs = [{"goal": goal, "ts": time.time(), "brief": d}] + self._briefs(gid)
         self.db.set(f"agent_briefs_{gid}", bs[:5])
 
+    def ledger(self):
+        lg = getattr(self, "_ledger", None)
+        if lg is None:
+            from aigroup.memory.ledger import Ledger
+            lg = self._ledger = Ledger(self.db, (self.cfg.get("net") or {}).get("ledger_ttl"))
+        return lg
+
+    def ledger_write(self, gid: int, d: dict) -> int:
+        if not self.gk(gid).get("ledger", True):
+            return 0
+        try:
+            return self.ledger().write(gid, d)
+        except Exception as e:  # noqa: BLE001
+            log.info("群 %s：记账本出错：%s", gid, e)
+            return 0
+
+    def ledger_block(self, gid: int, text: str) -> str:
+        if not self.gk(gid).get("ledger", True):
+            return ""
+        try:
+            return self.ledger().block(gid, text, self.cfg.tz)
+        except Exception as e:  # noqa: BLE001
+            log.info("群 %s：翻账本出错：%s", gid, e)
+            return ""
+
     def _now_text(self) -> str:
         now = self.brain.now()
         return f"{now:%Y-%m-%d %H:%M} 星期{P.WEEK[now.weekday()]}"
@@ -126,6 +243,10 @@ class AgentMixin:
             asker = hit or asker
         recent = self._briefs(gid)
         rec_txt = "\n".join(f"- {b['goal']}（{int((time.time() - b['ts']) / 60)} 分钟前）" for b in recent[:3]) or "（没有）"
+        recent_text = " ".join(str(r["content"] or "") for r in users[-4:])
+        led = self.ledger_block(gid, recent_text)          # 20.2 账本里还有效的：够答就不用再查
+        if led:
+            rec_txt += "\n" + led
         focus = (f"{'有人在叫她，' if mentioned else '她想接一句，'}最新一条是 {asker['name']} 说的。"
                  f"说这句话的人（“我”）是：{asker['name']}")
         try:
@@ -146,8 +267,8 @@ class AgentMixin:
         if not calls:
             tlog.info("群 %s 想一想：不用办事（%.1fs）", gid, time.time() - t0)
             if recent and time.time() - recent[0]["ts"] < 30 * 60:
-                return brief_block(recent[0]["goal"], recent[0]["brief"], fresh=False)
-            return ""
+                return brief_block(recent[0]["goal"], recent[0]["brief"], fresh=False) + ("\n\n" + led if led else "")
+            return led
         from aigroup.agent.loop import parse_args
         acts, research = [], None
         for tc in calls:
@@ -166,7 +287,9 @@ class AgentMixin:
             parts.append("# 你刚办的事（回话时顺口确认一下，时间说清楚；没办成的就说没办成）\n" + "\n".join(f"- {a}" for a in acts))
         if research:
             block = await self._agent_research(gid, str(research["goal"]).strip()[:120],
-                                               "deep" if research.get("depth") == "deep" else "quick", mentioned)
+                                               "deep" if research.get("depth") == "deep" else "quick", mentioned,
+                                               question=str(asker["content"] or "")[:128],
+                                               window=time_window(research.get("after"), research.get("before")))
             if block is None:
                 old = await self.web_block(gid, [r["content"] for r in users[-4:]], mentioned)
                 if old:
@@ -176,7 +299,8 @@ class AgentMixin:
         return "\n\n".join(parts)
 
     # ---------------- 研究层 ----------------
-    async def _agent_research(self, gid: int, goal: str, depth: str, mentioned: bool) -> str | None:
+    async def _agent_research(self, gid: int, goal: str, depth: str, mentioned: bool, question: str = "",
+                              window: tuple[str, str] | None = None) -> str | None:
         g = self.gk(gid)
         day_key = self._agent_day_key(gid)
         if int(self.db.get(day_key, 0) or 0) >= int(g.get("agent_per_day", 60)):
@@ -195,7 +319,10 @@ class AgentMixin:
         msgs = [{"role": "system", "content": P.RESEARCH_SYSTEM.format(
                     now=self._now_text(), name=self.brain.persona.name,
                     rounds=f"这次最多查 {rounds} 轮，一般 {max(1, rounds - 1)} 轮就该交卷。")},
-                {"role": "user", "content": P.RESEARCH_USER.format(goal=goal, context=self.transcript(gid, 6))}]
+                {"role": "user", "content": P.RESEARCH_USER.format(goal=goal + window_text(window),
+                                                                   context=self.transcript(gid, 6))}]
+        from aigroup.agent.tools import QUESTION
+        QUESTION.set(question or goal)
         try:
             tb = self.toolbox()
             res = await tool_loop(self.brain.llm, msgs, tb.schemas(recall=True),
@@ -212,9 +339,11 @@ class AgentMixin:
         self._agent_log({"ts": time.time(), "gid": gid, "goal": goal, "depth": depth, "thinking": thinking,
                          "rounds": res.rounds, "seconds": round(res.seconds, 1), "forced": res.forced,
                          "steps": res.steps[:20], "brief": d})
+        d = stale_check(d, window)
         if not d.get("answer_points") and not d.get("premise"):
-            return brief_block(goal, {"answer_points": [], "unknown": d.get("unknown") or "没查到"})
+            return brief_block(goal, {"answer_points": [], "unknown": d.get("unknown") or "没查到", "answerable": False})
         self._save_brief(gid, goal, d)
+        self.ledger_write(gid, d)
         if g.get("remember_web", True) and d.get("confidence") != "low" and d.get("answer_points"):
             self._spawn(self.learn(gid, goal, [{"title": goal, "snippet": "；".join(d["answer_points"][:3])}]))
         return brief_block(goal, d)
@@ -254,6 +383,9 @@ class AgentMixin:
                 out.append(blk)
         except Exception as e:  # noqa: BLE001
             log.info("翻记忆出错：%s", e)
+        led = self.ledger_block(gid, q)
+        if led:
+            out.append(led)
         kn = getattr(self, "knowledge", None)
         if kn is not None:
             es = kn.recall(gid, q, k=4)

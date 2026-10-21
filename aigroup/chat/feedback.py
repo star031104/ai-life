@@ -176,6 +176,10 @@ class FeedbackMixin:
                 log.info("重新拟合的权重没比现在的好，先不换")
         except Exception as e:  # noqa: BLE001
             log.info("重新拟合发言权重出错：%s", e)
+        try:                                                      # 20.2 最近几天的事实补算“当时谁在”
+            await asyncio.to_thread(self.memory.refresh_presence)
+        except Exception as e:  # noqa: BLE001
+            log.info("补算在场的人出错：%s", e)
         try:
             n = await asyncio.to_thread(self.memory.embed_pending, 2000)
             if n:
@@ -186,10 +190,21 @@ class FeedbackMixin:
             self.update_rel_graph()
             if self.g.get("rel_experience", True):
                 await self.rel_experience()
+            if self.g.get("rel_tone", True) and now.weekday() in (0, 3):     # 20.2 关系色彩：一周两次就够
+                await self.rel_tone()
             if self.g.get("label_nb", True):
+                from aigroup.eval.label import weak_labels
+                await asyncio.to_thread(weak_labels, self.db)        # 20.0 没人标的、程序能推出来的弱标签
                 await asyncio.to_thread(self.train_label_nb)
         except Exception as e:  # noqa: BLE001
             log.info("关系网 / 相处经验 / 小判断器出错：%s", e)
+        if hasattr(self, "build_interests"):
+            try:                                                  # 20.2 “刷到的”：兴趣表、分享后的反馈
+                self.feed_learn()
+                for gid in sorted(self.groups):
+                    self.build_interests(gid)
+            except Exception as e:  # noqa: BLE001
+                log.info("整理兴趣表出错：%s", e)
         if self.g.get("person_spec", True) and hasattr(self, "build_specs"):
             try:                                                  # 19.1 相处说明书（每人一周写一次）
                 await self.build_specs()

@@ -115,6 +115,19 @@ qq:
     poke_back_chance: 0.4        # 被戳了戳回去的概率（每小时最多 3 次）
     update_signature: false      # 按今天的安排改小号的 QQ 签名
     explore_rate: 0.02           # 本该不说时偶尔随机说一次，让每晚的重新拟合不偏
+    # 20.0 / 20.1 / 20.2（小屋“性格开关”里也能调）：
+    typing_abort: true           # 她主动说的那句还在打字、群里又说了好几句：这句不发了
+    ablate_rate: 0.1             # 主动开口时随机去掉提示词里一段的概率（看哪段有用；0 = 关）
+    drift_anchor: true           # 问她自己 / 有人难过 / 聊人生时，在最后再提一遍她是谁
+    number_check: true           # 查资料后说的数字要在简报里出现过
+    ledger: true                 # 查到的硬事实记进账本（带有效期、会被取代）
+    feed: true                   # “刷到的”：按大家的兴趣攒候选、按事件去重、规则打分过线才分享
+    feed_hours: 3
+    feed_topics: 5
+    feed_min: 0.25
+    rel_tone: true               # 关系网加情绪色彩
+    weekly_qa: true              # 每周问她 15 个关于自己的问题
+    weekly_pairs: true           # 每周测带情绪时会不会附和
     catch_up: true               # 连上 QQ 后补上她不在时（重启、关机、掉线）群里说的话；期间被 @ 上线后补一句“才看到”
     catch_up_count: 80           # 每个群往回最多补多少条
     # 群友的别名（真名、外号）：群里叫真名时她知道说的是谁。左边写群名片 / QQ 昵称 / QQ 号都行；
@@ -135,6 +148,12 @@ qq:
 # ---------------- 联网（4.0） ----------------
 net:
   search: true                   # 能不能上网搜（关掉就只读群友发的链接）
+  deepseek_search: true         # 20.0 用 DeepSeek 搜索 / 读网页（和聊天同一个官方 DeepSeek Key；¥5 / 千次成功请求，空结果不收钱）
+  deepseek_key: ""               # 可选：单独给搜索用的 Key；不填就用 llm.profiles 里 api.deepseek.com 的 Key
+  search_first: deepseek        # 20.0 先用哪个：deepseek / tavily
+  deepseek_ip: ""               # 20.1 可选：填服务器公网 IP，DeepSeek 搜索按它出结果（不同 IP 结果只重合约六成，固定了更稳）
+  deepseek_qps: 5               # 20.1 DeepSeek 搜索每秒最多几次（超了会 429，自动歇 10 秒）
+  tavily_qps: 2
   tavily_key: ""                 # 可选：Tavily 的 Key（写 ${TAVILY_KEY}，Key 放 .env），百度 / 360 / 搜狗都不行时兜底；每月 1000 次免费
   browser: auto                  # 19.3 读脚本加载的网页时开无头浏览器：auto 装了 playwright 就用 / false 不用
   tavily_extract: true           # 19.3 国内打不开、被拦的网页让 Tavily 去读（一次算一个额度）

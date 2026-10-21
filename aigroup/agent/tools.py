@@ -82,6 +82,32 @@ SCHEMAS = {
 
 DEFAULT = ["web_search", "read_url", "recall", "bili", "esports", "weather", "calc"]
 
+# 20.1 一次研究里搜过的词（tool_loop 开始时换一份新的；同一轮并行的几个调用共用）
+import contextvars  # noqa: E402
+
+SEEN: contextvars.ContextVar = contextvars.ContextVar("agent_seen_queries", default=None)
+QUESTION: contextvars.ContextVar = contextvars.ContextVar("agent_question", default="")
+
+
+def _qnorm(q: str) -> str:
+    import re as _re
+    q = _re.sub(r"\b(site|after|before|lang):\S+", "", (q or "").lower())
+    return _re.sub(r"[\s\"'“”，,。.!?！？、:：]+", "", q)
+
+
+def seen_before(q: str, site: str = "") -> str:
+    """和这次研究里已经搜过的几乎一样（字二元组 Jaccard > 0.8，且网站一样）→ 返回那个旧的查询；第一次搜返回空并记下。"""
+    seen = SEEN.get()
+    if seen is None:
+        return ""
+    n = _qnorm(q)
+    b = {n[i:i + 2] for i in range(len(n) - 1)} or {n}
+    for old, osite, ob in seen:
+        if osite == site and len(b | ob) and len(b & ob) / len(b | ob) > 0.8:
+            return old
+    seen.append((q, site, b))
+    return ""
+
 
 def schemas(names: list[str] | None = None) -> list[dict]:
     return [{"type": "function", "function": {"name": n, **SCHEMAS[n]}} for n in (names or DEFAULT) if n in SCHEMAS]
@@ -180,7 +206,14 @@ class Toolbox:
         except (TypeError, ValueError):
             days = 0
         q, site = str(a.get("query") or ""), str(a.get("site") or "").strip()
-        res, eng = await (self.web.agent_search(q, 6, days, site=site) if site else self.web.agent_search(q, 6, days))
+        dup = seen_before(q, site)
+        if dup:                     # 20.1 换个说法搜同一件事（真实日志里 32% 的改写是这样）：不真去搜，提醒它该交卷了
+            return (f"（和刚才搜过的「{dup}」几乎一样，不会有新结果。够回答就交卷；不够就换个角度"
+                    "（换语言、换实体、加 site: 去数据站），或者 read_url 打开已有的结果）")
+        kw = {"site": site} if site else {}
+        if QUESTION.get():
+            kw["question"] = QUESTION.get()
+        res, eng = await self.web.agent_search(q, 6, days, **kw)
         return format_results(res, eng)
 
     async def t_read_url(self, a: dict) -> str:

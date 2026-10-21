@@ -191,6 +191,12 @@ links:
 net:
   search: true
   per_hour: 12                # 每小时最多搜几次
+  deepseek_search: true         # 20.0 用 DeepSeek 搜索 / 读网页（和聊天同一个官方 DeepSeek Key；¥5 / 千次成功请求，空结果不收钱）
+  deepseek_key: ""               # 可选：单独给搜索用的 Key；不填就用 llm.profiles 里 api.deepseek.com 的 Key
+  search_first: deepseek        # 20.0 先用哪个：deepseek / tavily
+  deepseek_ip: ""               # 20.1 可选：填服务器公网 IP，DeepSeek 搜索按它出结果（不同 IP 结果只重合约六成，固定了更稳）
+  deepseek_qps: 5               # 20.1 DeepSeek 搜索每秒最多几次（超了会 429，自动歇 10 秒）
+  tavily_qps: 2
   tavily_key: ""              # 可选：Tavily 的 Key（写 ${TAVILY_KEY}），百度 / 360 / 搜狗都不行时兜底
   agent: false                # 19.0 回话前先想一想要不要查：会多搜几次、打开网页看，交一份带日期的简报再回（要 DeepSeek 官方接口）
   agent_per_day: 40           # 每天最多查几次（超了退回只搜一次）

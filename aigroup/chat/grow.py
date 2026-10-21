@@ -744,9 +744,9 @@ class GrowMixin:
         out = list(self.db.get("qq_shares") or [])
         return [x for x in out if gid is None or x.get("gid") == gid]
 
-    def _note_share(self, gid: int, kind: str, text: str, topic: str = ""):
+    def _note_share(self, gid: int, kind: str, text: str, topic: str = "", feed: bool = False):
         out = list(self.db.get("qq_shares") or [])
-        out.append({"ts": time.time(), "gid": gid, "kind": kind, "text": text[:120], "topic": topic})
+        out.append({"ts": time.time(), "gid": gid, "kind": kind, "text": text[:120], "topic": topic, "feed": feed})
         self.db.set("qq_shares", out[-80:])
         k = f"qq_share_n_{gid}_{self.brain.now():%Y-%m-%d}"
         self.db.set(k, int(self.db.get(k, 0) or 0) + 1)
@@ -788,23 +788,37 @@ class GrowMixin:
             return False
         p = self.brain.persona
         kn = getattr(self, "knowledge", None)
+        item = None
+        if g.get("feed", True) and hasattr(self, "feed_pick"):
+            try:
+                item = self.feed_pick(gid)                       # 20.2 候选池里按规则打分最高的（没有过线的就不分享）
+            except Exception as e:  # noqa: BLE001
+                log.info("群 %s 挑候选出错：%s", gid, e)
+            if item is None and self.feed_has_pool(gid):
+                return False                                     # 有候选但都没过线：这次不分享（不再让模型硬挑一个）
         likes = ", ".join(e["topic"] for e in sorted(kn.entries(gid, 60), key=lambda e: -int(e["hits"] or 0))[:10]) if kn else ""
         mine = ", ".join(self.interests()[:10]) if hasattr(self, "interests") else ""
         recent = ", ".join(x.get("topic") or x.get("text", "")[:12] for x in self.shares(gid)[-6:]) or "（没有）"
         today = self.brain.now()
         tstr = f"{today:%Y-%m-%d}（{'一二三四五六日'[today.weekday()]}）"
         fresh = max(1, int(g.get("share_fresh_days", 3) or 3))
+        d = {}
         try:
-            d = await self.brain.llm.json([{"role": "user", "content": SHARE_PICK % (
-                p.name, tstr, f"{mine}；{likes}"[:400] or "（不太清楚）", (self.db.get(f"qq_group_notes_{gid}") or "（没有）")[:500],
-                recent)}], default={}, role="helper")
+            if item is None:                                     # 候选池还空着（刚上线 / 搜索都失败）：退回老办法
+                d = await self.brain.llm.json([{"role": "user", "content": SHARE_PICK % (
+                    p.name, tstr, f"{mine}；{likes}"[:400] or "（不太清楚）",
+                    (self.db.get(f"qq_group_notes_{gid}") or "（没有）")[:500], recent)}], default={}, role="helper")
         except Exception as e:  # noqa: BLE001
             log.info("挑分享话题失败：%s", e)
             return False
-        q = str((d or {}).get("query") or "").strip()[:30]
-        if len(q) < 2:
-            return False
-        res = await self.web.search(q, fresh_days=fresh)
+        q = str((d or {}).get("query") or "").strip()[:30] if d else ""
+        if item is not None:
+            q = item["topic"]
+            res = [{"title": item["title"], "url": item["url"], "snippet": item["snippet"], "date": item["date"]}]
+        else:
+            if len(q) < 2:
+                return False
+            res = await self.web.search(q, fresh_days=fresh)
         if not res:
             return False
         known = "\n".join(f"- {e['topic']}：{e['summary']}" for e in (kn.entries(gid, 30) if kn else []))[:1200] or "（没有）"
@@ -818,11 +832,15 @@ class GrowMixin:
             return False
         if not isinstance(j, dict) or not j.get("share") or not j.get("gist"):
             self._note_share(gid, "skip", q, str((d or {}).get("topic") or ""))     # 算一次：今天别再刷了
+            if item is not None:
+                self.feed_mark(gid, item)
             return False
         age = share_age(j, res, today, fresh)
         if age is None:
             log.info("群 %s：刷到的「%s」看不出是哪天的 / 是 %s 天以前的旧闻，不分享", gid, j.get("gist"), fresh)
             self._note_share(gid, "skip", q, str((d or {}).get("topic") or ""))
+            if item is not None:
+                self.feed_mark(gid, item)
             return False
         topic = str(j.get("topic") or d.get("topic") or q)[:20]
         if kn is not None and j.get("summary"):
@@ -841,7 +859,9 @@ class GrowMixin:
             except Exception as e:  # noqa: BLE001
                 log.info("群 %s 分享失败：%s", gid, e)
                 return False
-        self._note_share(gid, "news" if ok else "skip", str(j["gist"]), topic)
+        self._note_share(gid, "news" if ok else "skip", str(j["gist"]), topic, feed=item is not None)
+        if item is not None:
+            self.feed_mark(gid, item)
         return bool(ok)
 
     async def _share_photo(self, gid: int, st, count: bool = True) -> bool:

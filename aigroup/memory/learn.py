@@ -73,6 +73,7 @@ class Learner:
         db.conn.executescript(SCHEMA)
         for table in ("qq_expressions", "qq_jargon"):
             ensure_columns(db.conn, table, {"users": "TEXT NOT NULL DEFAULT '[]'"})   # 2.0：哪些人说过
+        ensure_columns(db.conn, "qq_jargon", {"by_user": "TEXT NOT NULL DEFAULT '{}'"})   # 20.2 不同人的不同用法
         db.conn.commit()
 
     @property
@@ -149,6 +150,9 @@ class Learner:
                 continue
             hits = [c for c in joined if term.lower() in c.lower()]
             n = sum(c.lower().count(term.lower()) for c in hits)
+            # 20.2 例句带上是谁说的：同一个词不同人意思可能不一样（GroupMemBench：这一项最强的系统也只有 37.7%）
+            hits = [(f"{r['name']}：" if "name" in r.keys() and r["name"] else "") + r["content"]
+                    for r in lines if term.lower() in r["content"].lower()]
             if not n:
                 continue
             uids = {int(r["user_id"]) for r in lines if term.lower() in r["content"].lower()}
@@ -187,7 +191,9 @@ class Learner:
         b = await self.llm.json([{"role": "user", "content":
             f"下面是一个{chan_name()}里的词，和它们在群里被用到的句子。根据句子判断每个词在这个群里是什么意思（20 字以内），"
             "并判断：和“不看上下文时的猜测”比，意思是不是明显不一样（明显不一样＝离开这个群就看不懂，才算群里的黑话）。\n"
-            '只输出 JSON：{"词": {"meaning": "...", "differs": true}}\n\n' + "\n\n".join(blocks)}], default={}, role="memory")
+            "例句前面是说话的人；要是不同的人用这个词意思明显不一样，在 by 里按人写（一样就不写 by）。\n"
+            '只输出 JSON：{"词": {"meaning": "...", "differs": true, "by": {"某人": "他用它指……"}}}\n\n'
+            + "\n\n".join(blocks)}], default={}, role="memory")
         b = b if isinstance(b, dict) else {}
         n = 0
         for r in rows:
@@ -195,10 +201,11 @@ class Learner:
             if not isinstance(v, dict):
                 continue
             cp = due_checkpoint(r["count"], r["checked_at"]) or r["checked_at"]
+            by = {str(k)[:12]: str(x)[:30] for k, x in (v.get("by") or {}).items()} if isinstance(v.get("by"), dict) else {}
             self.db.conn.execute(
-                "UPDATE qq_jargon SET meaning=?, guess=?, is_jargon=?, checked_at=?, updated=? WHERE id=?",
+                "UPDATE qq_jargon SET meaning=?, guess=?, is_jargon=?, checked_at=?, updated=?, by_user=? WHERE id=?",
                 (str(v.get("meaning") or "")[:40], str(a.get(r["term"]) or "")[:40], 1 if v.get("differs") else 0,
-                 cp, time.time(), r["id"]))
+                 cp, time.time(), json.dumps(dict(list(by.items())[:4]), ensure_ascii=False), r["id"]))
             n += 1
         self.db.conn.commit()
         return n
@@ -215,10 +222,17 @@ class Learner:
 
     def jargon_in(self, gid: int, text: str, k: int = 10) -> list[dict]:
         rows = self.db.conn.execute(
-            "SELECT term, meaning, status, users FROM qq_jargon WHERE group_id=? AND status!='no' AND meaning!='' "
+            "SELECT term, meaning, status, users, by_user FROM qq_jargon WHERE group_id=? AND status!='no' AND meaning!='' "
             "AND (is_jargon=1 OR status='ok') ORDER BY count DESC", (gid,)).fetchall()
         low = (text or "").lower()
-        return [{"term": r["term"], "meaning": r["meaning"]} for r in rows if r["term"].lower() in low
+
+        def by(r):
+            try:
+                d = json.loads(r["by_user"] or "{}")
+            except (ValueError, TypeError):
+                d = {}
+            return d if isinstance(d, dict) else {}
+        return [{"term": r["term"], "meaning": r["meaning"], "by": by(r)} for r in rows if r["term"].lower() in low
                 and (r["status"] == "ok" or len(json.loads(r["users"] or "[]")) >= MIN_USERS)][:k]
 
     def prompt_block(self, gid: int, recent_text: str) -> str:
@@ -231,5 +245,7 @@ class Learner:
         jg = self.jargon_in(gid, recent_text)
         if jg:
             parts.append("# 群里的黑话（下面的意思是你猜的，仅供理解聊天，不一定对）\n"
-                         + "\n".join(f"- {j['term']}：{j['meaning']}" for j in jg))
+                         + "\n".join(f"- {j['term']}：{j['meaning']}" + (
+                             "（不同人用法不一样：" + "；".join(f"{k}用它指{v}" for k, v in j["by"].items()) + "，按在聊的人的意思理解）"
+                             if j.get("by") else "") for j in jg))
         return "\n\n".join(parts)

@@ -234,6 +234,8 @@ class QQ:
         if not text:
             return
         brain.together.observe(text)
+        if getattr(brain, "healthy", None) is not None:
+            brain.healthy.observe(text)
         brain.rhythm.note_birthday_wish(text)
         links = brain.links
         from ailife.media.links import find_links

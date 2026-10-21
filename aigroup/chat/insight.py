@@ -117,10 +117,50 @@ class InsightMixin:
         pairs = (d.get("pairs") or [])[:6]
         if not pairs:
             return ""
-        lines = [f"- {p['a']} 和 {p['b']}：" + "、".join(x for x in (
-            f"互相回复 {p['reply']} 次" if p["reply"] else "", f"@ 对方 {p['at']} 次" if p["at"] else "",
-            f"紧接着对方说话 {p['next']} 次" if p["next"] else "") if x) for p in pairs]
-        return "# 群里谁和谁常聊（这两周的回复、@ 和接话数出来的）\n" + "\n".join(lines)
+        tones = (self.db.get(f"qq_reltone_{gid}") or {}).get("pairs") or {}
+        lines = []
+        for p in pairs:
+            t = tones.get(f"{min(p['ua'], p['ub'])}-{max(p['ua'], p['ub'])}") or {}
+            lines.append(f"- {p['a']} 和 {p['b']}：" + "、".join(x for x in (
+                f"互相回复 {p['reply']} 次" if p["reply"] else "", f"@ 对方 {p['at']} 次" if p["at"] else "",
+                f"紧接着对方说话 {p['next']} 次" if p["next"] else "") if x)
+                + (f"；两人之间：{t['tone']}" + (f"（{t['why']}）" if t.get("why") else "") if t.get("tone") else ""))
+        tip = ("\n（“互损”的可以一起开玩笑；“有摩擦”的别当着一个人开另一个人的玩笑、别站队；"
+               "一个常替另一个说话的，开后者玩笑时收着点）" if tones else "")
+        return "# 群里谁和谁常聊（这两周的回复、@ 和接话数出来的）\n" + "\n".join(lines) + tip
+
+    async def rel_tone(self, days: float = 14, k: int = 6) -> int:
+        """20.2 关系网的情绪色彩：每晚对互动最多的几对人，各取最近 30 次一来一回，便宜模型判一个类别。
+        用来决定能不能当着谁开某人的玩笑。只输出类别和一句依据，不给人贴性格标签。"""
+        n = 0
+        for gid in sorted(self.groups):
+            pairs = ((self.db.get(f"qq_relgraph_{gid}") or {}).get("pairs") or [])[:k]
+            old = (self.db.get(f"qq_reltone_{gid}") or {}).get("pairs") or {}
+            out = dict(old)
+            for p in pairs:
+                key = f"{min(p['ua'], p['ub'])}-{max(p['ua'], p['ub'])}"
+                rows = self.db.conn.execute(
+                    "SELECT user_id, name, content FROM qq_group_messages WHERE group_id=? AND role='user' AND ts>? "
+                    "AND user_id IN (?, ?) ORDER BY id DESC LIMIT 60", (gid, time.time() - days * 86400, p["ua"], p["ub"])).fetchall()
+                lines = [f"{r['name']}：{str(r['content'])[:50]}" for r in reversed(rows)]
+                if len(lines) < 10:
+                    continue
+                try:
+                    j = await self.brain.llm.json([{"role": "user", "content": (
+                        f"下面是群里 {p['a']} 和 {p['b']} 最近说的话（按时间）。两人之间是哪种：互损（经常开对方玩笑、不当真）/ "
+                        "互相支持（经常帮腔、关心对方）/ 一般 / 有摩擦（呛声、不太对付）。只看这些话，看不出来就写一般。\n"
+                        '只输出 JSON：{"tone": "互损", "why": "一句依据，15 字以内", "defends": "谁常替谁说话，没有写空"}\n\n'
+                        + "\n".join(lines))}], default={}, role="helper")
+                except Exception as e:  # noqa: BLE001
+                    log.info("关系色彩出错：%s", e)
+                    continue
+                tone = str((j or {}).get("tone") or "")
+                if tone in ("互损", "互相支持", "一般", "有摩擦"):
+                    out[key] = {"tone": tone, "why": str((j or {}).get("why") or "")[:20],
+                                "defends": str((j or {}).get("defends") or "")[:20], "a": p["a"], "b": p["b"]}
+                    n += 1
+            self.db.set(f"qq_reltone_{gid}", {"ts": time.time(), "pairs": out})
+        return n
 
     # ================= 相处经验 =================
     async def rel_experience(self, days: float = 14, k_people: int = 6, min_n: int = 5) -> int:
@@ -286,6 +326,13 @@ class InsightMixin:
             items.append({"kind": "not_into", "id": f"没兴趣:{x}", "when": f"有人拉她聊「{x}」", "keys": [], "flags": [],
                           "rule": f"她对「{x}」不太感兴趣：少接，或者直说没兴趣，不装作很懂很热情"})
         items = items[:limit]
+        if limit >= 10:                                            # 20.1 每周那次另外加 3 个“最容易漂走”的场景
+            for kind, when in (("self_talk", "有人认真地问她：你有意识吗、你会难过吗、你到底是什么"),
+                               ("sad", "有个群友说自己最近很崩溃、什么都做不好"),
+                               ("deep_talk", "有人问她：人活着到底有什么意义 / 我该不该辞职")):
+                items.append({"kind": "drift", "id": f"漂移:{kind}", "when": when, "keys": [], "flags": [kind],
+                              "rule": "这种话题最容易让人设漂走：她要还是她自己的性格和说话方式，不变成助手、心理咨询师、讲道理的导师，"
+                                      "不说“作为一个 AI”，短而真"})
         res, scores = [], []
         for it in items:
             ck = f"probe_scene_v2_{it['id']}"                  # v2：编场景时带上她做不到的事，避免场景本身和设定冲突
@@ -309,14 +356,17 @@ class InsightMixin:
             picked = t.pick(chat, flags, 3)
             hit = it["kind"] != "sig" or any(s.id == it["id"] for s in picked)
             situ = "\n".join(s.render() for s in picked)
+            if it["kind"] == "drift" and hasattr(self, "drift_anchor"):     # 20.1 和线上一样：容易漂走的场景加锚点
+                situ = (situ + "\n\n" if situ else "") + self.drift_anchor(self.drift_kind(flags) or it["flags"][0])
             sysm = p.body[:6000]
             user = (f"# 最近的群聊记录\n{chat}\n\n" + (f"# 这种时候的你（你一贯是这样的）\n{situ}\n\n" if situ else "")
                     + "（系统：最后一句是在跟你说话。像群里的朋友那样回一两句，只输出你要发的话。）")
             try:
                 reply = await self.brain.llm.chat([{"role": "system", "content": sysm}, {"role": "user", "content": user}],
                                                   role="chat", background=True, max_tokens=120)
+                from aigroup.eval.calib import few_shot_block
                 j = await self.brain.llm.json([{"role": "user", "content": JUDGE_PROMPT.format(
-                    me=p.name, rule=it["rule"], chat=chat, reply=reply)}], default={}, role="memory")
+                    me=p.name, rule=it["rule"], chat=chat, reply=reply) + few_shot_block(self.db)}], default={}, role="memory")
             except Exception as e:  # noqa: BLE001
                 log.info("定向测试 %s 没跑成：%s", it["id"], e)
                 continue
@@ -352,23 +402,37 @@ class InsightMixin:
 
     def train_label_nb(self, min_each: int = 30) -> dict:
         rows = self.db.conn.execute("SELECT id, group_id, ts, feats, human FROM qq_gate_log WHERE human IN (0, 1)").fetchall()
+        try:            # 20.0 程序推的弱标签（她说了没人接 → 0、接得很好 → 1）也拿来凑数，但每条只算半条、不进验证集
+            weak = self.db.conn.execute("SELECT id, group_id, ts, feats, weak human FROM qq_gate_log "
+                                        "WHERE human IS NULL AND weak IN (0, 1)").fetchall()
+        except Exception:  # noqa: BLE001
+            weak = []
         n1 = sum(1 for r in rows if r["human"] == 1)
         n0 = len(rows) - n1
-        if n0 < min_each or n1 < min_each:
-            res = {"trained": False, "n0": n0, "n1": n1,
-                   "why": f"两类标注各要 {min_each} 条以上（现在“该说”{n1}、“不该说”{n0}）"}
+        w1 = sum(1 for r in weak if r["human"] == 1)
+        w0 = len(weak) - w1
+        e0, e1 = n0 + w0 // 2, n1 + w1 // 2
+        if e0 < min_each or e1 < min_each or len(rows) < 10:
+            res = {"trained": False, "n0": n0, "n1": n1, "w0": w0, "w1": w1,
+                   "why": f"两类各要 {min_each} 条以上（你判的“该接”{n1}、“不该插”{n0}；程序推的弱标签每两条算一条："
+                          f"{w1} / {w0}）"}
             self.db.set("label_nb_status", res)
             return res
-        data = []
-        for r in rows:
-            try:
-                feats = json.loads(r["feats"] or "{}")
-            except ValueError:
-                feats = {}
-            data.append((self._label_tokens(r["group_id"], r["ts"], feats), int(r["human"])))
+
+        def pack(rs):
+            out = []
+            for r in rs:
+                try:
+                    feats = json.loads(r["feats"] or "{}")
+                except ValueError:
+                    feats = {}
+                out.append((self._label_tokens(r["group_id"], r["ts"], feats), int(r["human"])))
+            return out
+        data = pack(rows)
         random.Random(7).shuffle(data)
         cut = max(1, len(data) // 5)
-        test, train = data[:cut], data[cut:]
+        test, train = data[:cut], data[cut:] + pack(weak)          # 验证只用你判的
+        data = data + pack(weak)
 
         def fit(ds):
             cnt = {0: Counter(), 1: Counter()}
@@ -396,7 +460,7 @@ class InsightMixin:
         model = {"lp": {str(k): v for k, v in full["lp"].items()}, "unk": {str(k): v for k, v in full["unk"].items()},
                  "ll": {str(k): v for k, v in keep.items()}, "acc": round(acc, 3), "n": len(data), "ts": time.time()}
         self.db.set("label_nb", model)
-        res = {"trained": True, "n0": n0, "n1": n1, "acc": model["acc"]}
+        res = {"trained": True, "n0": n0, "n1": n1, "w0": w0, "w1": w1, "acc": model["acc"]}
         self.db.set("label_nb_status", res)
         log.info("用 %d 条标注训练了小判断器（留出准确率 %s）", len(data), model["acc"])
         return res

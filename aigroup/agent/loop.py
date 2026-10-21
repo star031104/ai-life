@@ -38,6 +38,36 @@ def _clean_msg(m: dict) -> dict:
     return {k: v for k, v in m.items() if not k.startswith("_") and v is not None}
 
 
+def compress_old_tools(messages: list[dict], keep_rounds: int = 2) -> int:
+    """20.1 深查第 3 轮起：更早的工具结果换成一行摘要（MiroThinker 只留最近几次工具结果不掉点；IterResearch 每轮只带结论）。
+    只改 role=tool 的内容；assistant 消息（DeepSeek 思考模式的 reasoning_content）原样保留。返回压缩了几条。"""
+    idx = [i for i, m in enumerate(messages) if m.get("role") == "assistant" and m.get("tool_calls")]
+    if len(idx) <= keep_rounds:
+        return 0
+    cut = idx[-keep_rounds]
+    n = 0
+    for m in messages[:cut]:
+        if m.get("role") == "tool" and not str(m.get("content") or "").startswith("（早先的结果，已压缩）"):
+            m["content"] = "（早先的结果，已压缩）" + summarize_tool(str(m.get("content") or ""))
+            n += 1
+    return n
+
+
+def summarize_tool(text: str, k: int = 4) -> str:
+    """一段工具结果 → 一行：每条资料取标题和前 40 字。"""
+    import re as _re
+    items = _re.findall(r"<资料([^>]*)>\s*(.*?)</资料>", text, _re.S)
+    if not items:
+        return text[:160].replace("\n", " ")
+    out = []
+    for attrs, body in items[:k]:
+        lines = [x.strip() for x in body.strip().splitlines() if x.strip()]
+        date = _re.search(r'日期="([^"]*)"', attrs)
+        out.append(f"{lines[0][:30] if lines else ''}"
+                   f"（{date.group(1) if date else ''}）：{(lines[1] if len(lines) > 1 else '')[:40]}")
+    return "；".join(out)
+
+
 async def run_tools(calls: list[dict], execute, timeout: float = 20.0) -> list[tuple[dict, dict, str]]:
     """并行执行一轮里的所有工具调用。返回 [(调用, 参数, 结果文字)]，顺序和调用一致。"""
     async def one(tc):
@@ -56,11 +86,15 @@ async def run_tools(calls: list[dict], execute, timeout: float = 20.0) -> list[t
 
 async def tool_loop(llm, messages: list[dict], tools: list[dict], execute, *, max_rounds: int = 4,
                     thinking: bool = False, deadline_s: float = 45.0, finish_prompt: str = "",
-                    role: str = "helper", max_tokens: int = 4000) -> LoopResult:
+                    role: str = "helper", max_tokens: int = 4000, compress: bool = True) -> LoopResult:
     """跑一次完整的工具循环。messages 会被就地追加（方便调用方存档）。"""
     t0 = time.time()
     res = LoopResult()
+    from aigroup.agent.tools import SEEN
+    SEEN.set([])                                     # 20.1 这次研究搜过的词：重复的不再真去搜
     for rnd in range(max_rounds + 1):
+        if rnd >= 3 and compress:
+            compress_old_tools(messages, keep_rounds=2)
         last = rnd == max_rounds or (time.time() - t0) > deadline_s
         if last and rnd > 0 and finish_prompt:
             messages.append({"role": "user", "content": finish_prompt})

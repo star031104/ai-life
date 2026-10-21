@@ -178,6 +178,13 @@ mark{background:var(--warn-soft);color:inherit;border-radius:3px;padding:0 1px}
 /* ---------- 工作台：学到的 ---------- */
 .lab-q{border-radius:var(--r);background:var(--surface-2);padding:12px 14px;font-size:var(--fs-sm);color:var(--ink-2);line-height:1.75;max-height:300px;overflow:auto}
 .lab-did{margin:12px 0}
+.tag.warn{background:var(--warn-soft)}
+.lab-help{font-size:var(--fs-sm);color:var(--ink-2);line-height:1.7}.lab-help summary{cursor:pointer;color:var(--ink);font-weight:600}
+.lab-help ul{margin:6px 0 6px 18px;padding:0}.lab-help p{margin:6px 0}
+.lab-steps{margin:10px 0;padding:10px 14px;border-left:3px solid var(--line);font-size:var(--fs-sm);color:var(--ink-2);line-height:1.7}
+.lab-how{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.lab-how .tag{cursor:pointer;user-select:none}.lab-how .tag.on{outline:2px solid var(--accent,#c77)}
+.lab-item{border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:12px}.lab-item .lab-q{max-height:160px}
+.lab-item .lab-acts .btn{min-height:36px;padding:0 12px}.lab-item .btn.on{outline:2px solid var(--accent,#c77)}
 .lab-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .lab-acts .btn{min-height:44px;padding:0 18px;font-size:var(--fs-sm)}
 .lab-prog{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
@@ -517,12 +524,43 @@ body:not(.admin) .side .adm-gt{display:none}
     <span class="meta" id="learnOff" hidden>“跟着群里学说话”在性格开关里关着</span></div>
   <div class="grid">
     <div class="card c12" id="labCard">
-      <div class="card-h"><h3><span data-i="quote"></span>这一刻她该不该说</h3><span class="sp"></span><span class="hint" id="labStat">你判的会直接用来调她什么时候开口（每晚重新拟合时权重最高）</span></div>
-      <div class="card-b" id="labBox"></div>
+      <div class="card-h"><h3><span data-i="quote"></span>这一刻她该不该接话</h3><span class="sp"></span>
+        <div class="seg" id="labMode"><button data-m="one" class="on">一条条判</button><button data-m="batch">一屏 10 条</button></div></div>
+      <div class="card-b">
+        <details class="lab-help"><summary>怎么判、判了有什么用</summary>
+          <p><b>只看最后一句之后。</b>把自己当成群里一个普通群友（不是被问到的人）：看到这里，<b>她</b>这时候接一句合不合适？没人叫她的时刻才会出现在这里。</p>
+          <ul>
+            <li><b>该接</b>：不接就像没听见、冷场了，或者接一句明显让聊天更好（有人在问、在接她的话、说错了她有把握纠正）。可以顺手点一下“怎么接”。</li>
+            <li><b>可接可不接</b>：接了不奇怪，不接也很正常。<b>大多数时刻其实是这种</b>，拿不准就选它，不会算进“该说没说”。</li>
+            <li><b>不该插</b>：别人在互相聊、话还没说完、插进去突兀或抢话、她说了也没人接是活该的。</li>
+            <li><b>看不出来</b>：上下文不够，跳过。</li>
+          </ul>
+          <p>每条下面的“她当时是怎么决定的”按顺序写了四步：①本地门控（不花钱，按消息特征算“想说的程度”，和这一小时的门槛比）→ ②离门槛不远时，小判断器或便宜模型再判一次 → ③过了的，她自己再想一次要不要说 → ④说了之后有没有人接。</p>
+          <p>你判的用在四处：每晚重新拟合门控（权重最高）；训练小判断器（“该接”“不该插”各够 30 条后）；拿不准时问模型的例子；下面“像不像人”的两个率。</p>
+        </details>
+        <div class="hint" id="labStat" style="margin:10px 0"></div>
+        <div id="labBox"></div>
+      </div>
     </div>
     <div class="card c12" id="humaneCard">
-      <div class="card-h"><h3><span data-i="heart"></span>像不像人（这一周）</h3><span class="sp"></span><span class="hint">该说没说、不该说却说用的是你上面的标注；搭话 = 别人接她的话</span></div>
+      <div class="card-h"><h3><span data-i="heart"></span>像不像人（这一周）</h3><span class="sp"></span><span class="hint">该说没说 = 你判“该接”的里她没接的比例；不该说却说 = 你判“不该插”的里她说了的比例（“可接可不接”不算）；搭话 = 别人接她的话</span></div>
       <div class="card-b"><div class="hm" id="humane"></div></div>
+    </div>
+    <div class="card c12" id="calibCard">
+      <div class="card-h"><h3><span data-i="star"></span>给她的话打分</h3><span class="sp"></span><span class="hint" id="calibStat">你打的分会当成每周评测的标准；攒够 10 条，每周看评委和你一致不一致</span></div>
+      <div class="card-b"><div class="small muted" style="margin-bottom:8px">1 很差 · 2 不太行 · 3 一般 · 4 挺好 · 5 就是她。看的是“像不像她、这时候这么说合不合适”。键盘 Shift + 1~5 给第一条打分。</div><div id="calibBox"></div></div>
+    </div>
+    <div class="card c12" id="checksCard">
+      <div class="card-h"><h3><span data-i="heart"></span>每周额外检查</h3><span class="sp"></span><span class="hint">评委准不准、问她自己会不会改口、带着情绪会不会附和、说话像不像群友、提示词哪段有用</span></div>
+      <div class="card-b"><div class="hm" id="checksStat"></div><div id="checksMore" style="margin-top:12px"></div></div>
+    </div>
+    <div class="card c12" id="ledgerCard">
+      <div class="card-h"><h3><span data-i="search"></span>她查到的事实</h3><span class="sp"></span><span class="hint">查资料时记下的硬事实，过了有效期 / 被新消息取代就不再用；不对的可以删</span></div>
+      <div class="card-b"><ul class="rows scrollbox" id="ledgerList"><li class="empty">还没有</li></ul></div>
+    </div>
+    <div class="card c12" id="feedCard">
+      <div class="card-h"><h3><span data-i="bars"></span>她会去刷的话题</h3><span class="sp"></span><span class="hint" id="feedStat">从大家画像里的兴趣 / 在意整理的；分享后有人接会加分、冷场会减分；点 × 删掉</span></div>
+      <div class="card-b"><div class="chips" id="feedInts"></div><ul class="rows" id="feedCands" style="margin-top:10px"></ul></div>
     </div>
     <div class="card c12" id="agentCard">
       <div class="card-h"><h3><span data-i="search"></span>她查过什么</h3><span class="sp"></span><span class="hint" id="agentStat">回话前先想一想要不要查：每次查了几轮、多久、交了什么简报</span></div>
@@ -1149,7 +1187,7 @@ async function loadLearn(){
     :'<li class="empty">还没有词条（整理群聊时会把群梗、黑话自动加进来，也可以自己写）</li>';
   document.querySelectorAll("[data-lore]").forEach(b=>b.onclick=async()=>{const body={id:+b.dataset.lore};if(b.dataset.del){if(!confirm("删掉这条？"))return;body.delete=true}else body.status=b.dataset.st;
     try{const x=await api("/api/lore",body);toast(x.message||x.error);loadLearn()}catch(e){toast("出错了："+e.message)}});
-  loadPair();loadLabel();loadHumane();loadAgent();markEmpty();
+  loadPair();loadLabel();loadHumane();loadAgent();loadCalib();loadChecks();loadLedger();loadFeed();markEmpty();
   document.querySelectorAll("[data-fact]").forEach(b=>b.onclick=async()=>{const a=b.dataset.act;if(a==="delete"&&!confirm("删掉这条？"))return;
     try{const x=await api("/api/learned/fact",{id:+b.dataset.fact,delete:a==="delete",expire:a==="expire"});toast(x.message);loadLearn()}catch(e){toast("出错了："+e.message)}});
   document.querySelectorAll("[data-stk]").forEach(b=>b.onclick=async()=>{try{const x=await api("/api/learned/sticker",{id:+b.dataset.stk,status:b.dataset.st});toast(x.message);loadLearn()}catch(e){toast("出错了："+e.message)}});
@@ -1174,30 +1212,51 @@ async function loadPair(){try{const r=await api(`/api/pairs/next?gid=${LSEL}`);P
   document.querySelectorAll("[data-pick]").forEach(b=>b.onclick=async()=>{try{await api("/api/pairs/answer",{trace:PAIR.trace,a:PAIR.a,b:PAIR.b,sent:PAIR.sent,choice:+b.dataset.pick});loadPair()}catch(e){toast("出错了："+e.message)}});
 }catch(e){$("pairBox").innerHTML='<div class="small muted">没加载出来</div>'}}
 $("saveNorms").onclick=async()=>{try{const r=await api("/api/group/norms",{gid:LSEL,text:$("normText").value});toast(r.message)}catch(e){toast("出错了："+e.message)}};
-let LAB=null,LABN=0,LABBUSY=false,NBS=null;
+let LAB=null,LABN=0,LABBUSY=false,NBS=null,LABM="one",LHOW="",LBATCH=[];
 const pct=v=>v==null?"—":Math.round(v*100)+"%";
-/* 17.0：Y / N / S 快捷键 + 进度（小判断器两类各要 30 条） */
-async function loadLabel(){try{const r=await api(`/api/label/next?gid=${LSEL}`);LAB=r.moment;const s=r.stats;
-  if(NBS===null){try{NBS=(await api("/api/eval")).label_nb||{}}catch(e){NBS={}}}
-  $("labStat").textContent=s.n?`判了 ${s.n} 条 · 她和你一致 ${pct(s.agree)} · 她说的该说 ${pct(s.precision)} · 该说的她说了 ${pct(s.recall)}`:"你判的会直接用来调她什么时候开口（每晚重新拟合时权重最高）";
-  const n0=s.n0??NBS.n0,n1=s.n1??NBS.n1,need=30;      // 18.1 进度用现在判过的条数（以前是每晚数一次，判了也不动）
-  const prog=`<div class="lab-prog">
-    <div><div class="k"><span>这次判了</span><b class="num">${LABN} 条</b></div><div class="small muted">一共 ${s.n} 条 · 键盘 <span class="kbd">Y</span> 该说 <span class="kbd">N</span> 不该说 <span class="kbd">S</span> 看不出来</div></div>
-    ${n0!==undefined?`<div><div class="k"><span>小判断器要的“不该说”</span><b class="num">${Math.min(n0,need)} / ${need}</b></div><div class="bar" role="progressbar" aria-label="不该说的标注进度" aria-valuemin="0" aria-valuemax="${need}" aria-valuenow="${Math.min(n0,need)}"><span style="width:${Math.min(100,n0/need*100)}%"></span></div></div>
-    <div><div class="k"><span>“该说”</span><b class="num">${Math.min(n1,need)} / ${need}</b></div><div class="bar" role="progressbar" aria-label="该说的标注进度" aria-valuemin="0" aria-valuemax="${need}" aria-valuenow="${Math.min(n1,need)}"><span style="width:${Math.min(100,n1/need*100)}%"></span></div></div>`:""}
-  </div>${n0!==undefined?`<div class="small muted" style="margin:-6px 0 12px">${NBS.trained?`小判断器已经在用（留出准确率 ${Math.round((NBS.acc||0)*100)}%），每晚用新标注重新训练`:n0>=need&&n1>=need?"两类都够了，今晚整理时训练好，明天开始用":"两类各够 30 条后，当晚训练、第二天开始用"}</div>`:""}`;
+const LHOWS=["接住","回答","追问","接梗","纠错","补充","关心"];
+/* 20.0：三档（该接 / 可接可不接 / 不该插）+ 看不出来；一条条判或一屏 10 条；每条写清她当时是怎么决定的 */
+function labProg(s){const n0=s.n0??0,n1=s.n1??0,need=30,w0=s.w0||0,w1=s.w1||0;
+  $("labStat").textContent=s.n||s.n2?`判了 ${s.n+(s.n2||0)} 条（该接 ${n1} · 可接可不接 ${s.n2||0} · 不该插 ${n0}） · 她做的和你判的一致 ${pct(s.agree)} · 她说了的里该接的 ${pct(s.precision)} · 该接的她接了 ${pct(s.recall)}`:"还没判过：先展开上面的“怎么判”看一眼";
+  const bar=(v,lab)=>`<div><div class="k"><span>${lab}</span><b class="num">${Math.min(v,need)} / ${need}</b></div><div class="bar" role="progressbar" aria-label="${lab}" aria-valuemin="0" aria-valuemax="${need}" aria-valuenow="${Math.min(v,need)}"><span style="width:${Math.min(100,v/need*100)}%"></span></div></div>`;
+  return `<div class="lab-prog"><div><div class="k"><span>这次判了</span><b class="num">${LABN} 条</b></div><div class="small muted">键盘 <span class="kbd">Y</span> 该接 <span class="kbd">M</span> 可接可不接 <span class="kbd">N</span> 不该插 <span class="kbd">S</span> 看不出来 · <span class="kbd">1</span>~<span class="kbd">7</span> 选怎么接</div></div>
+    ${bar(n1+Math.floor(w1/2),"小判断器要的“该接”")}${bar(n0+Math.floor(w0/2),"小判断器要的“不该插”")}</div>
+    <div class="small muted" style="margin:-6px 0 12px">${NBS&&NBS.trained?`小判断器已经在用（留出准确率 ${Math.round((NBS.acc||0)*100)}%），每晚用新标注重新训练`:"两类各够 30 条后当晚训练、第二天开始用。程序自己推的弱标签（她说了没人接 → 不该插、接得很好 → 该接）每两条算一条"}${w0||w1?`（现在有弱标签 ${w1} / ${w0}）`:""}</div>`}
+function labCtx(m){return `${m.context.length?`<div class="lab-q">${m.context.map(esc).join("<br>")}</div>`:""}
+    <div class="lab-did">最后一句之后：<b>${esc(m.did)}</b></div>
+    <details class="lab-steps-d"><summary class="small">她当时是怎么决定的</summary><div class="lab-steps">${(m.steps||[]).map(esc).join("<br>")}</div></details>`}
+function howChips(cur,attr){return `<div class="lab-how"><span class="small muted">该接的话，怎么接（可不选）：</span>${LHOWS.map((h,i)=>`<span class="tag ${cur===h?"on":""}" ${attr}="${h}">${i+1} ${h}</span>`).join("")}</div>`}
+async function loadLabel(){if(NBS===null){try{NBS=(await api("/api/eval")).label_nb||{}}catch(e){NBS={}}}
+  if(LABM==="batch")return loadBatch();
+  try{const r=await api(`/api/label/next?gid=${LSEL}`);LAB=r.moment;LHOW="";const prog=labProg(r.stats);
   if(!LAB){$("labBox").innerHTML=prog+'<div class="small muted">暂时没有要判的（群里聊一阵子就有了）</div>';return}
-  $("labBox").innerHTML=prog+`${LAB.context.length?`<div class="lab-q">${LAB.context.map(esc).join("<br>")}</div>`:""}
-    <div class="lab-did">这之后：<b>${esc(LAB.did)}</b> <span class="muted small">（想说的程度 ${LAB.p}，门槛 ${LAB.thr}）</span></div>
-    <div class="lab-acts"><button class="btn" data-lab="1"><span class="kbd">Y</span>这时候该说</button><button class="btn" data-lab="0"><span class="kbd">N</span>这时候不该说</button><button class="btn ghost" data-lab="skip"><span class="kbd">S</span>看不出来</button></div>`;
+  $("labBox").innerHTML=prog+labCtx(LAB)+howChips(LHOW,"data-how")+`<div class="lab-acts"><button class="btn" data-lab="1"><span class="kbd">Y</span>该接</button><button class="btn ghost" data-lab="2"><span class="kbd">M</span>可接可不接</button><button class="btn" data-lab="0"><span class="kbd">N</span>不该插</button><button class="btn ghost" data-lab="skip"><span class="kbd">S</span>看不出来</button></div>`;
   document.querySelectorAll("[data-lab]").forEach(b=>b.onclick=()=>answerLabel(b.dataset.lab));
+  document.querySelectorAll("[data-how]").forEach(b=>b.onclick=()=>pickHow(b.dataset.how));
 }catch(e){$("labBox").innerHTML='<div class="small muted">没加载出来</div>'}}
+function pickHow(h){LHOW=LHOW===h?"":h;document.querySelectorAll("[data-how]").forEach(b=>b.classList.toggle("on",b.dataset.how===LHOW))}
 async function answerLabel(v){if(!LAB||LABBUSY)return;LABBUSY=true;
-  try{await api("/api/label/answer",{id:LAB.id,label:v});if(v!=="skip")LABN++;toast(v==="1"?"记下：该说":v==="0"?"记下：不该说":"跳过了");await loadLabel()}
+  try{await api("/api/label/answer",{id:LAB.id,label:v,how:v==="1"?LHOW:""});if(v!=="skip")LABN++;
+    toast(v==="1"?"记下：该接"+(LHOW?"（"+LHOW+"）":""):v==="2"?"记下：可接可不接":v==="0"?"记下：不该插":"跳过了");await loadLabel()}
   catch(e){toast("出错了："+e.message)}finally{LABBUSY=false}}
-document.addEventListener("keydown",e=>{if(cur!=="learn"||!LAB||e.ctrlKey||e.metaKey||e.altKey)return;
+async function loadBatch(){try{const r=await api(`/api/label/batch?gid=${LSEL}&n=10`);LBATCH=r.items.map(m=>({...m,lab:null,how:""}));const prog=labProg(r.stats);
+  if(!LBATCH.length){$("labBox").innerHTML=prog+'<div class="small muted">暂时没有要判的（群里聊一阵子就有了）</div>';return}
+  $("labBox").innerHTML=prog+LBATCH.map((m,i)=>`<div class="lab-item" data-bi="${i}">${labCtx(m)}${howChips("",`data-bh="${i}" data-h`)}
+    <div class="lab-acts"><button class="btn" data-bl="1">该接</button><button class="btn ghost" data-bl="2">可接可不接</button><button class="btn" data-bl="0">不该插</button><button class="btn ghost" data-bl="skip">看不出来</button></div></div>`).join("")
+    +`<div class="lab-acts"><button class="btn" id="labSubmit">提交判了的（<span id="labDone">0</span> / ${LBATCH.length}）</button><span class="small muted">没判的留着下次出</span></div>`;
+  document.querySelectorAll(".lab-item").forEach(el=>{const i=+el.dataset.bi;
+    el.querySelectorAll("[data-bl]").forEach(b=>b.onclick=()=>{LBATCH[i].lab=b.dataset.bl;el.querySelectorAll("[data-bl]").forEach(x=>x.classList.toggle("on",x===b));$("labDone").textContent=LBATCH.filter(x=>x.lab!==null).length});
+    el.querySelectorAll("[data-h]").forEach(b=>b.onclick=()=>{const h=b.dataset.h;LBATCH[i].how=LBATCH[i].how===h?"":h;el.querySelectorAll("[data-h]").forEach(x=>x.classList.toggle("on",x.dataset.h===LBATCH[i].how))})});
+  $("labSubmit").onclick=submitBatch;
+}catch(e){$("labBox").innerHTML='<div class="small muted">没加载出来</div>'}}
+async function submitBatch(){const items=LBATCH.filter(x=>x.lab!==null).map(x=>({id:x.id,label:x.lab,how:x.lab==="1"?x.how:""}));
+  if(!items.length){toast("还没判");return}
+  try{const r=await api("/api/label/answers",{items});LABN+=items.filter(x=>x.label!=="skip").length;toast(`记下了 ${r.done} 条`);await loadBatch()}catch(e){toast("出错了："+e.message)}}
+document.querySelectorAll("#labMode [data-m]").forEach(b=>b.onclick=()=>{LABM=b.dataset.m;document.querySelectorAll("#labMode [data-m]").forEach(x=>x.classList.toggle("on",x===b));loadLabel()});
+document.addEventListener("keydown",e=>{if(cur!=="learn"||LABM!=="one"||!LAB||e.ctrlKey||e.metaKey||e.altKey)return;
   const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;if($("drawer").classList.contains("on"))return;
-  const k=e.key.toLowerCase(),v=k==="y"?"1":k==="n"?"0":k==="s"?"skip":null;if(v===null)return;e.preventDefault();answerLabel(v)});
+  const k=e.key.toLowerCase();if(/^[1-7]$/.test(k)){e.preventDefault();pickHow(LHOWS[+k-1]);return}
+  const v=k==="y"?"1":k==="m"?"2":k==="n"?"0":k==="s"?"skip":null;if(v===null)return;e.preventDefault();answerLabel(v)});
 
 /* ============ 性格开关 ============ */
 const KGROUPS=[["说话多少",["talkativeness","max_per_10min","max_bubbles","cooldown_seconds","unprompted_per_day"]],
@@ -1210,9 +1269,10 @@ const KGROUPS=[["说话多少",["talkativeness","max_per_10min","max_bubbles","c
   ["懂人（16.0）",["rel_experience","absent_hours","state_judge"]],
   ["更像人（19.1）",["bids","bid_hours","no_repeat_today","no_monologue","lonely_hours","self_score","self_score_min","person_spec"]],
   ["B 站视频和天气",["watch_videos","video_frames","weather","weather_care"]],
+  ["20.x 说话时机、守住人格、联网整合",["typing_abort","drift_anchor","ablate_rate","number_check","ledger","feed","feed_min","rel_tone"]],
   ["每周评测",["weekly_eval"]]];
 let K={},KG="all";
-const kfmt=(it,v)=>it.kind==="bool"?(v?"开":"关"):it.kind==="str"?v:/chance|talkativeness|typo_rate|explore_rate/.test(it.key)?Math.round(v*100)+"%":/factor|boost|pace/.test(it.key)?"×"+(+v).toFixed(2).replace(/\.?0+$/,""):String(v);
+const kfmt=(it,v)=>it.kind==="bool"?(v?"开":"关"):it.kind==="str"?v:/chance|talkativeness|typo_rate|explore_rate|ablate_rate/.test(it.key)?Math.round(v*100)+"%":/factor|boost|pace/.test(it.key)?"×"+(+v).toFixed(2).replace(/\.?0+$/,""):String(v);
 async function loadEval(){let E;try{E=await api("/api/eval")}catch(e){return}
   const H=(E.hist||[]).slice(-12);
   $("evHist").innerHTML=H.length?`<div class="small muted" style="margin-bottom:6px">每周平均分（淡色的是用旧人设时评的）${E.running?" · 正在评…":""}</div>`+
@@ -1280,10 +1340,52 @@ async function loadHumane(){let h;try{h=await api(`/api/humane?gid=${LSEL}`)}cat
     ["搭话接住",pc(h.bid_rate),h.bids?`${h.bids_caught} / ${h.bids} 次，目标 ≥ 80%`:"这周还没人接她的话"],["当天说重复",String(h.repeats),"同一天同样的意思，目标 0"],
     ["没人理还追发",String(h.monologues),"说完 30 分钟没人接又说，目标 0"]]
     .map(([a,b,c])=>`<div class="stat"><div class="l">${a}</div><div class="v">${esc(b)}</div><div class="d">${esc(c)}</div></div>`).join("")}
+/* 20.1 评委校准：给她的话打分 */
+let CAL=[];
+async function loadCalib(){let r;try{r=await api(`/api/calib/next?gid=${LSEL}`)}catch(e){return}
+  CAL=r.items||[];const c=r.calib||{};
+  $("calibStat").textContent=`你打了 ${r.n} 条`+(c.rho!=null?` · 评委和你的一致程度 ${c.rho}（${c.trusted?"可信":"还不可信，要 ≥ 0.6"}）`:(r.n<10?` · 再打 ${10-r.n} 条就能校准评委`:" · 下周一评测时校准"));
+  $("calibBox").innerHTML=CAL.length?CAL.map((x,i)=>`<div class="lab-item" data-ci="${i}"><div class="lab-q">${x.context.map(esc).join("<br>")}</div>
+    <div class="lab-did">她说：<b>${esc(x.said)}</b></div><div class="lab-acts">${[1,2,3,4,5].map(v=>`<button class="btn ${v>=4?"":"ghost"}" data-cs="${v}">${v}</button>`).join("")}</div></div>`).join("")
+    :'<div class="small muted">这两周她说过的话都打过了</div>';
+  document.querySelectorAll("[data-ci]").forEach(el=>el.querySelectorAll("[data-cs]").forEach(b=>b.onclick=()=>calibAnswer(+el.dataset.ci,+b.dataset.cs)))}
+async function calibAnswer(i,v){const x=CAL[i];if(!x)return;try{await api("/api/calib/answer",{trace:x.trace,score:v});toast(`记下：${v} 分`);await loadCalib()}catch(e){toast("出错了："+e.message)}}
+/* Shift + 1~5 给第一条打分（不和上面“该不该接话”的 1~7 冲突） */
+document.addEventListener("keydown",e=>{if(cur!=="learn"||!CAL.length||!e.shiftKey||e.ctrlKey||e.metaKey||e.altKey)return;
+  const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
+  const m=/^Digit([1-5])$/.exec(e.code);if(m){e.preventDefault();calibAnswer(0,+m[1])}});
+/* 20.1 每周额外检查 */
+async function loadChecks(){let r;try{r=await api(`/api/checks?gid=${LSEL}`)}catch(e){return}
+  const pc=v=>v==null?"—":Math.round(v*100)+"%";const c=r.calib||{},qa=r.qa||{},pr=r.pairs||{},nc=r.numcheck||{};
+  $("checksStat").innerHTML=[["评委和你一致",c.rho==null?"—":String(c.rho),c.rho==null?(c.why||"先在上面打 10 条分"):(c.trusted?"可信（≥ 0.6）":"还不可信：周评测的分数先别当真")],
+    ["问她自己不改口",pc(qa.consistent),qa.n?`${qa.n} 个问题，和上周比改口 ${qa.changed} 次（目标 ≥ 90%、0 次）`:"每周一问一次"],
+    ["带情绪就附和",pc(pr.softer_rate),pr.n?`${pr.n} 对，第二次立场变软的比例（目标 ≤ 10%）`:"每周一测一次"],
+    ["转述的数字对不上",String(nc.bad||0),`这一周查资料后说的话里，数字和简报对不上的次数（${nc.fixed||0} 次改过来了）`]]
+    .map(([a,b,d])=>`<div class="stat"><div class="l">${a}</div><div class="v">${esc(b)}</div><div class="d">${esc(d)}</div></div>`).join("");
+  const st=r.style||{},ab=r.ablate||{};let h="";
+  if(st.ok)h+=`<div class="field"><label>说话像不像群友 <span style="font-weight:400">· 她和 ${st.n_people} 个群友比（z 分数，超过 ±2 标黄）</span></label><div class="chips">${Object.values(st.items).map(x=>`<span class="tag ${Math.abs(x.z)>2?"warn":""}">${esc(x.name)} 她 ${x.her} / 大家 ${x.people}（z ${x.z}）</span>`).join("")}</div></div>`;
+  else h+=`<div class="small muted">${esc(st.why||"")}</div>`;
+  if(ab.mods&&!ab.mods.some(m=>m.n))h+=`<div class="small muted" style="margin-top:10px">提示词哪段有用：还没有数据（她主动说话时有 ${Math.round((r.rate||0)*100)}% 的概率随机去掉一段，攒够每段 30 次以后出结论）</div>`;
+  else if(ab.mods)h+=`<div class="field" style="margin-top:10px"><label>提示词哪段有用 <span style="font-weight:400">· 她主动说话时有 ${Math.round((r.rate||0)*100)}% 的概率随机去掉一段，比被接率（不去掉时 ${pc(ab.base&&ab.base.rate)}，${(ab.base&&ab.base.n)||0} 次）</span></label>
+    <ul class="rows">${ab.mods.map(m=>`<li><span>${esc(m.name)}</span><span class="small muted">去掉时 ${m.n} 次 · 被接 ${pc(m.rate)}${m.chars?` · 约 ${m.chars} 字`:""}</span><span class="tri tag ${m.verdict==="帮倒忙"?"warn":m.verdict==="有用"?"ok":""}">${esc(m.verdict)}</span></li>`).join("")}</ul></div>`;
+  if((pr.items||[]).length)h+=`<details style="margin-top:10px"><summary class="small">情绪测试的例子</summary><ul class="rows">${pr.items.slice(0,6).map(x=>`<li><span class="small">${esc(x.claim)}：平常「${esc(x.a)}」→ 带情绪「${esc(x.b)}」${x.softer?" ⚠ 变软":""}</span></li>`).join("")}</ul></details>`;
+  if((qa.items||[]).length)h+=`<details style="margin-top:6px"><summary class="small">问她自己的问题</summary><ul class="rows">${qa.items.map(x=>`<li><span class="small">${esc(x.q)} → 「${esc(x.a)}」 ${esc(x.consistent)}${x.changed?" · 改口了":""}</span></li>`).join("")}</ul></details>`;
+  $("checksMore").innerHTML=h}
+/* 20.2 账本、兴趣表 */
+async function loadLedger(){let r;try{r=await api(`/api/ledger?gid=${LSEL}`)}catch(e){return}
+  const it=r.items||[];$("ledgerList").innerHTML=it.length?it.map(x=>`<li><span>${esc(x.entity)} · ${esc(x.attr)}：<b>${esc(x.value)}</b></span>
+    <span class="small muted">${esc(x.kind)} · ${esc(x.as_of||"")}${x.source_site?" · "+esc(x.source_site):""}${x.valid?"":x.superseded_by?" · 已被新的取代":" · 过期了"}</span>
+    <button class="btn ghost tri" data-ld="${x.id}" aria-label="删掉">×</button></li>`).join(""):'<li class="empty">还没有（查资料时记下的）</li>';
+  document.querySelectorAll("[data-ld]").forEach(b=>b.onclick=async()=>{try{await api("/api/ledger/delete",{id:+b.dataset.ld});loadLedger()}catch(e){toast("出错了："+e.message)}})}
+async function loadFeed(){let r;try{r=await api(`/api/feed?gid=${LSEL}`)}catch(e){return}
+  $("feedInts").innerHTML=(r.interests||[]).map(x=>`<span class="tag" title="${esc((x.who||[]).join("、"))}">${esc(x.topic)} <b>${x.w}</b> <a href="#" data-fr="${esc(x.topic)}" aria-label="删掉">×</a></span>`).join("")||'<span class="small muted">还没整理（每晚整理一次）</span>';
+  $("feedCands").innerHTML=(r.cands||[]).map(x=>`<li><span>${esc(x.title)}</span><span class="small muted">${esc(x.topic)} · ${esc(x.date)} · 分 ${x.score}${x.novelty<1?" · 后续":""}</span></li>`).join("")||'<li class="empty">候选池是空的（每 3 小时在后台刷一次）</li>';
+  $("feedStat").textContent=r.last?`上次刷：${new Date(r.last*1000).toLocaleString()}`:"还没刷过";
+  document.querySelectorAll("[data-fr]").forEach(a=>a.onclick=async e=>{e.preventDefault();try{await api("/api/feed/remove",{gid:LSEL,topic:a.dataset.fr});loadFeed()}catch(err){toast("出错了："+err.message)}})}
 /* 19.0 她查过什么 */
 async function loadAgent(){let a;try{a=await api(`/api/agent?gid=${LSEL}`)}catch(e){return}
   $("agentStat").textContent=(a.enabled?(a.on?"开着":"开着，但现在的模型不支持工具调用（退回只搜一次）"):"没开（性格开关 → 联网 → “先想一想再回”）")
-    +` · 今天查了 ${a.today} / ${a.per_day} 次 · Tavily 这个月 ${a.tavily_used} 次${a.tavily_out?"（免费额度用完了，改用免费搜索）":""}`
+    +` · 今天查了 ${a.today} / ${a.per_day} 次 · ${a.ds?`DeepSeek 搜索这个月 ${a.ds.search} 次、读网页 ${a.ds.fetch} 次（约 ¥${((a.ds.search+a.ds.fetch)*0.005).toFixed(2)}） · `:""}Tavily 这个月 ${a.tavily_used} 次${a.tavily_out?"（免费额度用完了，改用免费搜索）":""}`
     +((a.reader||[]).length?` · 读网页：${a.reader.join(" → ")}`:"");
   const DEP={deep:"深查",quick:"快查"};
   $("agentList").innerHTML=(a.logs||[]).map(x=>{const b=x.brief||{};const pts=(b.answer_points||[]).slice(0,4);

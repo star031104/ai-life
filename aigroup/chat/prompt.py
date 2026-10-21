@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+import random
 import time
 from datetime import datetime
 
@@ -203,7 +204,7 @@ class PromptMixin:
                 st.name = ""
         return st.name or str(gid)
 
-    def recall_block(self, gid: int, query: str) -> str:
+    def recall_block(self, gid: int, query: str, focus: list | None = None) -> str:
         if not self.gk(gid).get("memory_recall", True) or not query.strip():
             return ""
         tmap = self._tmap.get(gid) or {}
@@ -212,10 +213,10 @@ class PromptMixin:
             found = self.memory.recall(gid, query, skip_after_id=first)
         except Exception:  # noqa: BLE001
             return ""
-        return self.memory.prompt_block(found, self.names(gid))
+        return self.memory.prompt_block(found, self.names(gid), focus)
 
     def situation_block(self, gid: int, text: str, *, mentioned: bool, ign: int, why: str, flags: set | None,
-                        now, focus: list | None = None) -> str:
+                        now, focus: list | None = None, drop: str = "") -> str:
         """14.0 这一轮用得上的情境签名（if-then）和 1~2 段对话示例，放在提示词最后、离生成最近的地方；
         15.0 加上：在聊的这几个人今天的状态（短期的“心智推测”），和她之前憋着没说的话（Inner Thoughts 的想法池）。"""
         p = self.brain.persona
@@ -224,41 +225,94 @@ class PromptMixin:
         f = detect_flags(text, mentioned=mentioned, pestered=bool(flags and "pestered" in flags), ignored=ign,
                          hour=now.hour, why=why, mood=md) | set(flags or ())
         out = []
-        ps = self.people_today(gid, focus or []) if hasattr(self, "people_today") else ""
+        ps = self.people_today(gid, focus or []) if hasattr(self, "people_today") and drop != "people_today" else ""
         if ps:
             out.append(ps)
             if "状态不太好" in ps:
                 f.add("sad")
-        ab = self.absent_block(gid, focus or []) if hasattr(self, "absent_block") else ""      # 16.0 谁刚回来、可能没看到
+        ab = self.absent_block(gid, focus or []) if hasattr(self, "absent_block") and drop != "absent" else ""      # 16.0 谁刚回来、可能没看到
         if ab:
             out.append(ab)
-        rx = self.rel_exp_block(gid, focus or []) if hasattr(self, "rel_exp_block") else ""    # 16.0 和他相处的经验
+        rx = self.rel_exp_block(gid, focus or []) if hasattr(self, "rel_exp_block") and drop != "rel_exp" else ""    # 16.0 和他相处的经验
         if rx:
             out.append(rx)
-        sp = self.spec_block(gid, focus or []) if hasattr(self, "spec_block") else ""          # 19.1 相处说明书
+        sp = self.spec_block(gid, focus or []) if hasattr(self, "spec_block") and drop != "spec" else ""          # 19.1 相处说明书
         if sp:
             out.append(sp)
         t = getattr(p, "traits", None)
         if not hasattr(self, "_last_sigs") or not isinstance(self._last_sigs, dict):
             self._last_sigs = {}
         self._last_sigs[gid] = []
-        if t is not None and t.signatures and self.gk(gid).get("signatures", True):
+        if t is not None and t.signatures and self.gk(gid).get("signatures", True) and drop != "signatures":
             sigs = t.pick(text, f, int(self.gk(gid).get("signature_k", 3) or 3))
             if sigs:
                 out.append("# 这种时候的你（你一贯是这样的）\n" + "\n".join(s.render() for s in sigs))
                 self._last_sigs[gid] = [s.id for s in sigs]
-        held = self.held_thoughts(gid, text, idle=("idle" in f)) if hasattr(self, "held_thoughts") else []
+        from aigroup.traits import DEFAULT_RULES
+        have = {fl for sg in (t.signatures if t is not None else []) for fl in sg.flags}
+        dr = [DEFAULT_RULES[k] for k in ("corrected", "offended") if k in f and k not in have]
+        if dr:                                               # 20.1 人格文件没写这种情境：用默认做法（道歉分两种）
+            out.append("# 这种时候\n" + "\n".join(f"- {x}" for x in dr))
+        held = (self.held_thoughts(gid, text, idle=("idle" in f)) if hasattr(self, "held_thoughts") and drop != "held"
+                else [])
         if held:
             out.append("# 你之前想说、还没说出口的（现在合适就说，不合适就继续憋着，别硬塞）\n"
                        + "\n".join(f"- {h}" for h in held))
-        if p.examples and self.gk(gid).get("persona_examples", True):
+        if p.examples and self.gk(gid).get("persona_examples", True) and drop != "examples":
             scored = sorted(((-sum(1 for w in e.keywords if w and w in text), i, e) for i, e in enumerate(p.examples)),
                             key=lambda x: (x[0], x[1]))
             exs = [e for sc, _, e in scored if sc < 0][:int(self.gk(gid).get("example_k", 2) or 2)]
             if exs:
                 out.append("# 你平时这种时候会这样说（学口吻和分寸，别照抄）\n" + "\n\n".join(
                     "\n".join(f"{who}：{txt.replace('|||', ' / ')}" for who, txt in e.turns) for e in exs))
+        self._drift = getattr(self, "_drift", {}) if isinstance(getattr(self, "_drift", None), dict) else {}
+        self._drift[gid] = self.drift_kind(f) if self.gk(gid).get("drift_anchor", True) else ""
         return "\n\n".join(out)
+
+    @staticmethod
+    def drift_kind(flags: set) -> str:
+        """20.1 这一轮是不是最容易“漂走”的场景（Anthropic Assistant Axis 2026）：问她自己 / 对方情绪低 / 咨询哲学。"""
+        from aigroup.traits import DRIFT_FLAGS
+        return next((k for k in DRIFT_FLAGS if k in flags), "")
+
+    DRIFT_NOTE = {
+        "self_talk": ("有人在问你自己", "别突然变成一本正经讲 AI 原理、讲“作为一个 AI 我……”的样子，也别编一段深情独白；"
+                      "就用你平时的口气答，可以自嘲、可以反问"),
+        "sad": ("有人状态不好", "别变成心理咨询师（“我理解你的感受”“你可以试试深呼吸”这种），也别一下子温柔得不像你；"
+                "用你自己的方式陪一下，短一点"),
+        "deep_talk": ("在聊人生 / 该不该这种大问题", "别变成讲道理的导师、别列一二三；说你自己的真实看法，一两句，拿不准就说拿不准"),
+    }
+
+    def drift_anchor(self, kind: str) -> str:
+        """最容易漂走的场景：在提示词最后再提一遍你是谁（核心 + 这种时候不会怎么说）。平时不加，免得稀释。"""
+        if not kind or kind not in self.DRIFT_NOTE:
+            return ""
+        p = self.brain.persona
+        t = getattr(p, "traits", None)
+        core = ""
+        if t is not None:
+            try:
+                core = "\n".join(t.render_core().splitlines()[:3])
+            except Exception:  # noqa: BLE001
+                core = ""
+        nots = []
+        if t is not None:
+            nots = [s.not_ for s in t.signatures if s.not_ and kind in s.flags][:2]
+        what, how = self.DRIFT_NOTE[kind]
+        return ("# 先别忘了你是谁（" + what + "的时候，最容易说着说着变成别人）\n"
+                + (core + "\n" if core else f"你是{p.name}。\n") + how
+                + ("。你这种时候不会：" + "；".join(nots) if nots else "") + "。")
+
+    ABLATABLE = ("recall", "lore", "known", "today", "people_today", "absent", "rel_exp", "spec", "signatures", "held",
+                 "examples")
+
+    def pick_ablation(self, gid: int, mentioned: bool, why: str | None) -> str:
+        """20.1 模块消融：主动开口时以 ablate_rate 的概率随机去掉一段（安全、隐私、人设核心、群规不参与）。"""
+        import random as _r
+        rate = float(self.gk(gid).get("ablate_rate", 0.1) or 0)
+        if mentioned or why or rate <= 0 or _r.random() >= rate:
+            return ""
+        return _r.choice(self.ABLATABLE)
 
     def anchor(self) -> str:
         """放在最末尾的一句人设锚点（对抗格式任务带来的人设漂移；参考 Persona Drift / Author's Note depth 0）。"""
@@ -346,6 +400,7 @@ class PromptMixin:
 - 别重复你自己最近在群里说过的话和梗；别每次都用同一种开头；别每句都把问题抛回给别人（“你呢？”）。
 - 接话前先弄清那句话是什么意思、在说谁。省略的、可能是在说上一条或者说别人的（比如有人说“这是人类”，多半是在说上一条是真人发的），
   按最平常的意思理解；拿不准就别接，或者直接问一句“你说哪个”，别往自己身上套，别脑补。
+  （20.0）话没说完、指代不清、图看不清、问题缺条件时，像真人一样短短反问一句（“哪个？”“然后呢”“你说的是上周那场？”）就是好回答，别硬猜着答一大段。
 - 群里的梗和口头禅（“何意味”“这集神了”这种）只在你确定它的意思、场合也和群友平时用的一样时才用；别为了显得合群硬塞，
   更别拿来调侃一句正常的提问。
 - 有人连着逗你、绕圈子、想让你说你不想说的话：回得越来越短，几个字就行，也可以不理；同一个问题问过一次对方不正面答，就别再追问。
@@ -406,8 +461,12 @@ class PromptMixin:
         batch = [stick, learned, likes, "# 群里的人\n" + (self.roster(gid, focus) or "（还不熟悉）")]
         system = "\n\n".join(x for x in static + daily + batch if x)
         # ---- 每次都变的：放 user ----
-        recall = self.recall_block(gid, query or hist[-400:])
-        lore = self.lore.prompt_block(gid, self._recent_text(gid)) if getattr(self, "lore", None) else ""
+        drop = self.pick_ablation(gid, mentioned, why)
+        if not isinstance(getattr(self, "_ablated", None), dict):
+            self._ablated = {}
+        self._ablated[gid] = drop
+        recall = self.recall_block(gid, query or hist[-400:], focus) if drop != "recall" else ""
+        lore = self.lore.prompt_block(gid, self._recent_text(gid)) if getattr(self, "lore", None) and drop != "lore" else ""
         mood = self.mood.describe(gid) if getattr(self, "mood", None) else ""
         state = [f"现在是 {now:%H:%M}，{period_of_day(now.hour)}。{b.mood}"]
         if mood:
@@ -423,7 +482,8 @@ class PromptMixin:
         if ign >= 2:
             state.append(f"你刚才主动说的 {ign} 句都没人接：别再硬聊，想说也短一点、换个话题，或者干脆不说。")
         situ = self.situation_block(gid, query or self._recent_text(gid), mentioned=mentioned, ign=ign, why=why or "",
-                                    flags=flags, now=now, focus=focus)
+                                    flags=flags, now=now, focus=focus, drop=drop)
+        drift = self.drift_anchor((getattr(self, "_drift", {}) or {}).get(gid, ""))
         skip = '"act": "skip"' if plan else "[跳过]"
         if why:
             pass
@@ -436,14 +496,19 @@ class PromptMixin:
         if note:
             why = note + why
         tail = "按上面的格式只输出 JSON。" if plan else "只输出你要发的话。"
-        known = kn.prompt_block(gid, self._recent_text(gid)) if kn is not None and self.g.get("remember_web", True) else ""
+        known = (kn.prompt_block(gid, self._recent_text(gid)) if kn is not None and self.g.get("remember_web", True)
+                 and drop != "known" else "")
         vids = self.videos_block(gid, query=query or self._recent_text(gid)) if hasattr(self, "videos_block") else ""
-        today = self.today_block(gid) if hasattr(self, "today_block") else ""       # 19.1 今天说过的（聊天记录里看不到的）
+        today = self.today_block(gid) if hasattr(self, "today_block") and drop != "today" else ""   # 19.1 今天说过的
+        if random.random() < 0.1:
+            from aigroup.eval.ablate import note_lengths
+            note_lengths(self.db, {"recall": recall, "lore": lore, "known": known, "today": today})
         user = "\n\n".join(x for x in [
             recall, lore, known, vids, web, today,
             f"# 最近的群聊记录（“你”是你自己）\n{hist}",
             "# 此刻\n" + "\n".join(state),
             situ,
+            drift,
             self.anchor(),
             f"（系统：{why}。{tail}）",
         ] if x)

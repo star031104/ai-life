@@ -198,6 +198,8 @@ class Memory:
             db.conn.execute("ALTER TABLE qq_facts ADD COLUMN source TEXT NOT NULL DEFAULT ''")
         if "evidence" not in cols:               # 16.0 这件事有几次独立的证据；“你猜的”要 ≥2 次才拿来用
             db.conn.execute("ALTER TABLE qq_facts ADD COLUMN evidence INTEGER NOT NULL DEFAULT 1")
+        if "heard_by" not in cols:               # 20.2 这件事被说出来的时候谁在（那条消息前 30 分钟到后 2 小时说过话的人）
+            db.conn.execute("ALTER TABLE qq_facts ADD COLUMN heard_by TEXT NOT NULL DEFAULT ''")
         db.conn.commit()
         self._idx: dict[int, tuple] = {}         # gid → (建索引时的最大消息 id, 行, BM25)；每 200 条新消息重建一次
 
@@ -226,12 +228,59 @@ class Memory:
             self.db.conn.execute("UPDATE qq_facts SET t_invalid=? WHERE id=? AND group_id=? AND (t_invalid IS NULL OR t_invalid>?)",
                                  (now, int(rid), gid, now))
         cur = self.db.conn.execute(
-            "INSERT INTO qq_facts(group_id, speaker_id, subject_id, text, kind, msg_id, t_valid, t_invalid, created, source) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)", (gid, speaker, subject, text, kind if kind in ("fact", "event", "plan", "opinion")
-                                             else "fact", msg_id, now, until if until and until > now else None, now,
-                                             source if source in ("self", "other", "guess") else ""))
+            "INSERT INTO qq_facts(group_id, speaker_id, subject_id, text, kind, msg_id, t_valid, t_invalid, created, source, "
+            "heard_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (gid, speaker, subject, text, kind if kind in ("fact", "event", "plan", "opinion") else "fact", msg_id, now,
+             until if until and until > now else None, now, source if source in ("self", "other", "guess") else "",
+             ",".join(str(u) for u in self.present(gid, msg_id))))
         self.db.conn.commit()
         return int(cur.lastrowid)
+
+    # ---------------- 20.2 谁在场 ----------------
+    @staticmethod
+    def presence_note(f: dict, names: dict | None, focus: list | None) -> str:
+        """20.2 在聊的人当时不在（不是说这件事的人、也不在 heard_by 里）：提醒她别默认他知道。"""
+        hb = str(f.get("heard_by") or "")
+        if not hb or not focus:
+            return ""
+        heard = {int(x) for x in hb.split(",") if x.strip().lstrip("-").isdigit()}
+        miss = []
+        for u in focus:
+            try:
+                u = int(u)
+            except (TypeError, ValueError):
+                continue
+            if u in heard or u == f.get("speaker_id") or u == f.get("subject_id"):
+                continue
+            nm = (names or {}).get(str(u))
+            if nm:
+                miss.append(nm)
+        if not miss:
+            return ""
+        return f"（{'、'.join(miss[:2])}当时不在，可能不知道：提的时候说“上次谁说……”，别当他知道）"
+
+    def present(self, gid: int, msg_id: int | None, before: float = 1800, after: float = 7200) -> list[int]:
+        """那条消息前 30 分钟到后 2 小时在群里说过话的人（微信、QQ 都没有“已读”，用说话近似；一句没说的当“可能没看到”）。"""
+        if not msg_id:
+            return []
+        r = self.db.conn.execute("SELECT ts FROM qq_group_messages WHERE id=?", (msg_id,)).fetchone()
+        if not r:
+            return []
+        t = float(r["ts"])
+        rows = self.db.conn.execute("SELECT DISTINCT user_id FROM qq_group_messages WHERE group_id=? AND role='user' "
+                                    "AND ts BETWEEN ? AND ?", (gid, t - before, t + after)).fetchall()
+        return sorted(int(x["user_id"]) for x in rows if x["user_id"])
+
+    def refresh_presence(self, days: float = 3) -> int:
+        """每晚：最近几天的事实重新算一次在场的人（记下来的时候“之后 2 小时”还没到）。"""
+        n = 0
+        for r in self.db.conn.execute("SELECT id, group_id, msg_id FROM qq_facts WHERE created>? AND msg_id IS NOT NULL",
+                                      (time.time() - days * 86400,)).fetchall():
+            hb = ",".join(str(u) for u in self.present(r["group_id"], r["msg_id"]))
+            self.db.conn.execute("UPDATE qq_facts SET heard_by=? WHERE id=?", (hb, r["id"]))
+            n += 1
+        self.db.conn.commit()
+        return n
 
     def facts(self, gid: int, subject: int | None = None, limit: int = 40, valid_only: bool = True) -> list[dict]:
         sql = "SELECT * FROM qq_facts WHERE group_id=?"
@@ -347,7 +396,7 @@ class Memory:
         self._idx[gid] = (top, rows, bm)
         return rows, bm
 
-    def prompt_block(self, found: dict, names: dict | None = None) -> str:
+    def prompt_block(self, found: dict, names: dict | None = None, focus: list | None = None) -> str:
         from aigroup.core.safety import clean_member_text, quote_member
         lines = []
         for f in found.get("facts") or []:
@@ -364,7 +413,7 @@ class Memory:
             fuzzy = ""
             if f.get("created") and self.strength(f["created"], f.get("hits") or 0, time.time()) < 0.35:
                 fuzzy = "（记得不太清了：说的时候带个“好像”“我记得是”）"     # 20.0 记忆会淡：太久没想起的别说得斩钉截铁
-            lines.append(f"- （{day}）{who}{clean_member_text(f['text'], 120)}{src}{exp}{fuzzy}")
+            lines.append(f"- （{day}）{who}{clean_member_text(f['text'], 120)}{src}{exp}{fuzzy}{self.presence_note(f, names, focus)}")
         for m in found.get("messages") or []:
             day = datetime.fromtimestamp(m["ts"], self.tz).strftime("%m-%d %H:%M")
             who = "你" if m["role"] == "assistant" else m["name"]

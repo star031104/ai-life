@@ -33,6 +33,61 @@ tlog = logging.getLogger("aigroup.text.group")       # 13.0 带聊天正文的�
 SOFT_BLOCK = 6.0          # 5.0 罚分到这么多：没被叫到就不说了；被叫到就让她重写一次
 
 
+
+# 20.0 拿不准时问出来的动作：名字 → (什么时候选, 对应 say / wait / skip, 给她的一句做法)
+JUDGE_ACTS = {
+    "不说": ("跟你无关、别人在互相聊、插进去突兀", "skip", ""),
+    "等": ("话还没说完、在等别人回", "wait", ""),
+    "接住": ("有人在接你的话、损你、提到你", "say", "接住就好，一两句、可以就一个表情，别把刚才的话再说一遍"),
+    "回答": ("有人在问、你知道答案", "say", "直接给具体答案，别反问回去"),
+    "追问": ("话没说完、指代不清、你想知道后续", "say", "短短问一句就行（“哪个？”“然后呢”），别自己猜着答"),
+    "接梗": ("气氛轻松、你有好玩的话", "say", "一句就够，梗要接得上原意"),
+    "纠错": ("有人说错了事实、你有把握", "say", "一句话指出哪里不对、给个台阶，别说教；没把握就别纠"),
+    "补充": ("大家缺一个你知道的信息", "say", "只补最关键的一点，最多两句"),
+    "关心": ("有人累了、难过、遇到事", "say", "先接住情绪，别急着给建议，也别连着追问"),
+}
+
+
+def parse_judge(out: str) -> tuple[str, str]:
+    """{"why": .., "act": ..}；模型不听话只回了一个字（老格式“说 / 等 / 不”）也认。"""
+    import json as _json
+    import re as _re
+    s = (out or "").strip()
+    m = _re.search(r"\{.*\}", s, _re.S)
+    act, why = "", ""
+    if m:
+        try:
+            d = _json.loads(m.group(0))
+            act, why = str(d.get("act") or "").strip(), str(d.get("why") or "").strip()
+        except ValueError:
+            pass
+    if act not in JUDGE_ACTS:
+        hit = next((k for k in JUDGE_ACTS if k in (act or s)), "")
+        if not hit:
+            hit = "等" if s.startswith("等") else "不说" if s.startswith("不") else "接住" if s.startswith("说") else "不说"
+        act = hit
+    return act, why[:80]
+
+
+def judge_examples(db, gid: int, tz=None, k: int = 3) -> str:
+    """你在小屋判过的这个群的例子：该接、不该插各最多 k 条，每条只带那一刻的最后 3 句。"""
+    out = []
+    try:
+        for lab, word in ((1, "该接"), (0, "不该插")):
+            rows = db.conn.execute("SELECT ts, act FROM qq_gate_log WHERE group_id=? AND human=? AND mentioned=0 "
+                                   "ORDER BY id DESC LIMIT ?", (gid, lab, k)).fetchall()
+            for r in rows:
+                ctx = list(reversed(db.conn.execute(
+                    "SELECT name, role, content FROM qq_group_messages WHERE group_id=? AND ts<=? ORDER BY id DESC LIMIT 3",
+                    (gid, r["ts"] + 1)).fetchall()))
+                if not ctx:
+                    continue
+                lines = " / ".join(f"{'你' if c['role'] == 'assistant' else c['name']}：{str(c['content'])[:40]}" for c in ctx)
+                out.append(f"- {lines} → {word}")
+    except Exception:  # noqa: BLE001        # 老库没有 act 列
+        return ""
+    return "\n".join(out)
+
 class SpeakMixin:
     def member_names(self, gid: int) -> list[str]:
         """这个群里群友的名字、外号、称呼（“小王 / 王哥”拆开）。"""
@@ -235,6 +290,7 @@ class SpeakMixin:
                 and random.random() < float(self.gk(gid).get("explore_rate", 0.02))):
             ok, explore, why = True, True, f"随机试一次（{why}）"      # 少量放行本该拦下的：以后重新拟合时不偏
         judged = ""
+        judge_act = judge_why = ""
         nb = None
         if (not ok and not mentioned and not quiet and why.startswith("不太想插话") and talk > 0 and texts
                 and self.gk(gid).get("label_nb", True) and hasattr(self, "label_prob")
@@ -255,14 +311,17 @@ class SpeakMixin:
                 st.batch_callers = callers + st.batch_callers
                 st.batch_guess = st.batch_guess or guess
                 return
+            jd = (getattr(self, "_judged", {}) or {}).pop(gid, None) or {}
+            judge_act, judge_why = jd.get("act", ""), jd.get("why", "")
             if judged == "say":
-                ok, explore, why = True, True, f"拿不准，问了一下：说（{p:.2f} / 阈值 {thr:.2f}）"
+                ok, explore, why = True, True, f"拿不准，问了一下：{judge_act or '说'}（{p:.2f} / 阈值 {thr:.2f}）"
             elif judged == "wait" and texts:
                 st.wait = {"uid": int(texts[-1][1]), "until": now + 150}
                 log.info("群 %s：拿不准，先等等看 %s 还说不说", gid, texts[-1][1])
         gate_id = None
         if texts and not quiet:
-            gate_id = self.gate.add(gid, mentioned, p, thr, ok, feats, explore=explore, judge=judged)
+            gate_id = self.gate.add(gid, mentioned, p, thr, ok, feats, explore=explore, judge=judged,
+                                    act=judge_act, why=judge_why or ("" if mentioned else why))
         if not ok:
             log.debug("群 %s：不说话（%s）", gid, why)
             if not mentioned and texts and not quiet and random.random() < float(self.gk(gid).get("react_chance", 0)):
@@ -321,6 +380,8 @@ class SpeakMixin:
             if asked:
                 note += ("你刚才已经问过：" + "；".join(f"「{q}」" for q in asked)
                          + "。对方没正面回答就算了，别再问一遍同样的问题。")
+        if judge_act and judge_act in JUDGE_ACTS and JUDGE_ACTS[judge_act][2]:
+            note += f"（这次适合「{judge_act}」：{JUDGE_ACTS[judge_act][2]}）"     # 20.0 判断时选的动作 → 一句做法
         if guess:
             how, _, gname = guess.partition(":")
             if how == "bid":
@@ -393,6 +454,14 @@ class SpeakMixin:
         messages = await self.build_messages(gid, mentioned, owner_spoke, who, why, note=note, interest=interest,
                                              query=query, focus=focus, web=web,
                                              flags={"pestered"} if may_ignore else None)
+        if gate_id:                                      # 20.1 这次去掉了哪段 / 加没加锚点：周报里比被接率
+            try:
+                self.db.conn.execute("UPDATE qq_gate_log SET ablated=?, drift=? WHERE id=?",
+                                     ((getattr(self, "_ablated", {}) or {}).get(gid, ""),
+                                      (getattr(self, "_drift", {}) or {}).get(gid, ""), gate_id))
+                self.db.conn.commit()
+            except Exception:  # noqa: BLE001
+                pass
         raw = await b.llm.chat(messages, role=str(self.gk(gid).get("route") or "chat"),
                                json_mode=bool(self.gk(gid).get("plan_json", True)))
         tlog.info("群 %s 原文：%s", gid, raw)
@@ -574,6 +643,8 @@ class SpeakMixin:
                 log.info("群 %s 质检：%s（%d 个候选，选了第 %d 个）", gid, qtxt, len(cands), i + 1)
         else:
             bubbles = [x for x in (cands[0] if cands else []) if not self.too_similar(gid, x)]
+        if bubbles and web and self.gk(gid).get("number_check", True):
+            bubbles = await self._check_numbers(gid, bubbles, web, messages, raw, mentioned, use_plan)
         sticker_only = bool(not bubbles and sticker and plan and plan["act"] == "say"
                             and not last_is_sticker and self.stickers.choose(gid, sticker))
         if not bubbles and not sticker_only:
@@ -611,6 +682,12 @@ class SpeakMixin:
                 log.info("群 %s：说到一半有人找她，剩下的先不发", gid)
                 interrupted = True
                 break
+            if (i == 0 and not mentioned and not must and self.gk(gid).get("typing_abort", True)
+                    and self._typed_over(gid, last_id)):
+                # 20.0（HUMA）：她主动想说的这句还在“打字”，群里话题已经往前走了几条：这句不发了，照常看新消息
+                log.info("群 %s：打字的时候群里又说了好几句，这句不发了", gid)
+                self.gate.mark(gate_id, spoke=False)
+                return False
             segs = to_segments(text, name_to_qq)
             if i == 0 and quote:
                 segs = [reply_seg(quote)] + segs
@@ -695,6 +772,30 @@ class SpeakMixin:
         else:
             done("send_fail", [], qtxt)
         return bool(sent_ids)
+
+    async def _check_numbers(self, gid: int, bubbles: list[str], web: str, messages: list[dict], raw: str,
+                             mentioned: bool, use_plan: bool) -> list[str]:
+        """20.1 转述走样检查：她说的数字要在简报 / 最近聊天 / 想起来的事里出现过。对不上 → 重写一次 → 还不行就删掉那几句。"""
+        from aigroup.chat.quality import unsupported_numbers
+        src = web + "\n" + " ".join(str(r["content"] or "") for r in self._rows(gid, 20))
+        bad = unsupported_numbers(" ".join(bubbles), src)
+        if not bad:
+            return bubbles
+        log.info("群 %s：她说的数字简报里没有：%s", gid, "、".join(bad))
+        fixed = False
+        if use_plan:
+            fix = await self._rewrite(messages, raw, [f"数字对不上：{'、'.join(bad)}（简报里没有这些数，照简报原样说，没有的别说）"], gid)
+            for c in fix:
+                if not unsupported_numbers(" ".join(c), src):
+                    bubbles, fixed = c, True
+                    break
+        if not fixed:
+            keep = [x for x in bubbles if not unsupported_numbers(x, src)]
+            bubbles = keep if keep else ([] if not mentioned else bubbles)
+        nl = list(self.db.get("numcheck_log") or [])[-199:]
+        nl.append({"ts": time.time(), "gid": gid, "bad": bad[:4], "fixed": fixed})
+        self.db.set("numcheck_log", nl)
+        return bubbles
 
     async def _rewrite(self, messages: list[dict], raw: str, hits: list[str], gid: int) -> list[list[str]]:
         """质检毛病很大时重写一次：把她刚写的和毛病告诉她。返回新的候选。"""
@@ -851,6 +952,15 @@ class SpeakMixin:
                     out.append(part)
         return out[:k]
 
+    def _typed_over(self, gid: int, last_id: int) -> bool:
+        """想好以后到真发出去之间（打字的那几秒），群友又说了 rethink_min_new 条以上，或者有人在叫她。"""
+        try:
+            r = self.db.conn.execute("SELECT COUNT(*) n, IFNULL(MAX(to_her), 0) h FROM qq_group_messages "
+                                     "WHERE group_id=? AND role='user' AND id>?", (gid, int(last_id or 0))).fetchone()
+        except Exception:  # noqa: BLE001
+            return False
+        return bool(r["n"] >= int(self.gk(gid).get("rethink_min_new", 2)) + 1 and not r["h"])
+
     def unprompted_today(self, gid: int) -> int:
         """今天她在这个群主动开口了几次（插话、冒泡、分享；被叫到的不算）。"""
         now = self.brain.now()
@@ -859,21 +969,32 @@ class SpeakMixin:
                                         (gid, t0)).fetchone()["n"])
 
     async def quick_judge(self, gid: int) -> str:
-        """13.0 本地门控拿不准时：把最近十几句给便宜模型，只要一个字——说 / 等 / 不。返回 say / wait / skip（出错按 skip）。"""
+        """本地门控拿不准时问一下便宜模型。20.0：先写一句理由、再选一个动作（GroupGPT 的 6 类 + 等 / 追问），
+        few-shot 用你在小屋判过的这个群的例子（纠正模型“爱插嘴”的偏向）。返回 say / wait / skip（出错按 skip）；
+        动作和理由放在 self._judged[gid]，记进门控日志、也会变成给她的一句提示。"""
         p = self.brain.persona
         hist = self.transcript(gid, 14)
+        acts = "、".join(f"{k}（{v[0]}）" for k, v in JUDGE_ACTS.items())
+        shots = judge_examples(self.db, gid, self.cfg.tz)
         prompt = (f"下面是{p.name}所在的群最近的聊天（“你”是{p.name}）。最后几句之后，{p.name}要不要接一句？\n"
-                  "只回一个字：\n说＝这话其实是冲你来的（问你、接你刚说的、在说你），或者你接一句很自然、有具体的话可说；\n"
-                  "等＝话还没说完、或者在等别人回，先别插；\n不＝跟你无关、两个人在聊、插进去会突兀。\n\n" + hist)
+                  "像一个普通群友那样判断：真人在群里大多数时候是不说话的；只有这话冲你来、或者你接一句明显让聊天更好时才开口。\n"
+                  f"动作只能选一个：{acts}。\n"
+                  "先用一句话写理由（谁在跟谁说、你插进去会怎样），再选动作。只输出 JSON："
+                  '{"why": "一句理由", "act": "动作"}\n'
+                  + (f"\n你的主人以前判过的例子（照这个标准）：\n{shots}\n" if shots else "")
+                  + "\n现在的聊天：\n" + hist)
         try:
             out = await self.brain.llm.chat([{"role": "user", "content": prompt}], role="gate", temperature=0.0,
-                                            max_tokens=16)
+                                            max_tokens=120)
         except Exception as e:  # noqa: BLE001
             log.info("问要不要说失败：%s", e)
             return "skip"
-        out = (out or "").strip()
-        verdict = "say" if out.startswith("说") else "wait" if out.startswith("等") else "skip"
-        log.info("群 %s：拿不准，问了一下 → %s", gid, out[:4])
+        act, why = parse_judge(out)
+        if not hasattr(self, "_judged"):
+            self._judged = {}
+        self._judged[gid] = {"act": act, "why": why}
+        verdict = JUDGE_ACTS.get(act, ("", "skip"))[1]
+        log.info("群 %s：拿不准，问了一下 → %s（%s）", gid, act, why[:40])
         return verdict
 
     def _last_user_mid(self, gid: int):

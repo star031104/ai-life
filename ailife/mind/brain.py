@@ -135,6 +135,9 @@ class Brain:
         self._last_examples: list[str] = []
         from ailife.mind.together import Together
         self.together = Together(cfg, self)
+        from ailife.mind.healthy import Healthy
+        self.healthy = Healthy(cfg, self.db)           # 20.0 关系健康底线：告别不挽留、不拿愧疚感拉他、依恋时往身边的人引
+        self._replying = False
         from ailife.media.links import LinkReader
         self.links = LinkReader(cfg, self)
         from ailife.mind.rhythm import Rhythm
@@ -421,6 +424,7 @@ class Brain:
             ex.block(p, chosen),
             f"# 你今天自己的安排\n{life or '（普通的一天，自由发挥但要前后一致）'}",
             self.together.care_block(),
+            self.healthy.block((lu_row["content"] if lu_row else "") or "", replying=self._replying),
             f"# 你此刻的心情\n{self.mood}；{self.emotion.describe()}\n"
             "对他的好感：永远是满的，不会因为任何事减少（你最喜欢他了，只是嘴上不承认）。",
             f"# 你记得的关于他的事\n{mem_txt}",
@@ -482,7 +486,11 @@ class Brain:
         await self.refresh_world()
         hist = self.history()
         query = self._query(hist)
-        sys = await self.build_prompt(query)
+        self._replying = True
+        try:
+            sys = await self.build_prompt(query)
+        finally:
+            self._replying = False
         messages = [{"role": "system", "content": sys}] + hist
         if len(messages) == 1:
             messages.append({"role": "user", "content": "（他刚刚打开了和你的聊天）"})
@@ -551,13 +559,17 @@ class Brain:
         if not proactive:
             self._cap_bubbles(p, max_bubbles)     # 回复太多条：把多的并进最后一条，不用重写
         texts = [b.text for b in p.bubbles if b.text]
+        lu_row = self.db.last_message("user")
+        lu = (lu_row["content"] if lu_row else "") or ""
         issues = self.quality.problems(texts, proactive, max_bubbles)
+        h_issues = self.healthy.issues(texts, lu, proactive)
         if issues and not proactive:
             # 回复他的话：只要还有没问题的句子，就直接删掉重复的那几句（换话题重写容易答非所问）
             flags = self.quality.dup_flags(texts)
             if not all(flags) and len(texts) > 1:
                 self.quality.prune(p, False, max_bubbles)
                 issues = self.quality.problems([b.text for b in p.bubbles if b.text], False, max_bubbles)
+        issues = h_issues + [x for x in issues if x not in h_issues]
         if issues:
             log.info("重写（%s）", "；".join(issues)[:200])
             how = ("换个说法、换个话题重新写" if proactive else
@@ -570,7 +582,7 @@ class Brain:
                 p2 = parse_reply(raw2, self.persona.name)
                 n_old = sum(1 for b in p.bubbles if b.text)
                 n_new = sum(1 for b in p2.bubbles if b.text)
-                if not p2.skip and n_new and (proactive or n_new >= min(2, n_old)):
+                if not p2.skip and n_new and (proactive or h_issues or n_new >= min(2, n_old)):
                     log.info("重写后：%s", raw2)
                     # 重写只为换说法：原来打的标签（提醒、纪念日、追番、打卡、心情……）重写时常常漏掉，补回来
                     for k in ("reminders", "dates", "shows", "songs", "checkins", "wishes", "wishes_done"):
@@ -587,6 +599,12 @@ class Brain:
                 log.info("重写失败，用原来的：%s", e)
         if self.quality.problems([b.text for b in p.bubbles if b.text], proactive, max_bubbles):
             p = self.quality.prune(p, proactive, max_bubbles)
+        txt = [b for b in p.bubbles if b.text]
+        bad = self.healthy.bad_flags([b.text for b in txt], lu, proactive)
+        if any(bad) and not all(bad):                 # 20.0 重写了还在挽留 / 埋怨：删掉那几句（至少留一句）
+            drop = {id(b) for b, f in zip(txt, bad) if f}
+            log.info("删掉挽留 / 埋怨的话：%s", [b.text[:20] for b in txt if id(b) in drop])
+            p.bubbles = [b for b in p.bubbles if id(b) not in drop]
         if proactive:
             first = next((b.text for b in p.bubbles if b.text), "")
             if first:

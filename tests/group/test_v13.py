@@ -135,8 +135,8 @@ def test_quick_judge(cfg, brain):
 
     class D(FakeLLM):
         async def chat(self, messages, **kw):
-            if "只回一个字" in messages[-1]["content"]:
-                assert kw.get("role") == "gate" and kw.get("max_tokens") == 16
+            if "动作只能选一个" in messages[-1]["content"]:          # 20.0：理由 + 动作；老的一个字也还认
+                assert kw.get("role") == "gate"
                 return "说"
             return await super().chat(messages, **kw)
     brain.llm = D()
@@ -295,7 +295,8 @@ def test_label_moment(cfg, brain):
     gc._record(GROUP, 88888, "小王", "有人打球吗", 1)
     gid = gc.gate.add(GROUP, False, 0.3, 0.35, False, {"question": 1.0}, judge="skip")
     m = next_moment(brain.db, GROUP)
-    assert m["id"] == gid and "有人打球吗" in m["context"][-1] and "不" in m["did"]
+    assert m["id"] == gid and "有人打球吗" in m["context"][-1] and "没开口" in m["did"]
+    assert any("不说" in x for x in m["steps"]) and any("有人在问" in x for x in m["steps"])     # 20.0 决定链
     answer(brain.db, gid, 1)
     assert stats(brain.db)["n"] == 1 and next_moment(brain.db, GROUP) is None
     from aigroup.chat.gate import labeled_rows

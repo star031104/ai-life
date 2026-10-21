@@ -103,6 +103,15 @@ class GroupHome:
         r.add_post("/api/pairs/answer", self.pairs_answer)
         r.add_get("/api/label/next", self.label_next)          # 13.0 金标准集：这一刻她该不该开口
         r.add_post("/api/label/answer", self.label_answer)
+        r.add_get("/api/calib/next", self.calib_next)          # 20.1 给她的话打分（评委校准）
+        r.add_post("/api/calib/answer", self.calib_answer)
+        r.add_get("/api/checks", self.checks)                  # 20.1 每周额外检查：评委、问答一致、讨好、说话统计、消融
+        r.add_get("/api/ledger", self.ledger_list)             # 20.2 她查到的事实（账本）
+        r.add_post("/api/ledger/delete", self.ledger_delete)
+        r.add_get("/api/feed", self.feed_info)                 # 20.2 “刷到的”：兴趣表和候选
+        r.add_post("/api/feed/remove", self.feed_remove)
+        r.add_get("/api/label/batch", self.label_batch)        # 20.0 一屏判 10 条
+        r.add_post("/api/label/answers", self.label_answers)
         r.add_get("/api/person/versions", self.person_versions)  # 13.0 画像的历史版本
         r.add_post("/api/person/restore", self.person_restore)
         r.add_post("/api/person/check", self.person_check)          # 16.0 画像抽查：这一项对 / 不对
@@ -242,6 +251,64 @@ class GroupHome:
         return web.json_response({"gid": gid, "pairs": g.get("pairs") or [], "pairs_ts": g.get("ts"), "experience": exp,
                                   "specs": specs})
 
+    async def calib_next(self, req):
+        from aigroup.eval.calib import next_items, scored
+        gid = self._gid(req)
+        return web.json_response({"items": next_items(self.db, gid, 5), "n": len(scored(self.db, 1000)),
+                                  "calib": self.db.get("judge_calib") or {}})
+
+    async def calib_answer(self, req):
+        d = await self._json(req)
+        from aigroup.eval.calib import answer, scored
+        try:
+            ok = answer(self.db, str(d["trace"]), int(d["score"]))
+        except (KeyError, TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "参数不对"}, status=400)
+        return web.json_response({"ok": ok, "n": len(scored(self.db, 1000))})
+
+    async def checks(self, req):
+        gid = self._gid(req)
+        from aigroup.eval.ablate import NAMES, ablation_stats
+        from aigroup.eval.traits import style_z
+        nl = [x for x in (self.db.get("numcheck_log") or []) if float(x.get("ts") or 0) > time.time() - 7 * 86400]
+        qa, pr = self.db.get("qa_last") or {}, self.db.get("pair_last") or {}
+        return web.json_response({
+            "calib": self.db.get("judge_calib") or {},
+            "qa": {k: v for k, v in qa.items() if k != "answers"} if qa else {},
+            "pairs": pr, "style": style_z(self.db, gid), "ablate": ablation_stats(self.db, gid=gid), "names": NAMES,
+            "numcheck": {"bad": len(nl), "fixed": sum(1 for x in nl if x.get("fixed")), "recent": nl[-5:]},
+            "rate": float(self.gc.gk(gid).get("ablate_rate", 0.1) or 0)})
+
+    async def ledger_list(self, req):
+        gid = self._gid(req)
+        rows = self.gc.ledger().entries(gid, 120) if hasattr(self.gc, "ledger") else []
+        return web.json_response({"items": rows})
+
+    async def ledger_delete(self, req):
+        d = await self._json(req)
+        try:
+            self.gc.ledger().delete(int(d["id"]))
+        except (KeyError, TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "参数不对"}, status=400)
+        return web.json_response({"ok": True})
+
+    async def feed_info(self, req):
+        gid = self._gid(req)
+        gc = self.gc
+        if not hasattr(gc, "feed_interests"):
+            return web.json_response({"interests": [], "cands": []})
+        return web.json_response({"interests": gc.feed_interests(gid), "cands": gc.feed_candidates(gid)[:8],
+                                  "last": self.db.get(f"feed_last_{gid}") or 0})
+
+    async def feed_remove(self, req):
+        d = await self._json(req)
+        gid = self._gid(req, d)
+        t = str(d.get("topic") or "").strip()
+        if not t:
+            return web.json_response({"ok": False, "error": "参数不对"}, status=400)
+        self.gc.remove_interest(gid, t)
+        return web.json_response({"ok": True})
+
     async def humane(self, req):
         """19.1 像人的几个指标（这一周）：该说没说、不该说却说、搭话接住、当天重复、没人理还追发。"""
         gid = self._gid(req)
@@ -260,6 +327,7 @@ class GroupHome:
             "enabled": bool(g.get("agent", False)), "today": n_today, "per_day": int(g.get("agent_per_day", 60) or 60),
             "tavily_used": web_.tavily_used() if web_ is not None and hasattr(web_, "tavily_used") else 0,
             "tavily_out": bool(web_ is not None and hasattr(web_, "tavily_out") and web_.tavily_out()),
+            "ds": (web_.ds_used() if web_ is not None and getattr(web_, "ds_key", "") else None),
             "reader": gc.toolbox().reader.layers() if hasattr(gc, "toolbox") else [],
             "tools": gc.toolbox().names(recall=True) if hasattr(gc, "toolbox") else [],
             "logs": [{"ts": x.get("ts"), "goal": x.get("goal"), "depth": x.get("depth"), "thinking": x.get("thinking"),
@@ -969,10 +1037,31 @@ class GroupHome:
         from aigroup.eval.label import answer, stats
         try:
             lab = d.get("label")
-            answer(self.db, int(d["id"]), None if lab in (None, "", "skip") else int(lab))
+            answer(self.db, int(d["id"]), None if lab in (None, "", "skip") else int(lab), str(d.get("how") or ""))
         except (KeyError, TypeError, ValueError):
             return web.json_response({"ok": False, "error": "参数不对"}, status=400)
         return web.json_response({"ok": True, "stats": stats(self.db)})
+
+    async def label_batch(self, req):
+        from aigroup.eval.label import batch, stats
+        try:
+            n = max(1, min(20, int(req.query.get("n") or 10)))
+        except ValueError:
+            n = 10
+        return web.json_response({"items": batch(self.db, self._gid(req), self.gc.cfg.tz, n), "stats": stats(self.db)})
+
+    async def label_answers(self, req):
+        d = await self._json(req)
+        from aigroup.eval.label import answer, stats
+        done = 0
+        try:
+            for it in list(d.get("items") or [])[:40]:
+                lab = it.get("label")
+                answer(self.db, int(it["id"]), None if lab in (None, "", "skip") else int(lab), str(it.get("how") or ""))
+                done += 1
+        except (KeyError, TypeError, ValueError, AttributeError):
+            return web.json_response({"ok": False, "error": "参数不对", "done": done}, status=400)
+        return web.json_response({"ok": True, "done": done, "stats": stats(self.db)})
 
     async def person_versions(self, req):
         from aigroup.memory.style import profile_diff

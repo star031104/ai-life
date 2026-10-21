@@ -294,6 +294,8 @@ class WebReader:
         if self.browser is not None and time.time() >= self._browser_off:
             out.append("无头浏览器")
         w = self.web
+        if w is not None and getattr(w, "ds_key", "") and not w._ds_down():
+            out.append("DeepSeek 代读")
         if self.tavily_extract and w is not None and getattr(w, "tavily_key", "") and not w.tavily_out():
             out.append("Tavily 代读")
         return out
@@ -395,7 +397,9 @@ class WebReader:
 
     async def _extract(self, url: str) -> tuple[dict | None, str]:
         w = self.web
-        if not (self.tavily_extract and w is not None and getattr(w, "tavily_key", "") and not w.tavily_out()):
+        ds = bool(w is not None and getattr(w, "ds_key", "") and not w._ds_down())
+        tav = bool(self.tavily_extract and w is not None and getattr(w, "tavily_key", "") and not w.tavily_out())
+        if not (ds or tav):
             return None, "no"
         host = (urlparse(url).hostname or "").lower()
         try:
@@ -403,10 +407,20 @@ class WebReader:
                 return None, "down"
         except ValueError:
             pass
-        try:
-            got = await w.extract(url)
-        except Exception as e:  # noqa: BLE001
-            return None, str(e)[:80]
+        got, err, via = {}, "", "DeepSeek"
+        if ds:                                            # 20.0 先让 DeepSeek 读（便宜，不占 Tavily 额度）
+            try:
+                got = await w.ds_fetch(url)
+            except Exception as e:  # noqa: BLE001
+                err = str(e)[:80]
+        if not (got and got.get("text")) and tav:
+            via = "Tavily"
+            try:
+                got = await w.extract(url)
+            except Exception as e:  # noqa: BLE001
+                return None, str(e)[:80]
+        if err and not got:
+            return None, err
         if not got or not got.get("text"):
             return None, "block"
         from aigroup.net.links import site_name
@@ -419,7 +433,7 @@ class WebReader:
         if looks_blocked(title, text):
             return None, "block"
         return {"ok": True, "title": title[:120], "date": "", "text": text, "site": site_name(host), "url": url,
-                "via": "Tavily", "links": links}, ""
+                "via": via, "links": links}, ""
 
     # ---------------- 入口 ----------------
     async def read(self, url: str) -> dict:
@@ -441,7 +455,7 @@ class WebReader:
             return d
         take(d)
         steps = ((("block",), "仿浏览器", self._impersonate), (("block", "shell"), "浏览器", self._render),
-                 (("block", "shell", "down"), "Tavily", self._extract))
+                 (("block", "shell", "down"), "代读", self._extract))
         for need, label, fn in steps:
             if why not in need:
                 continue

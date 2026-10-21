@@ -164,7 +164,7 @@ def test_research_quick_makes_brief_and_reuses(cfg, brain, monkeypatch):
                          msg(BRIEF)])
     searched = []
 
-    async def fake_search(q, n=6, days=0):
+    async def fake_search(q, n=6, days=0, **kw):
         searched.append((q, days))
         return [{"title": "Aspas to miss Champions", "url": "https://www.sheepesports.com/a", "snippet": "...",
                  "date": "2026-09-21"}], "Tavily"
@@ -187,7 +187,7 @@ def test_research_quick_makes_brief_and_reuses(cfg, brain, monkeypatch):
 def test_research_deep_says_filler_and_thinks(cfg, brain, monkeypatch):
     gc, ob = _gc(cfg, brain, agent=True)
 
-    async def fake_search(q, n=6, days=0):
+    async def fake_search(q, n=6, days=0, **kw):
         return [], ""
     monkeypatch.setattr(gc.web, "agent_search", fake_search)
     _run(gc, _msg(FRIEND, "小王", "TenZ最近数据怎么样", 1, at=True))

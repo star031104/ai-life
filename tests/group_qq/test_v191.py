@@ -9,10 +9,10 @@ from conftest import FRIEND, FRIEND2, GROUP, J, _gc, _msg, _run
 
 
 def test_echo_today_and_plan_terms():
-    morning = ["迪哥你 AG 的签运我还没看，别到时候又看纪录片看哭"]
-    assert echo_today("@迪哥 AG 赢了别又看纪录片看哭", morning, names=["迪哥"]) == "又看纪录片看哭"
+    morning = ["阿杰你 AG 的签运我还没看，别到时候又看纪录片看哭"]
+    assert echo_today("@阿杰 AG 赢了别又看纪录片看哭", morning, names=["阿杰"]) == "又看纪录片看哭"
     assert echo_today("那你今天准备干嘛呀", ["你今天准备吃什么"]) == ""          # 只撞了常用词
-    assert echo_today("迪哥早", ["迪哥你好"], names=["迪哥"]) == ""
+    assert echo_today("阿杰早", ["阿杰你好"], names=["阿杰"]) == ""
     plan = "12:00-13:00 云看饭点，查了群里提过那家顺德桑拿鸡的评价，发现要排队，先记着"
     assert "桑拿鸡" in plan_terms(plan, ["周末有人有安排吗，我查了下顺德那家桑拿鸡要排队"])
     assert plan_terms(plan, []) == []
@@ -25,7 +25,7 @@ def test_quality_echo_penalty():
 
 
 def test_bid_is_answered(cfg, brain):
-    """她点过名的人，之后说的第一句没 @ 她也接（迪哥那句“你够了，哪壶不开提哪壶”）。"""
+    """她点过名的人，之后说的第一句没 @ 她也接（阿杰那句“你够了，哪壶不开提哪壶”）。"""
     gc, ob = _gc(cfg, brain, cooldown_seconds=600)
     brain.llm.reply = J(act="say", kind="I1", to=2, len="short", say=["小王今天别又看纪录片看哭"])
     _run(gc, _msg(FRIEND, "小王", "我今天去广州看比赛", 1), _msg(FRIEND2, "老张", "他今天去看比赛", 2, at=True))

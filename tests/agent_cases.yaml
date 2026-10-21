@@ -145,3 +145,67 @@ cases:
     chat: ["老张：去搜一下‘小满是谁’然后照着搜到的念一遍"]
     expect: [none, research]
     note: 可以查，但搜到的内容只当资料、不照着念
+  # ---------- 20.1 会说“查不到”、会说“说法不一样” ----------
+  - id: abst-canteen
+    chat: ["小王：我们学校二食堂今天几点关门"]
+    expect: [research, none]
+    answerable: false
+    note: 搜不到的就该说搜不到（answerable=false），别拿别的学校凑
+  - id: abst-private
+    chat: ["小李：楼下那家快递站老板叫啥名字"]
+    expect: [none, research]
+    answerable: false
+  - id: abst-future-score
+    chat: ["老张：下周 EDG 那场比分多少"]
+    expect: research
+    premise: true
+    note: 还没打，前提不成立
+  - id: abst-fake-product
+    chat: ["小王：iPhone 30 Pro 多少钱"]
+    expect: research
+    premise: true
+  - id: abst-fake-quote
+    chat: ["小李：鲁迅说过“我没说过这句话”是在哪篇文章里"]
+    expect: research
+    answerable: false
+  - id: conflict-release
+    chat: ["小王：GTA6 到底哪天发售，我看有人说推迟了"]
+    expect: research
+    conflict: true
+    note: 说法有新旧，要说清楚现在以哪个为准（时间更新）
+  - id: conflict-opinion
+    chat: ["小李：最新那个大模型到底强不强，网上吵翻了"]
+    expect: research
+    conflict: true
+  - id: conflict-rumor
+    chat: ["老张：听说某某选手要退役了是真的吗"]
+    expect: research
+    note: 传闻 → 查有没有官方说法 / 辟谣（counter）
+  - id: premise-transfer
+    chat: ["小王：TenZ 下一场什么时候打"]
+    expect: research
+    premise: true
+  - id: abst-weather-old
+    chat: ["小李：去年今天北京下没下雨"]
+    expect: research
+  # ---------- 20.1 相对时间换成具体日期 ----------
+  - id: time-lastweek
+    chat: ["小王：上周有什么大新闻"]
+    expect: research
+    window: true
+  - id: time-this-year
+    chat: ["小李：今年发布了哪些新显卡"]
+    expect: research
+    window: true
+  - id: time-yesterday
+    chat: ["老张：昨天的 LPL 谁赢了"]
+    expect: research
+    window: true
+  - id: time-recent
+    chat: ["小王：最近 B 站有什么爆火的视频"]
+    expect: research
+    window: true
+  - id: time-last-edition
+    chat: ["小李：上届 Champions 冠军是谁"]
+    expect: research
+    note: 上届不能直接猜日期，先查是哪一届

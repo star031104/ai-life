@@ -181,3 +181,38 @@ def make_typo(text: str, rand: random.Random | None = None) -> tuple[str, str] |
     a, b = max(0, i - 1), min(len(text), i + 2)
     fix = text[a:b].strip() or text[i]
     return wrong, f"*{fix}"
+
+
+# ---------------- 20.1 说出口的数字要有出处（转述走样检查，不调模型） ----------------
+_NUM = re.compile(r"\d+(?:[.:/\-]\d+)*%?")
+_FW = str.maketrans("０１２３４５６７８９：．％", "0123456789:.%")
+
+
+def _norm_nums(text: str) -> str:
+    return (text or "").translate(_FW).replace("：", ":").replace(" ", "")
+
+
+def numbers_in(text: str) -> list[str]:
+    """她话里要核对的数字：带小数点 / 比分 / 百分号 / 日期分隔的，或者 ≥ 100 的整数（小的整数太常见，不查）。"""
+    out = []
+    for m in _NUM.finditer(_norm_nums(text)):
+        t = m.group(0).rstrip(".-/:")
+        if not t:
+            continue
+        plain = t.rstrip("%")
+        if re.fullmatch(r"\d+", plain) and int(plain) < 100 and not t.endswith("%"):
+            continue
+        out.append(t)
+    return list(dict.fromkeys(out))
+
+
+def unsupported_numbers(text: str, sources: str) -> list[str]:
+    """她话里出现、但简报 / 聊天记录 / 记忆里都没有的数字。比分 2:1 和 2-1 算同一个；12.0% 和 12% 算同一个。"""
+    src = re.sub(r"(\d)\.0+(?=%)", r"\1", _norm_nums(sources))
+    src_alt = src.replace("-", ":").replace("比", ":")
+    bad = []
+    for t in numbers_in(text):
+        cands = {t, t.replace("-", ":"), t.replace(":", "-"), re.sub(r"\.0+(?=%|$)", "", t)}
+        if not any(c and (c in src or c in src_alt) for c in cands):
+            bad.append(t)
+    return bad

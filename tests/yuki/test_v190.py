@@ -102,7 +102,7 @@ def test_yuki_research_flow(env):
     brain.llm.chat_tools = chat_tools
     rs = bot._researcher()
 
-    async def search(q, n=6, days=0):
+    async def search(q, n=6, days=0, **kw):
         return [{"title": "aspas MIBR", "url": "https://www.vlr.gg/player/1", "snippet": "合同到 2027", "date": "2026-10-01"}], "Tavily"
     rs._web_().agent_search = search
     brain.db.add_message("user", "aspas 最近怎么样了")

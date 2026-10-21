@@ -345,6 +345,13 @@ class GateLog:
             "explore": "INTEGER NOT NULL DEFAULT 0",     # 2.0.1：本该拦下、随机放行的一小部分（重新拟合时纠正选样偏差）
             "judge": "TEXT NOT NULL DEFAULT ''",         # 13.0 拿不准时问的那一个字：say / wait / skip
             "human": "INTEGER",                          # 13.0 你在小屋“标注”里判的：1 该说、0 不该说（最准的标签）
+            # 20.0：2 可说可不说（不当标签用）；-1 看不出来；weak：没人标时程序自己推的弱标签（0 / 1），见 label.weak_labels
+            "act": "TEXT NOT NULL DEFAULT ''",           # 20.0 拿不准时问出来的动作（接住 / 回答 / 追问 / 纠错 ……）
+            "why": "TEXT NOT NULL DEFAULT ''",           # 20.0 这一刻为什么说 / 没说（人话，小屋里给你看）
+            "weak": "INTEGER",
+            "human_act": "TEXT NOT NULL DEFAULT ''",     # 20.0 你判“该接”时顺手选的：该怎么接
+            "ablated": "TEXT NOT NULL DEFAULT ''",       # 20.1 这次随机去掉了提示词里的哪一段（模块消融）
+            "drift": "TEXT NOT NULL DEFAULT ''",         # 20.1 这一轮是不是容易漂走的场景（加了锚点）
         })
         db.conn.commit()
 
@@ -359,12 +366,13 @@ class GateLog:
         return [float(r["p"]) for r in rows], sum(int(r["spoke"]) for r in rows)
 
     def add(self, gid: int, mentioned: bool, p: float, thr: float, passed: bool, feats: dict, explore: bool = False,
-            judge: str = "") -> int:
+            judge: str = "", act: str = "", why: str = "") -> int:
         cur = self.db.conn.execute(
-            "INSERT INTO qq_gate_log(ts, group_id, mentioned, p, threshold, passed, feats, explore, judge) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO qq_gate_log(ts, group_id, mentioned, p, threshold, passed, feats, explore, judge, act, why) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (time.time(), gid, int(mentioned), round(p, 4), round(thr, 4), int(passed),
-             json.dumps({k: round(float(v), 4) for k, v in feats.items()}), int(explore), judge or ""))
+             json.dumps({k: round(float(v), 4) for k, v in feats.items()}), int(explore), judge or "", act or "",
+             (why or "")[:120]))
         self.db.conn.commit()
         return int(cur.lastrowid)
 

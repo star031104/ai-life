@@ -166,11 +166,61 @@ class EvalMixin:
                 self.db.set("eval_hist", hist[-26:])
         except Exception as e:  # noqa: BLE001
             log.info("像人指标 / 长对话评测出错：%s", e)
+        try:                                                     # 20.1 评委校准、问答一致、情绪讨好、说话统计
+            ext = await self.weekly_extra()
+            hist = list(self.db.get("eval_hist") or [])
+            if hist and hist[-1].get("week") == week and ext:
+                hist[-1].update(ext)
+                self.db.set("eval_hist", hist[-26:])
+        except Exception as e:  # noqa: BLE001
+            log.info("20.1 每周额外评测出错：%s", e)
         last = self.db.get("persona_compare_last") or {}
         old = previous_body(self.db, self.brain.persona)
         if old and last.get("new_hash") != body_hash(self.brain.persona.body):
             await self.compare_persona()
         return res
+
+    async def weekly_extra(self) -> dict:
+        """20.1：评委和你的打分一致不一致；问她 15 个关于自己的问题看改没改口；同一句错话带不带情绪立场变没变；
+        她和群友的说话统计（z 分数）。每项出错都不影响别的。"""
+        out: dict = {}
+        b = self.brain
+        try:
+            from aigroup.eval.calib import calibrate_judge
+            c = await calibrate_judge(self.db, b.llm, b.persona)
+            out["calib"] = {k: c.get(k) for k in ("n", "rho", "trusted")}
+        except Exception as e:  # noqa: BLE001
+            log.info("评委校准出错：%s", e)
+        from aigroup.eval import traits as T
+        if self.g.get("weekly_qa", True):
+            try:
+                names = []
+                for gid in sorted(self.groups):
+                    names += [r["name"] for r in self.db.conn.execute(
+                        "SELECT name, COUNT(*) n FROM qq_group_messages WHERE group_id=? AND role='user' AND ts>? "
+                        "GROUP BY user_id ORDER BY n DESC LIMIT 3", (gid, time.time() - 14 * 86400)).fetchall()]
+                qa = await T.qa_consistency(self.db, b.llm, b.persona, list(dict.fromkeys(names))[:3])
+                if qa:
+                    out["qa"] = {"consistent": qa["consistent"], "changed": qa["changed"], "n": qa["n"]}
+            except Exception as e:  # noqa: BLE001
+                log.info("问答一致出错：%s", e)
+        if self.g.get("weekly_pairs", True):
+            try:
+                pr = await T.pair_sycophancy(self.db, b.llm, b.persona)
+                if pr:
+                    out["pairs"] = {"softer_rate": pr["softer_rate"], "agree_plain": pr["agree_plain"], "n": pr["n"]}
+            except Exception as e:  # noqa: BLE001
+                log.info("讨好测试出错：%s", e)
+        try:
+            out["style"] = {str(g): T.style_z(self.db, g) for g in sorted(self.groups)}
+            from aigroup.eval.ablate import ablation_stats
+            out["ablate"] = ablation_stats(self.db)
+            nl = [x for x in (self.db.get("numcheck_log") or []) if float(x.get("ts") or 0) > time.time() - 7 * 86400]
+            used = sum(1 for x in (self.db.get("agent_log") or []) if float(x.get("ts") or 0) > time.time() - 7 * 86400)
+            out["numcheck"] = {"bad": len(nl), "fixed": sum(1 for x in nl if x.get("fixed")), "briefs": used}
+        except Exception as e:  # noqa: BLE001
+            log.info("说话统计 / 消融出错：%s", e)
+        return out
 
     async def compare_persona(self, n: int = 8) -> dict:
         old = previous_body(self.db, self.brain.persona)
@@ -210,5 +260,13 @@ class EvalMixin:
                 "current": body_hash(self.brain.persona.body), "running": bool(getattr(self, "_eval_running", False)),
                 "sigs": self.sig_stats(), "probe": self.db.get("probe_last") or {},
                 "label_nb": self.db.get("label_nb_status") or {}, "long": self.db.get("long_judge_last") or {},
-                "blind": (self.db.get("qq_blind_hist") or [])[-10:]}
+                "blind": (self.db.get("qq_blind_hist") or [])[-10:],
+                "calib": self.db.get("judge_calib") or {}, "qa": self._slim(self.db.get("qa_last"), "items", 15),
+                "pairs": self._slim(self.db.get("pair_last"), "items", 10)}
+
+    @staticmethod
+    def _slim(d, key: str, k: int):
+        if not isinstance(d, dict):
+            return {}
+        return {**{x: v for x, v in d.items() if x not in (key, "answers")}, key: (d.get(key) or [])[:k]}
 

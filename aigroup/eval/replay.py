@@ -138,6 +138,22 @@ JUDGE_PROMPT = """你是严格的审稿人，只找毛病，不夸。下面是�
 {said}"""
 
 
+async def judge_one(db, llm, persona, ctx: list[str], said: str, shots: bool = True) -> tuple[int, list]:
+    """给一句话挑毛病 → (0~100 分, 毛病列表)。20.1：shots=True 时带上主人亲自打过分的例子（评委校准）。"""
+    from aigroup.core.config import chan_name
+    prompt = JUDGE_PROMPT.replace("微信群", chan_name()).format(
+        name=persona.name, persona=persona.body[:1200], context="\n".join(ctx), said=said)
+    if shots:
+        from aigroup.eval.calib import few_shot_block
+        fs = few_shot_block(db)
+        if fs:
+            prompt += fs + "\n（主人打 4~5 分的，一般没有毛病或只有轻微的；打 1~2 分的，一定有严重度 ≥ 3 的毛病）"
+    d = await llm.json([{"role": "user", "content": prompt}], default={}, role="memory")
+    defects = [x for x in (d or {}).get("defects", []) if isinstance(x, dict)] if isinstance(d, dict) else []
+    sev = sum(max(1, min(5, int(x.get("severity") or 1))) for x in defects)
+    return max(0, 100 - 5 * sev), defects
+
+
 async def judge(db, llm, persona, n: int = 20, days: float = 7) -> dict:
     rows = db.conn.execute("SELECT * FROM qq_trace WHERE ts>? AND outcome='say' ORDER BY RANDOM() LIMIT ?",
                            (time.time() - days * 86400, n)).fetchall()
@@ -147,14 +163,10 @@ async def judge(db, llm, persona, n: int = 20, days: float = 7) -> dict:
         user = next((m["content"] for m in msgs if m.get("role") == "user"), "")
         ctx = user.split("# 最近的群聊记录", 1)[-1].split("# 此刻", 1)[0].strip().splitlines()[-8:]
         said = " / ".join(json.loads(r["sent"] or "[]"))
-        from aigroup.core.config import chan_name
-        d = await llm.json([{"role": "user", "content": JUDGE_PROMPT.replace("微信群", chan_name()).format(
-            name=persona.name, persona=persona.body[:1200], context="\n".join(ctx), said=said)}], default={}, role="memory")
-        defects = [x for x in (d or {}).get("defects", []) if isinstance(x, dict)] if isinstance(d, dict) else []
-        sev = sum(max(1, min(5, int(x.get("severity") or 1))) for x in defects)
+        score, defects = await judge_one(db, llm, persona, ctx, said)
         for x in defects:
             kinds[str(x.get("type"))] = kinds.get(str(x.get("type")), 0) + 1
-        out.append({"trace": r["trace"], "said": said, "score": max(0, 100 - 5 * sev), "defects": defects})
+        out.append({"trace": r["trace"], "said": said, "score": score, "defects": defects})
     avg = round(sum(x["score"] for x in out) / len(out), 1) if out else None
     return {"n": len(out), "avg": avg, "kinds": kinds, "items": out}
 
