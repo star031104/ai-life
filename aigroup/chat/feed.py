@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS qq_feed (
 );
 CREATE INDEX IF NOT EXISTS idx_qq_feed ON qq_feed(group_id, ts);
 """
+GENERIC = re.compile(r"他|她|有人|被|最近|话题|工具|^比赛$|^游戏$|^东西$|很感兴趣|感兴趣|^聊天$|想")
 SPLIT = re.compile(r"[、，,/；;：:\s]+|和|与|及")
 
 
@@ -81,17 +82,17 @@ class FeedMixin:
                     prof = json.loads(r["profile"] or "{}")
                 except ValueError:
                     continue
-                for field in ("兴趣", "在意"):
+                for field in ("兴趣",):          # “在意”写的是他图什么（被认可、有人接梗），不是能搜的话题
                     raw = re.sub(r"[（(][^）)]*[）)]?", "", str(prof.get(field) or ""))   # 括号里的补充说明不当话题
                     for t in SPLIT.split(raw):
                         t = re.sub(r"^(爱|喜欢|常|玩|看|聊)", "", t.strip("。.的 "))
-                        if 2 <= len(t) <= 10:
-                            score[t] += 1.0 if field == "兴趣" else 0.6
+                        if 2 <= len(t) <= 8 and not GENERIC.search(t):
+                            score[t] += 1.0
                             who[t].add(str(r["name"] or ""))
         except Exception as e:  # noqa: BLE001
             log.info("群 %s 整理兴趣出错：%s", gid, e)
         for t in (self.interests() if hasattr(self, "interests") else [])[:15]:
-            if 2 <= len(t) <= 10:
+            if 2 <= len(t) <= 8 and not GENERIC.search(t):
                 score[t] += 0.5
         kn = getattr(self, "knowledge", None)
         if kn is not None:
