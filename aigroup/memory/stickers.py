@@ -22,6 +22,19 @@ from pathlib import Path
 
 log = logging.getLogger("aigroup.stickers")
 
+
+def image_ok(data: bytes) -> bool:
+    """17.1 是一张完整的图（Pillow 能从头解到尾；动图只看第一帧）。"""
+    try:
+        import io
+
+        from PIL import Image
+        im = Image.open(io.BytesIO(data))
+        im.load()
+        return im.width > 0 and im.height > 0
+    except Exception:  # noqa: BLE001
+        return False
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS qq_stickers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,8 +96,12 @@ class Stickers:
         return r
 
     def save_file(self, key: str, data: bytes) -> str:
+        if not image_ok(data):                                  # 17.1 下载不完整 / 不是图：不存（下次再见到会重新下载）
+            log.info("表情包（%s）下载得不完整，没存", key[:8])
+            return ""
         self.dir.mkdir(parents=True, exist_ok=True)
-        ext = ".gif" if data[:3] == b"GIF" else ".png" if data[:4] == b"\x89PNG" else ".jpg"
+        ext = (".gif" if data[:3] == b"GIF" else ".png" if data[:4] == b"\x89PNG"
+               else ".webp" if data[:4] == b"RIFF" and data[8:12] == b"WEBP" else ".jpg")
         p = self.dir / f"{key}{ext}"
         p.write_bytes(data)
         self.db.conn.execute("UPDATE qq_stickers SET path=? WHERE key=?", (p.name, key))
@@ -163,6 +180,15 @@ class Stickers:
         r = (rand or random).choice(cands)
         p = self.dir / r["path"]
         if not p.exists():
+            return None
+        if not image_ok(p.read_bytes()):                        # 17.1 以前存坏的（只下了一半）：不发，清掉等下次重新下载
+            log.info("表情包 %s 是坏的，清掉了", r["path"])
+            self.db.conn.execute("UPDATE qq_stickers SET path='' WHERE id=?", (r["id"],))
+            self.db.conn.commit()
+            try:
+                p.unlink()
+            except OSError:
+                pass
             return None
         r["file"] = p
         return r

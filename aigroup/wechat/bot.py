@@ -747,7 +747,8 @@ class WeChatBot:
                 f = str(dd.get("file") or "")
                 if f.startswith("base64://"):
                     raw = base64.b64decode(f[9:])
-                    ext = ".gif" if raw[:3] == b"GIF" else ".png" if raw[:4] == b"\x89PNG" else ".jpg"
+                    ext = (".gif" if raw[:3] == b"GIF" else ".png" if raw[:4] == b"\x89PNG"
+                           else ".webp" if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP" else ".jpg")
                     out = str(self.opts.get("outbox") or "") or tempfile.gettempdir()   # 微信在容器里时：放挂进去的目录
                     Path(out).mkdir(parents=True, exist_ok=True)
                     p = Path(out) / f"aiwx_{int(time.time() * 1000)}{ext}"

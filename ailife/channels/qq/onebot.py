@@ -461,8 +461,16 @@ async def fetch_bytes(url: str, limit: int = 8 * 1024 * 1024, timeout: float = 2
             async with s.get(url) as r:
                 if r.status != 200:
                     return None
-                data = await r.content.read(limit + 1)
-                return data if len(data) <= limit else None
+                # 17.1 content.read(n) 只给“已经到了的”那一块，大一点的图会被截断（存下来的表情包只有开头 3KB）：读到头为止
+                buf = bytearray()
+                async for chunk in r.content.iter_chunked(64 * 1024):
+                    buf += chunk
+                    if len(buf) > limit:
+                        return None
+                want = r.content_length
+                if want is not None and len(buf) != want:
+                    return None
+                return bytes(buf)
     except Exception as e:  # noqa: BLE001
         log.info("下载 QQ 图片失败：%s", e)
         return None

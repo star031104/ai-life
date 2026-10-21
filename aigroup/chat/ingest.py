@@ -338,8 +338,8 @@ class IngestMixin:
         if rec and rec.get("need_fetch"):
             data = await fetch_bytes(url, limit=2 * 1024 * 1024)
             if data:
-                self.stickers.save_file(key, data)
-                log.info("存了一张群里常用的表情包（%s）", key[:8])
+                if self.stickers.save_file(key, data):
+                    log.info("存了一张群里常用的表情包（%s）", key[:8])
 
     async def _hear(self, file: str | None, url: str | None) -> str:
         from aigroup.net.voice import voice_text, wav_seconds

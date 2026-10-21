@@ -139,6 +139,10 @@ class ProcMem:
 
 
 # ---------------- X 窗口（xdotool / xclip） ----------------
+IMAGE_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+              ".webp": "image/webp", ".bmp": "image/bmp"}
+
+
 class XError(RuntimeError):
     pass
 
@@ -211,6 +215,7 @@ class XSender:
         self.titles: dict[str, str] = dict(o.get("window_titles") or {})
         self.own = None
         self.path_map = dict(o.get("path_map") or {})        # 宿主机路径前缀 → 微信看到的路径前缀（发文件用）
+        self.paste_images = bool(o.get("paste_images", True))   # 17.1 图片按图片发（关掉就按文件发）
 
     def _x(self, *args: str, data: bytes | None = None):
         return xrun(self.opts, list(args), data=data)
@@ -247,6 +252,14 @@ class XSender:
         self._x("xclip", "-selection", "clipboard", "-i", data=text.encode("utf-8"))
 
     def _clip_files(self, paths: list[str]):
+        # 17.1 一张图：按图片放进剪贴板（image/png 这类），微信发出去是“图片”；
+        # 以前一律放 text/uri-list，微信当成文件，群里看到的是一个 aiwx_xxx.png 文件
+        if len(paths) == 1 and self.paste_images:
+            q = Path(str(paths[0]))
+            mime = IMAGE_MIME.get(q.suffix.lower())
+            if mime and q.is_file():
+                self._x("xclip", "-selection", "clipboard", "-t", mime, "-i", data=q.read_bytes())
+                return
         uris = []
         for p in paths:
             p = str(p)

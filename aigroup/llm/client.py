@@ -8,6 +8,7 @@ config.yaml 里：
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -267,7 +268,8 @@ class LLM:
                     if patient and attempt == 0 and busy:
                         await asyncio.sleep(6)
                         continue
-                    if not (role == "gate" and "空内容" in str(e)):     # 问一个字没问出来不算接口坏了（别让聊天的模型冷却）
+                    bad_img = role == "vision" and "400" in str(e) and "image" in str(e).lower()
+                    if not (role == "gate" and "空内容" in str(e)) and not bad_img:  # 问一个字没问出来、这张图本身不行，都不算接口坏了（别让聊天的模型冷却）
                         p.cool(e)
                     break
         raise RuntimeError(f"所有 {role} 接口都失败了：{last}")
@@ -283,6 +285,7 @@ class LLM:
         return parse_json(text, default)
 
     async def label_image(self, image_b64: str, prompt: str, mime: str = "image/png") -> str:
+        image_b64, mime = image_payload(image_b64)
         msgs = [{"role": "user", "content": [
             {"type": "text", "text": prompt},
             {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}},
@@ -291,10 +294,11 @@ class LLM:
 
     async def describe_image(self, image_b64: str, hint: str = "", prompt: str = "") -> str:
         """用看图模型把图片变成文字描述，再交给聊天模型。prompt：换一种问法（群聊里的图用 GROUP_IMAGE_PROMPT）。"""
+        image_b64, mime = image_payload(image_b64)
         msgs = [{"role": "user", "content": [
             {"type": "text", "text": (prompt or "用中文简洁描述这张图片的内容（人物、场景、文字、氛围），80 字以内。")
                                      + (f"发图的人附言：{hint}" if hint else "")},
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}},
         ]}]
         return await self.chat(msgs, role="vision", temperature=0.3, max_tokens=300)
 
@@ -305,6 +309,30 @@ GROUP_IMAGE_PROMPT = ("这是群聊里{who}发的一张图。用中文写一行�
                       "先说是什么（截图 / 表情包 / 照片 / 梗图 / 文件），再说内容；图里有字就摘最关键的几个字放在「」里；"
                       "如果明显是在拍 / 在说群里的某个人（群里有：{names}），写“像在说某某（把握高）”或“（把握低）”，看不出来就不写；"
                       "看不清就说看不清，别编。")
+
+
+def image_payload(image_b64: str) -> tuple[str, str]:
+    """17.1 看图前先把图换成接口都认的格式：PNG / JPEG / WebP 原样（mime 照实写），GIF、BMP 这些转成第一帧 PNG；
+    Pillow 也打不开的（比如微信自己的 wxgf 动图、加密的 .dat）直接报错，不发给接口——发了只会 400，还会让聊天模型冷却。"""
+    raw = base64.b64decode(image_b64 or "")
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return image_b64, "image/png"
+    if raw[:3] == b"\xff\xd8\xff":
+        return image_b64, "image/jpeg"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return image_b64, "image/webp"
+    try:
+        import io
+
+        from PIL import Image
+        im = Image.open(io.BytesIO(raw))
+        im.seek(0)
+        im = im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB")
+        b = io.BytesIO()
+        im.save(b, "PNG")
+        return base64.b64encode(b.getvalue()).decode(), "image/png"
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(f"这张图的格式看不了（开头是 {raw[:4]!r}）") from e
 
 
 def peak_factor(tz=None) -> float:
