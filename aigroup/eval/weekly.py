@@ -165,11 +165,31 @@ class EvalMixin:
             log.info("人设对比：新的赢 %d、输 %d、平 %d", res["new"], res["old"], res["tie"])
         return res
 
+    def sig_stats(self, days: float = 14) -> list[dict]:
+        """15.0 每条人格签名用上以后效果怎么样：她那几句有没有人接（qq_reply_effect.score：1 直接接 … 0 冷场）。"""
+        log_ = [x for x in (self.db.get("sig_log") or []) if time.time() - float(x.get("ts") or 0) < days * 86400]
+        if not log_:
+            return []
+        ids = [int(x["id"]) for x in log_]
+        rows = {int(r["id"]): r["score"] for r in self.db.conn.execute(
+            f"SELECT id, score FROM qq_reply_effect WHERE done=1 AND id IN ({','.join('?' * len(ids))})", ids).fetchall()}
+        agg: dict[str, list] = {}
+        for x in log_:
+            sc = rows.get(int(x["id"]))
+            if sc is None:
+                continue
+            for sid in x.get("sigs") or []:
+                agg.setdefault(sid, []).append(float(sc))
+        out = [{"id": k, "n": len(v), "avg": round(sum(v) / len(v), 2), "cold": round(sum(1 for y in v if y <= 0) / len(v), 2)}
+               for k, v in agg.items()]
+        return sorted(out, key=lambda r: (-r["n"], r["id"]))
+
     def eval_snapshot(self) -> dict:
         vs = self.db.get("persona_versions") or []
         cmp_ = self.db.get("persona_compare_last") or {}
         return {"hist": self.db.get("eval_hist") or [], "compare": {k: v for k, v in cmp_.items() if k != "items"},
                 "compare_items": (cmp_.get("items") or [])[:8],
                 "versions": [{"hash": v.get("hash"), "ts": v.get("ts")} for v in vs],
-                "current": body_hash(self.brain.persona.body), "running": bool(getattr(self, "_eval_running", False))}
+                "current": body_hash(self.brain.persona.body), "running": bool(getattr(self, "_eval_running", False)),
+                "sigs": self.sig_stats()}
 

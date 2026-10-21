@@ -255,14 +255,18 @@ class NetMixin:
         bv = info.get("bv")
         if not bv or not self.g.get("watch_videos", True) or getattr(self, "links", None) is None:
             return None
-        cache = self.db.get(f"qq_video_{bv}")
+        part = int(info.get("p") or 1)
+        ckey = f"qq_video_{bv}" + (f"_p{part}" if part > 1 else "")
+        cache = self.db.get(ckey)
+        if cache and "lines" not in cache and int(self.g.get("video_frames", 8) or 0) > 0:
+            cache = None                                   # 15.0 以前看过的只有要点：重新看一遍（这次带画面和原话）
         if not cache:
             if not self._allow("video", 10):
                 return None
             from aigroup.net.bili import ASR, Bili
             b = Bili(self.links.fetch_bytes, self.brain.llm, ASR(self.cfg))
             try:
-                w = await b.watch(bv)
+                w = await b.watch(bv, part, int(self.g.get("video_frames", 8) or 0))
                 s = await b.summarize(w)
             except Exception as e:  # noqa: BLE001
                 log.info("视频 %s 没看成：%s", bv, e)
@@ -271,12 +275,15 @@ class NetMixin:
                 return None
             cache = {"title": w["title"], "block": Bili.describe(w, s), "gist": str(s["gist"])[:80],
                      "keys": [k for k in (s.get("keys") or []) if isinstance(k, str)][:5],
-                     "points": [str(x) for x in (s.get("points") or [])][:5], "subtitle": bool(w.get("subtitle") or w.get("heard")),
-                     "ts": time.time()}
-            self.db.set(f"qq_video_{bv}", cache)
-            log.info("群 %s：看了视频《%s》（%s）", gid, cache["title"][:30], "有字幕" if cache["subtitle"] else "没字幕")
+                     "points": [str(x) for x in (s.get("points") or [])][:6], "subtitle": bool(w.get("subtitle") or w.get("heard")),
+                     "lines": str(w.get("subtitle") or w.get("heard") or "")[:6000],      # 15.0 原话（带时间），追问时翻
+                     "frames": list(w.get("frames") or [])[:12], "author": w.get("author", ""), "ts": time.time()}
+            self.db.set(ckey, cache)
+            log.info("群 %s：看了视频《%s》（%s，画面 %d 张）", gid, cache["title"][:30],
+                     "有字幕或语音" if cache["subtitle"] else "没听到内容", len(cache["frames"]))
         vids = [v for v in (self.db.get(f"qq_videos_{gid}") or []) if v.get("bv") != bv]
-        vids.append({"ts": time.time(), "bv": bv, "title": cache["title"], "block": cache["block"], "who": who})
+        vids.append({"ts": time.time(), "bv": bv, "p": part, "key": ckey, "title": cache["title"], "block": cache["block"],
+                     "who": who})
         self.db.set(f"qq_videos_{gid}", vids[-10:])
         kn = getattr(self, "knowledge", None)
         if kn is not None and self.g.get("remember_web", True):
@@ -293,12 +300,45 @@ class NetMixin:
                     log.info("群 %s 看完视频没说成：%s", gid, e)
         return cache
 
-    def videos_block(self, gid: int, hours: float = 6) -> str:
+    def videos_block(self, gid: int, hours: float = 6, query: str = "") -> str:
         vids = [v for v in (self.db.get(f"qq_videos_{gid}") or []) if time.time() - float(v.get("ts") or 0) < hours * 3600]
         if not vids:
             return ""
-        return "# 群里最近分享的视频（你点开看过了）\n" + "\n".join(
+        out = "# 群里最近分享的视频（你点开看过了）\n" + "\n".join(
             (f"{v['who']}发的：" if v.get("who") else "") + v["block"] for v in vids[-2:])
+        det = self.video_detail(vids, query) if query else ""
+        return out + ("\n\n" + det if det else "")
+
+    def video_detail(self, vids: list, query: str) -> str:
+        """15.0 有人追问视频里的内容（“第 3 分钟那段”“最后说了啥”“画面上那个是谁”）：翻出那附近的原话和画面。"""
+        from aigroup.net.bili import ask_time
+        asks = bool(re.search(r"视频|那段|那里|片段|分钟|开头|结尾|最后|后面|前面|画面|UP|up主|博主|弹幕|讲了|说了|\d{1,2}[:：]\d{2}", query))
+        hit = None
+        for v in reversed(vids[-2:]):
+            c = self.db.get(v.get("key") or f"qq_video_{v.get('bv')}") or {}
+            words = [c.get("title", "")[:6], *(c.get("keys") or [])]
+            if asks or any(w and len(w) >= 2 and w in query for w in words):
+                hit = c
+                break
+        if not hit or not (hit.get("lines") or hit.get("frames")):
+            return ""
+        t = ask_time(query, hit.get("lines", ""))
+        lines = [ln for ln in str(hit.get("lines") or "").splitlines() if ln.strip()]
+        fr = list(hit.get("frames") or [])
+        if t is not None:
+            from aigroup.net.bili import line_time
+            near = [ln for ln in lines if (lt := line_time(ln)) is not None and abs(lt - t) <= 45]
+            fnear = [f for f in fr if (ft := line_time(f"[{f.get('t')}]")) is not None and abs(ft - t) <= 90]
+            body = "\n".join(near[:8]) or "（那附近没有原话）"
+            fb = "；".join(f"{f['t']} {f['see']}" for f in fnear[:3])
+            return (f"# 《{hit.get('title', '')}》{t // 60:02d}:{t % 60:02d} 附近（你看的时候记下的）\n{body}"
+                    + (f"\n画面：{fb}" if fb else "") + "\n（只说这里有的，没有的就说没注意到）")
+        body = "\n".join(lines)
+        if len(body) > 1600:                                       # 太长：头、中、尾各留一点
+            body = body[:700] + "\n……\n" + body[len(body) // 2: len(body) // 2 + 400] + "\n……\n" + body[-500:]
+        fb = "\n".join(f"- {f['t']}：{f['see']}" for f in fr[:8])
+        return (f"# 《{hit.get('title', '')}》里说的话（你看的时候记下的，带时间）\n{body or '（没听到内容）'}"
+                + (f"\n# 你看到的画面\n{fb}" if fb else "") + "\n（只说这里有的，没有的就说没注意到）")
 
     def learn_link(self, gid: int, desc: str):
         """群友发的链接读到了内容：也记一条（标题当话题）。"""

@@ -11,6 +11,8 @@
     facets      大五 30 个 facet 里和她有关的，1~5 档 + 一句说明（NEO-PI-R / IPIP-NEO）
     humor       幽默配比（Martin 的四种幽默风格）、能调侃什么、绝不碰什么、对方没笑怎么补台
     voice       句长、口头禅配额、不说的话
+    knowledge   15.0 知识边界：knows 熟的 / vague 只知道个大概的 / unknown 不懂的 / not_into 不感兴趣的
+                （图灵测试研究里，“承认不知道”是最像人的信号之一：Jones & Bergen 2025）
     signatures  if-then 情境签名（Mischel & Shoda CAPS）：when / do / not，keys 是触发词，flags 是程序判断的情境
 
 core/position/attachment/values/motives/facets/humor/voice 渲染成一段“# 你的人格”放进人设正文最前面（静态，缓存友好）；
@@ -89,6 +91,7 @@ class Traits:
     facets: dict = field(default_factory=dict)          # code → {"level": int, "note": str}
     humor: dict = field(default_factory=dict)
     voice: dict = field(default_factory=dict)
+    knowledge: dict = field(default_factory=dict)
     signatures: list[Signature] = field(default_factory=list)
     path: str = ""
     warnings: list[str] = field(default_factory=list)
@@ -129,6 +132,18 @@ class Traits:
                                             ("contradiction", "你的矛盾")) if m.get(k)]
         if mm:
             out.append("；".join(mm) + "。")
+        kn = self.knowledge or {}
+        kk = []
+        if kn.get("knows"):
+            kk.append("你熟的：" + "、".join(kn["knows"]))
+        if kn.get("vague"):
+            kk.append("只知道个大概的：" + "、".join(kn["vague"]) + "（说的时候带“好像”“我记得”，说错了就认）")
+        if kn.get("unknown"):
+            kk.append("不懂的：" + "、".join(kn["unknown"]) + "（被问到就说不懂，想知道就问一句或者去查，别硬编）")
+        if kn.get("not_into"):
+            kk.append("不太感兴趣的：" + "、".join(kn["not_into"]) + "（聊到可以少接，或者直说没兴趣）")
+        if kk:
+            out.append("你知道多少：" + "；".join(kk) + "。")
         v = self.voice or {}
         vv = []
         if v.get("sentence"):
@@ -214,6 +229,8 @@ def parse_traits(data: dict, path: str = "") -> Traits:
         t.warnings.append(f"幽默比例加起来是 {sum(mix.values())}，应该是 100")
     t.humor = {"mix": mix, "ok": _lst(h.get("ok")), "never": _lst(h.get("never")), "repair": str(h.get("repair") or "")}
     t.voice = data.get("voice") if isinstance(data.get("voice"), dict) else {}
+    kn = data.get("knowledge") if isinstance(data.get("knowledge"), dict) else {}
+    t.knowledge = {k: _lst(kn.get(k)) for k in ("knows", "vague", "unknown", "not_into") if kn.get(k)}
     for i, s in enumerate(data.get("signatures") or []):
         if not isinstance(s, dict) or not s.get("when") or not s.get("do"):
             t.warnings.append(f"第 {i + 1} 条情境签名要有 when 和 do")

@@ -1215,10 +1215,10 @@ async function loadLearn(){
       <div class="meta">出现 ${x.count} 次 · ${x.is_jargon===1?"真黑话":x.is_jargon===0?"普通词":"待判断"}${x.guess?" · 字面猜："+esc(x.guess):""} · ${x.used?'<span style="color:var(--accent-ink)">会用</span>':"暂不用"}</div></div>
       <div class="chips" style="flex-wrap:nowrap">${lBtns("jargon",x)}</div></li>`).join("")
     :'<li class="empty" style="display:block">还没发现黑话</li>';
-  $("factList").innerHTML=r.facts.length?r.facts.map(f=>`<li><div class="grow"><div>${f.t_invalid?'<s class="muted">':''}<b>${esc(f.about)}</b>：${esc(f.text)}${f.t_invalid?'</s>':''}</div>
-      <div class="meta">${fmtDay(f.t_valid)} · 想起 ${f.hits} 次${f.t_invalid?" · 已过时":""}</div></div>
-      <div class="chips" style="flex-wrap:nowrap"><button class="btn sm ghost" data-fact="${f.id}" data-act="${f.t_invalid?"restore":"expire"}">${f.t_invalid?"恢复":"过时"}</button>
-      <button class="btn sm ghost danger" data-fact="${f.id}" data-act="delete" aria-label="删掉">${icon("x")}</button></div></li>`).join("")
+  $("factList").innerHTML=r.facts.length?r.facts.map(f=>{const dead=f.t_invalid&&f.t_invalid*1000<Date.now(),till=f.t_invalid&&!dead;const src={self:"他自己说的",other:"听别人说的",guess:"猜的"}[f.source]||"";return `<li><div class="grow"><div>${dead?'<s class="muted">':''}<b>${esc(f.about)}</b>：${esc(f.text)}${dead?'</s>':''}</div>
+      <div class="meta">${fmtDay(f.t_valid)}${src?" · "+src:""} · 想起 ${f.hits} 次${dead?" · 已过时":till?" · 到 "+fmtDay(f.t_invalid)+" 为止":""}</div></div>
+      <div class="chips" style="flex-wrap:nowrap"><button class="btn sm ghost" data-fact="${f.id}" data-act="${dead?"restore":"expire"}">${dead?"恢复":"过时"}</button>
+      <button class="btn sm ghost danger" data-fact="${f.id}" data-act="delete" aria-label="删掉">${icon("x")}</button></div></li>`}).join("")
     :'<li class="empty" style="display:block">还没记什么事（整理群聊时会记）</li>';
   $("normText").value=r.norms||"";
   $("stkList").innerHTML=r.stickers.length?r.stickers.map(x=>`<div class="card" style="padding:8px;text-align:center"><img src="api/sticker?id=${x.id}" alt="${esc(x.descr||x.emotion||"表情包")}" style="max-width:100%;height:90px;object-fit:contain">
@@ -1282,8 +1282,9 @@ const KGROUPS=[["说话多少",["talkativeness","max_per_10min","max_bubbles","c
   ["小动作",["repeat_chance","react_chance","welcome_chance","night_catch_up","see_images","hear_voice","voice_reply","stickers","typo_rate","poke_back_chance","update_signature"]],
   ["像真人（2.2）",["lore","mood","human_latency","explore_rate"]],["群冷了冒个泡",["idle_hours","idle_chance","idle_gap_hours","active_hours"]],
   ["记性",["profile_every","impression_every"]],["联网",["read_links","web_search","search_per_hour","remember_web","weekly_reflect"]],
-  ["慢慢长",["monthly_self","plans","plans_per_day","fix_knowledge","celebrate","birthday_card","plans_cheer","share_per_day","share_chance","photo_share_chance"]],
-  ["视频和天气（4.4）",["watch_videos","weather","weather_care"]],
+  ["慢慢长",["monthly_self","plans","plans_per_day","fix_knowledge","celebrate","birthday_card","plans_cheer","share_per_day","share_chance","share_fresh_days","photo_share_chance"]],
+  ["人格和分寸（14.0）",["signatures","signature_k","persona_examples","example_k","hold_thoughts","pester_calls"]],
+  ["B 站视频和天气",["watch_videos","video_frames","weather","weather_care"]],
   ["每周评测",["weekly_eval"]]];
 let K={},KG="all";
 const kfmt=(it,v)=>it.kind==="bool"?(v?"开":"关"):it.kind==="str"?v:/chance|talkativeness|typo_rate|explore_rate/.test(it.key)?Math.round(v*100)+"%":/factor|boost|pace/.test(it.key)?"×"+(+v).toFixed(2).replace(/\.?0+$/,""):String(v);
@@ -1298,6 +1299,8 @@ async function loadEval(){let E;try{E=await api("/api/eval")}catch(e){return}
       (h.traits?`<div class="small" style="margin-top:6px">人格一致性：和人格文件平均差 ${h.traits.dist??"?"} 档${(h.traits.off||[]).length?"，差得多："+h.traits.off.map(([c,v])=>`${esc(c)} ${v>0?"+":""}${v}`).join("、"):""}；幽默 ${Object.entries(h.traits.humor||{}).map(([a,b])=>`${esc(a)} ${b}`).join("、")}${(h.traits.attack||[]).length?`<div class="meta">攻击型：${h.traits.attack.map(esc).join(" / ")}</div>`:""}</div>`:"")+
             ((h.worst||[]).length?`<ul class="rows" style="margin-top:6px">${h.worst.map(w=>`<li><span class="tag ${w.score<70?"hot":"warm"}">${w.score}</span><div class="grow">${esc(w.said)}<div class="meta">${esc(w.why)}</div></div></li>`).join("")}</ul>`:"")})()
     :`<div class="empty">还没评过（每周一自动评一次，也可以点“现在评一次”）${E.running?" · 正在评…":""}</div>`;
+  const SG=E.sigs||[];
+  if(SG.length)$("evHist").innerHTML+=`<div class="small" style="margin-top:10px">人格签名用上以后（近两周，她那几句有没有人接；1 直接接、0 冷场）：</div><div class="chips" style="margin-top:6px">${SG.slice(0,12).map(g=>`<span class="tag ${g.cold>=.5?"hot":g.avg>=.6?"ok":""}">${esc(g.id)} · ${g.n} 次 · ${g.avg}${g.cold>=.5?" · 常冷场":""}</span>`).join("")}</div>`;
   const C=E.compare||{};
   $("evCmpBox").innerHTML=C.n?`<div class="small muted" style="margin-bottom:6px">上次人设对比（${fmtDay(C.ts)}，${C.n} 段聊天，盲比）</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><span class="tag ok">新人设赢 ${C.new}</span><span class="tag hot">旧人设赢 ${C.old}</span><span class="tag">平 ${C.tie}</span></div>
@@ -1315,7 +1318,8 @@ async function loadKnobs(){
   if(multi()){mkSeg($("kseg"),[["all","所有群（全局）"],...S.groups.map(g=>[String(g.id),"只调「"+g.name+"」",(g.own_knobs||[]).length||null])],KG,v=>{KG=v;loadKnobs()});
     $("kNote").textContent=gm?`这里调的只对「${gname(+KG)}」生效，盖在全局上面；没单独调过的跟着全局走。灰掉的只能在全局里调。`:"几个群热闹程度不一样？切到某一个群，单独调它的话痨度、冒泡时段这些。"}
   $("resetAll").textContent=gm?"这个群全部跟回全局":"全部恢复";
-  $("knobs").innerHTML=KGROUPS.map(([t,keys])=>`<div class="sec-t" style="margin-top:6px">${t}</div><div class="knobs">${keys.filter(k=>K[k]).map(k=>{const it=K[k];
+  const listed=new Set(KGROUPS.flatMap(g=>g[1])),rest=Object.keys(K).filter(k=>!listed.has(k));
+  $("knobs").innerHTML=[...KGROUPS,...(rest.length?[["其他",rest]]:[])].map(([t,keys])=>`<div class="sec-t" style="margin-top:6px">${t}</div><div class="knobs">${keys.filter(k=>K[k]).map(k=>{const it=K[k];
     const dis=gm&&it.global_only?"disabled":"";
     const ctl=it.kind==="bool"?`<label class="switch" aria-label="${esc(it.label)}"><input type="checkbox" data-k="${k}" ${it.value?"checked":""} ${dis}><span></span></label>`
       :it.kind==="str"?`<input class="input" data-k="${k}" value="${esc(it.value||"")}" style="width:${k==="group_note"?"min(100%,420px)":"130px"};height:30px" ${dis}>`

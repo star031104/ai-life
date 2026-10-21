@@ -94,8 +94,12 @@ class DigestMixin:
                   "2. 群|…：这个群最近的事和梗（大家在忙的事、约好的活动、反复出现的梗），合并原来的，最多 5 行，每行 40 字以内，过时的删掉。\n"
                   "3. 规|…：这个群不成文的规矩（比如“大家都不 @人”“不刷屏”“深夜才热闹”“说话爱带某个梗”），合并原来的，最多 4 行，没把握就不写。\n"
                   "4. 我|…：你（“你”）在群里说过的关于你自己的事（经历、喜好、计划），以后要和这些保持一致；合并原来的，最多 8 行。\n"
-                  f"5. 事|{id_label()}或“群”|内容|替代编号：值得以后想起来的具体的事（谁在准备考试、谁养了猫、约了周六看展），每条 40 字以内；"
-                  "如果它推翻了下面“原来记的事”里的某条（比如考完了、分手了、换工作了），在最后写那条的编号，没有就写 -。最多 6 条，只写新的。\n"
+                  f"5. 事|{id_label()}或“群”|内容|替代编号|来源|有效到：值得以后想起来的具体的事（谁在准备考试、谁养了猫、约了周六看展），每条 40 字以内；"
+                  "如果它推翻了下面“原来记的事”里的某条（比如考完了、分手了、换工作了），替代编号写那条的编号，没有就写 -。"
+                  "来源写 自己（他本人说的自己的事）/ 别人（别人说他的、转述的）/ 猜（你从话里推测的）；"
+                  "开玩笑、互损、反话、假设、在说别人的事都不要记到他头上。"
+                  "有效到：只在一段时间内成立的（这周在赶论文、明天考试、这几天在出差）写到哪天为止 YYYY-MM-DD，长期的写 -。"
+                  "最多 6 条，只写新的。\n"
                   "6. 梗|词1/词2|这个梗是什么意思、一般什么时候用：群里反复出现、外人看不懂的梗，词写群友真的会打的字，最多 3 条，没有就不写。\n"
                   + (self.digest_extra_prompt() + "\n\n" if hasattr(self, "digest_extra_prompt") else "\n") +
                   f"# 原来的印象（{id_label()}|名字|印象）\n{chr(10).join(known)}\n\n# 原来记的群里的事\n{old_notes}\n\n"
@@ -142,13 +146,24 @@ class DigestMixin:
                 continue
             who, text = parts[0], parts[1]
             rep = [int(r) for r in re.findall(r"\d+", parts[2])] if len(parts) > 2 else []
+            src = {"自己": "self", "本人": "self", "别人": "other", "转述": "other", "猜": "guess", "推测": "guess"}.get(
+                parts[3].strip() if len(parts) > 3 else "", "")
+            until = None
+            if len(parts) > 4 and re.match(r"\d{4}-\d{2}-\d{2}", parts[4].strip()):
+                try:
+                    from datetime import datetime as _dt
+                    until = _dt.strptime(parts[4].strip()[:10], "%Y-%m-%d").replace(
+                        hour=23, minute=59, tzinfo=self.cfg.tz).timestamp()
+                except ValueError:
+                    until = None
             valid_ids = {f["id"] for f in facts}
             subject = int(who) if who.isdigit() and int(who) in ids else (0 if who in ("群", "大家") else
                                                                           -1 if who in ("我", "你") else None)
             if subject is None:
                 continue
-            if self.memory.add_fact(gid, text, speaker=subject if subject > 0 else None, subject=subject,
-                                    kind="fact", replaces=[r for r in rep if r in valid_ids]):
+            if self.memory.add_fact(gid, text, speaker=subject if subject > 0 and src != "other" else None,
+                                    subject=subject, kind="fact", replaces=[r for r in rep if r in valid_ids],
+                                    source=src, until=until):
                 nf += 1
         n = 0
         names = self.names(gid)

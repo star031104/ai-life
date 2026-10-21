@@ -193,20 +193,24 @@ class Memory:
         self.db, self.tz = db, tz
         self.embedder = embedder
         db.conn.executescript(SCHEMA)
+        cols = {r[1] for r in db.conn.execute("PRAGMA table_info(qq_facts)")}
+        if "source" not in cols:                 # 15.0 这件事是怎么知道的：self 他自己说的 / other 别人说他的 / guess 你猜的
+            db.conn.execute("ALTER TABLE qq_facts ADD COLUMN source TEXT NOT NULL DEFAULT ''")
         db.conn.commit()
         self._idx: dict[int, tuple] = {}         # gid → (建索引时的最大消息 id, 行, BM25)；每 200 条新消息重建一次
 
     # ---------------- 写 ----------------
     def add_fact(self, gid: int, text: str, *, speaker: int | None = None, subject: int | None = None,
                  kind: str = "fact", msg_id: int | None = None, replaces: list[int] | None = None,
-                 now: float | None = None) -> int | None:
+                 now: float | None = None, source: str = "", until: float | None = None) -> int | None:
+        """until（15.0）：这件事到什么时候就不算数了（“这周在赶论文”→ 周日），到点自动当成过期；source 见建表处。"""
         text = re.sub(r"\s+", " ", str(text or "")).strip()[:120]
         if len(text) < 4:
             return None
         now = now or time.time()
         dup = self.db.conn.execute(
-            "SELECT id, text FROM qq_facts WHERE group_id=? AND t_invalid IS NULL AND IFNULL(subject_id,0)=IFNULL(?,0)",
-            (gid, subject)).fetchall()
+            "SELECT id, text FROM qq_facts WHERE group_id=? AND (t_invalid IS NULL OR t_invalid>?) "
+            "AND IFNULL(subject_id,0)=IFNULL(?,0)", (gid, now, subject)).fetchall()
         from difflib import SequenceMatcher
         for r in dup:
             if SequenceMatcher(None, r["text"], text).ratio() >= 0.85:      # 同一件事又说了一遍：算想起一次
@@ -214,12 +218,13 @@ class Memory:
                 self.db.conn.commit()
                 return int(r["id"])
         for rid in replaces or []:                       # 新说法替代旧的：旧的标失效（不删，以后还能查“以前”）
-            self.db.conn.execute("UPDATE qq_facts SET t_invalid=? WHERE id=? AND group_id=? AND t_invalid IS NULL",
-                                 (now, int(rid), gid))
+            self.db.conn.execute("UPDATE qq_facts SET t_invalid=? WHERE id=? AND group_id=? AND (t_invalid IS NULL OR t_invalid>?)",
+                                 (now, int(rid), gid, now))
         cur = self.db.conn.execute(
-            "INSERT INTO qq_facts(group_id, speaker_id, subject_id, text, kind, msg_id, t_valid, created) "
-            "VALUES (?,?,?,?,?,?,?,?)", (gid, speaker, subject, text, kind if kind in ("fact", "event", "plan", "opinion")
-                                         else "fact", msg_id, now, now))
+            "INSERT INTO qq_facts(group_id, speaker_id, subject_id, text, kind, msg_id, t_valid, t_invalid, created, source) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)", (gid, speaker, subject, text, kind if kind in ("fact", "event", "plan", "opinion")
+                                             else "fact", msg_id, now, until if until and until > now else None, now,
+                                             source if source in ("self", "other", "guess") else ""))
         self.db.conn.commit()
         return int(cur.lastrowid)
 
@@ -227,7 +232,8 @@ class Memory:
         sql = "SELECT * FROM qq_facts WHERE group_id=?"
         args: list = [gid]
         if valid_only:
-            sql += " AND t_invalid IS NULL"
+            sql += " AND (t_invalid IS NULL OR t_invalid>?)"
+            args.append(time.time())
         if subject is not None:
             sql += " AND subject_id=?"
             args.append(subject)
@@ -263,8 +269,8 @@ class Memory:
             sc = [s + (0.5 if i in set(dense[:10]) else 0.0) for i, s in enumerate(sc)]
             best = sorted(fused, key=lambda k: -fused[k] * (1 + sc[k[1]] / (1 + max(sc))))[:k_msgs]
             out["messages"] = sorted((dict(rows[i]) for _, i in best), key=lambda r: r["ts"])
-        frows = self.db.conn.execute("SELECT * FROM qq_facts WHERE group_id=? AND t_invalid IS NULL ORDER BY id DESC "
-                                     "LIMIT 2000", (gid,)).fetchall()
+        frows = self.db.conn.execute("SELECT * FROM qq_facts WHERE group_id=? AND (t_invalid IS NULL OR t_invalid>?) "
+                                     "ORDER BY id DESC LIMIT 2000", (gid, time.time())).fetchall()
         if frows:
             bm = BM25([tokens(r["text"]) for r in frows])
             sc = bm.scores(q)
@@ -345,7 +351,11 @@ class Memory:
             elif f.get("subject_id") and names and str(f["subject_id"]) in names:
                 who = f"{names[str(f['subject_id'])]}："
             day = datetime.fromtimestamp(f["t_valid"], self.tz).strftime("%m-%d")
-            lines.append(f"- （{day}）{who}{clean_member_text(f['text'], 120)}")
+            src = {"self": "（他自己说的）", "other": "（听别人说的，未必准）", "guess": "（你猜的，别当真说出来）"}.get(
+                str(f.get("source") or "") if f.get("subject_id") not in (-1, 0) else "", "")
+            exp = (f"（到 {datetime.fromtimestamp(f['t_invalid'], self.tz):%m-%d} 为止）"
+                   if f.get("t_invalid") else "")
+            lines.append(f"- （{day}）{who}{clean_member_text(f['text'], 120)}{src}{exp}")
         for m in found.get("messages") or []:
             day = datetime.fromtimestamp(m["ts"], self.tz).strftime("%m-%d %H:%M")
             who = "你" if m["role"] == "assistant" else m["name"]

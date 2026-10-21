@@ -415,6 +415,8 @@ class SpeakMixin:
             kind = plan["kind"]
             if plan["think"]:
                 tlog.info("群 %s 她想（%s）：%s", gid, kind or "-", plan["think"])
+            if plan.get("hold") and self.gk(gid).get("hold_thoughts", True):
+                self.hold_thought(gid, plan["hold"], plan.get("think", ""))
             nxt = plan.get("next")
             if nxt and isinstance(nxt, dict):
                 try:
@@ -619,11 +621,17 @@ class SpeakMixin:
                 (gid, now - 1800)).fetchall()]
             st.attention.talked_to(target_uid, everyone, now)
             self.gate.mark(gate_id, spoke=True, kind=kind)
-            self.db.conn.execute(
+            cur = self.db.conn.execute(
                 "INSERT INTO qq_reply_effect(ts, group_id, gate_id, mentioned, target_uid, her_ids, text) "
                 "VALUES (?,?,?,?,?,?,?)", (now, gid, gate_id, int(mentioned), target_uid,
                                            json.dumps([x for x in sent_ids if x is not None]), " ".join(sent_txt)[:300]))
             self.db.conn.commit()
+            sigs = (getattr(self, "_last_sigs", None) or {}).get(gid) if isinstance(getattr(self, "_last_sigs", None), dict) else None
+            if sigs:                                        # 15.0 记下这次用了哪几条人格签名，每周看哪条老是冷场
+                log_ = list(self.db.get("sig_log") or [])
+                log_.append({"id": int(cur.lastrowid), "gid": gid, "sigs": sigs, "ts": now})
+                self.db.set("sig_log", log_[-600:])
+            self.use_thoughts(gid, " ".join(sent_txt))
             done("say", sent_txt, qtxt)
         else:
             done("send_fail", [], qtxt)
@@ -690,6 +698,66 @@ class SpeakMixin:
                 log.debug("群 %s：不在主动开口的时段（%s），不插话", gid, hrs)
                 return True
         return False
+
+    # ---------------- 15.0 想法池：想说但时机不对的话先留着（Inner Thoughts, Liu et al. 2025） ----------------
+    def hold_thought(self, gid: int, text: str, why: str = "", now: float | None = None):
+        text = re.sub(r"\s+", " ", str(text or "")).strip()[:80]
+        if len(text) < 4:
+            return
+        from aigroup.chat.plan import bigram_overlap
+        now = now or time.time()
+        pool = [x for x in (self.db.get(f"qq_thoughts_{gid}") or []) if now - float(x.get("ts") or 0) < 6 * 3600]
+        if any(bigram_overlap(x["text"], text) >= 0.6 for x in pool):
+            return
+        pool.append({"ts": now, "text": text, "why": str(why or "")[:80]})
+        self.db.set(f"qq_thoughts_{gid}", pool[-5:])
+        log.info("群 %s：她先憋着一句：%s", gid, text)
+
+    def held_thoughts(self, gid: int, text: str, idle: bool = False, now: float | None = None) -> list[str]:
+        """和现在聊的有关（字面重合）、或者群里冷了：拿出来给她考虑；一次最多两句。"""
+        from aigroup.chat.plan import bigram_overlap
+        now = now or time.time()
+        pool = [x for x in (self.db.get(f"qq_thoughts_{gid}") or []) if now - float(x.get("ts") or 0) < 6 * 3600]
+        if not pool or not self.gk(gid).get("hold_thoughts", True):
+            return []
+        hit = [x for x in pool if idle or bigram_overlap(x["text"], text or "") >= 0.2]
+        return [f"{x['text']}（{int((now - x['ts']) // 60)} 分钟前想到的）" for x in hit[-2:]]
+
+    def use_thoughts(self, gid: int, said: str):
+        """她说出口的话和池子里的某句很像：那句算说过了。"""
+        from aigroup.chat.plan import bigram_overlap
+        pool = list(self.db.get(f"qq_thoughts_{gid}") or [])
+        keep = [x for x in pool if bigram_overlap(x["text"], said or "") < 0.35]
+        if len(keep) != len(pool):
+            self.db.set(f"qq_thoughts_{gid}", keep)
+
+    # ---------------- 15.0 在聊的人今天怎么样（短期的心智推测） ----------------
+    def people_today(self, gid: int, focus: list, k: int = 3) -> str:
+        """这几个人今天说过的话里有没有“累 / 崩溃 / 忙 / 考试 / 开心”之类：给她一句提醒，免得在人家状态差的时候还去损。"""
+        from aigroup.traits import FLAG_WORDS
+        if not focus:
+            return ""
+        now = self.brain.now()
+        t0 = now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        busy = r"加班|开会|考试|ddl|DDL|赶|答辩|面试|出差|通勤|值班"
+        happy = r"哈哈哈|太好了|开心|爽|赢了|上分|过了|拿到了|offer"
+        lines = []
+        for uid in [u for u in focus if isinstance(u, int) and u > 0][:k]:
+            rows = self.db.conn.execute("SELECT name, content FROM qq_group_messages WHERE group_id=? AND user_id=? "
+                                        "AND role='user' AND ts>? ORDER BY id DESC LIMIT 40", (gid, uid, t0)).fetchall()
+            if not rows:
+                continue
+            txt = " ".join(str(r["content"] or "") for r in rows)
+            words = []
+            for name, pat in (("状态不太好", FLAG_WORDS["sad"]), ("在忙", busy), ("心情不错", happy)):
+                hits = list(dict.fromkeys(re.findall(pat, txt)))[:3]
+                if hits:
+                    words.append(f"{name}（说过：{'、'.join(hits)}）")
+            if words:
+                lines.append(f"- {rows[0]['name']}今天：{'；'.join(words)}")
+        if not lines:
+            return ""
+        return "# 在聊的这几个人今天怎么样（从他们今天的话里看出来的，别直接点破）\n" + "\n".join(lines)
 
     def pester_count(self, gid: int, uid, now: float, minutes: float = 15) -> tuple[int, int]:
         """13.2 这个人最近 minutes 分钟里叫了她几次（@ 她 / 冲她说）、她这段时间说了几句。"""

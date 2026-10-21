@@ -81,6 +81,7 @@ DEFAULTS = {
     "photo_share_chance": 0.3,     # 分享时是一张自己日常照片的概率（要配了画图接口 routes.image）
     "photo_per_day": 1,            # 每天最多发几张照片（所有群加起来）
     "watch_videos": True,          # 4.4 群友发的 B 站视频点开“看”：字幕、弹幕、热评整理成要点（每小时最多 10 个）
+    "video_frames": 8,             # 15.0 看 B 站视频时截几张画面给看图模型看（0 = 不看画面；要装 ffmpeg、配看图模型）
     "weather": True,               # 4.4 记住群友在哪个城市（出差、旅游、老家），提示词里带上那边的天气
     "weather_care": True,          # 4.4 他在外地、那边要下大雨 / 太热太冷：提醒一句（每个群每天最多一次）
     "weekly_eval": True,           # 4.3 每周一拿真实聊天评一次分；人设改过就和上一版比一比（chat/../eval/weekly.py）
@@ -110,6 +111,7 @@ DEFAULTS = {
     "signature_k": 3,              # 最多挑几条
     "persona_examples": True,      # 14.0 按关键词挑 1~2 段人设里的对话示例放进提示词
     "example_k": 2,
+    "hold_thoughts": True,         # 15.0 想说但时机不对的话先留着，聊到相关的或群冷了再拿出来（最多 5 句，6 小时过期）
     "pester_calls": 4,             # 13.2 同一个人 15 分钟里叫她这么多次：当成在逗她，回得短、可以不回（0 = 不管）
     "stale_batch_minutes": 30,     # 13.1 这批消息里最新的一条都是这么多分钟以前的了，没被叫到就不插话（比如补进来的旧消息）
     "mask_pii": True,              # 群友的话写进数据库前把手机号、身份证号、银行卡号、验证码、邮箱换成占位
@@ -171,7 +173,8 @@ KNOBS = {
     "share_chance": ("一天里分享的概率", "float", 0, 1, 0.05, ""),
     "share_fresh_days": ("只分享几天内的新消息", "int", 1, 14, 1, "事情发生在这么多天以前的算旧闻，不分享；看不出是哪天的也不分享"),
     "photo_share_chance": ("分享时发照片的概率", "float", 0, 1, 0.05, "要配了画图接口"),
-    "watch_videos": ("点开群友发的 B 站视频", "bool", None, None, None, "读字幕、弹幕、热评，能聊具体哪一段"),
+    "watch_videos": ("点开群友发的 B 站视频", "bool", None, None, None, "读字幕（没有就听一遍）、看几张画面、弹幕、热评，能聊具体哪一段"),
+    "video_frames": ("看视频时截几张画面", "int", 0, 12, 1, "交给看图模型看画面；0 = 只听不看"),
     "weather": ("记住群友在哪、那边天气", "bool", None, None, None, "出差、旅游、回老家；提示词里带上那边的天气"),
     "weather_care": ("外地要变天提醒一句", "bool", None, None, None, "大雨、暴雪、太热太冷；每个群每天最多一次"),
     "weekly_eval": ("每周评测", "bool", None, None, None, "每周一挑 10 句她说的话找毛病打分；人设改过就和上一版盲比"),
@@ -183,6 +186,7 @@ KNOBS = {
     "unprompted_per_day": ("每天主动开口最多几次", "int", 0, 200, 5, "插话、冒泡、分享加起来，不算被叫到；0 = 不限"),
     "signatures": ("按情境想起自己一贯的做法", "bool", None, None, None, "每轮挑 1~3 条人格签名（如果……就……）放在最后提醒她；人设要配了人格文件"),
     "persona_examples": ("按情境带上对话示例", "bool", None, None, None, "每轮按关键词挑 1~2 段人设里的对话示例，让她学口吻"),
+    "hold_thoughts": ("想说的话先憋着、等时机", "bool", None, None, None, "时机不对的话先留着，聊到相关的或群冷了再说"),
     "pester_calls": ("被同一个人连着叫几次就降温", "int", 0, 20, 1, "15 分钟里叫她这么多次：回得更短，可以不回；正经问事照常回；0 = 不管"),
     "rethink_max": ("新消息来了重新想几次", "int", 0, 3, 1, "想好了还没发、群里又说了几句：重新想一遍再发"),
     "hear_voice": ("听群友的语音", "bool", None, None, None, "转成文字、带上情绪和笑声（免费的 SenseVoice）"),

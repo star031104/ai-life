@@ -256,12 +256,15 @@ class LinkReader:
     # ---------------- B 站 ----------------
     async def _bilibili(self, url: str) -> dict:
         m = BV_RE.search(url)
+        final = url
         if not m:                                       # b23.tv 短链：先跳转拿到真实地址
             _, _, final = await self._get(url, max_bytes=4096)
             m = BV_RE.search(final)
             if not m:
                 return await self._page(final)
         bv = m.group(1)
+        pm = re.search(r"[?&]p=(\d{1,3})", str(final))      # 15.0 多 P 视频：链接里的 ?p=3
+        part = int(pm.group(1)) if pm else 1
         import json
         import uuid
         d = {}
@@ -282,10 +285,11 @@ class LinkReader:
                 raise RuntimeError("B站这会儿不让看（风控）")
             page["desc"] = re.sub(r",\s*视频播放量.*$", "", page.get("desc", "")).strip()
             page["bv"] = bv
+            page["p"] = part
             return page
         dur = int(d.get("duration") or 0)
         stat = d.get("stat") or {}
-        return {"ok": True, "kind": "B站视频", "bv": bv, "title": d.get("title", ""), "author": (d.get("owner") or {}).get("name", ""),
+        return {"ok": True, "kind": "B站视频", "bv": bv, "p": part, "title": d.get("title", ""), "author": (d.get("owner") or {}).get("name", ""),
                 "duration": f"{dur // 60}:{dur % 60:02d}" if dur else "", "category": d.get("tname", ""),
                 "desc": (d.get("desc") or "").strip()[:300],
                 "views": stat.get("view")}
