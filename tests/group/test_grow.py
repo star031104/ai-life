@@ -155,13 +155,22 @@ def test_share_age_and_dates():
 def test_share_photo(cfg, brain):
     gc, ob = _gc(cfg, brain)
 
+    from types import SimpleNamespace
+
     class FakePhotos:
         ready = True
+        gen = SimpleNamespace(ready=True)
+        left = 1
+        counted = []
 
         def remaining_today(self):
-            return 1
+            return self.left
 
-        async def make(self, scene):
+        def _budget_ok(self):
+            return True
+
+        async def make(self, scene, count=True):
+            self.counted.append(count)
             return b"\x89PNG fake"
     gc.photos = FakePhotos()
     _json(brain, {"随手拍": {"scene": "书桌上的数位板，黑猫踩在上面", "say": "煤球又来捣乱"}})
@@ -169,6 +178,14 @@ def test_share_photo(cfg, brain):
     assert asyncio.run(gc.share(GROUP, gc._st(GROUP), force_photo=True)) is True
     assert ob.sent[0][1][0]["type"] == "image" and "煤球" in str(ob.sent[1])
     assert gc.shares(GROUP)[-1]["kind"] == "photo"
+    # 17.1 小屋里点“发张照片”：今天的名额用完了也照样发（不占名额），不会退成去刷新闻
+    gc.photos.left = 0
+    ob.sent.clear()
+    assert asyncio.run(gc.share(GROUP, gc._st(GROUP), force_photo=True)) is True
+    assert ob.sent[0][1][0]["type"] == "image" and gc.photos.counted[-1] is False
+    gc.photos.gen = SimpleNamespace(ready=False)
+    assert asyncio.run(gc.share(GROUP, gc._st(GROUP), force_photo=True)) is False
+    assert "画图接口" in gc.share_error
 
 
 def test_share_due_limits(cfg, brain):

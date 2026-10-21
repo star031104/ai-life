@@ -1093,8 +1093,10 @@ class GroupHome:
             return web.json_response({"ok": False, "error": "还没连上，发不出去"})
         st = self.gc._st(gid)
         ok = await self.gc.share(gid, st, force_photo=bool(d.get("photo")))
-        return web.json_response({"ok": ok, "message": "分享了一次，去群里看看" if ok else "",
-                                  "error": "" if ok else "这次没刷到值得分享的（或者照片没画出来），看看日志"})
+        why = getattr(self.gc, "share_error", "")
+        return web.json_response({"ok": ok, "message": ("发了一张照片，去群里看看" if d.get("photo") else "分享了一次，去群里看看") if ok else "",
+                                  "error": "" if ok else (why or ("照片没发出去，看看日志" if d.get("photo")
+                                                                  else "这次没刷到值得分享的，看看日志"))})
 
     async def lore_set(self, req):
         d = await self._json(req)

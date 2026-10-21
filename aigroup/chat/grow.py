@@ -548,6 +548,12 @@ class GrowMixin:
         """刷到点东西发进群：多数时候是和大家兴趣有关的新消息，有时候是一张自己的日常照片。"""
         g = self._gk(gid)
         photo = getattr(self, "photos", None)
+        self.share_error = ""
+        if force_photo:                                    # 17.1 小屋里点“发张照片”：只发照片，不占每天的名额，发不了说清楚为什么
+            if photo is None or not photo.gen.ready:
+                self.share_error = "没配画图接口（大模型里的 routes.image），画不了照片"
+                return False
+            return await self._share_photo(gid, st, count=False)
         want_photo = force_photo if force_photo is not None else (
             photo is not None and photo.ready and random.random() < float(g.get("photo_share_chance", 0.3)))
         if want_photo and photo is not None and photo.ready and photo.remaining_today() > 0:
@@ -612,7 +618,7 @@ class GrowMixin:
         self._note_share(gid, "news" if ok else "skip", str(j["gist"]), topic)
         return bool(ok)
 
-    async def _share_photo(self, gid: int, st) -> bool:
+    async def _share_photo(self, gid: int, st, count: bool = True) -> bool:
         p = self.brain.persona
         life = self.db.get(f"life_{self.brain.now():%Y-%m-%d}", "") or "（普通的一天）"
         try:
@@ -620,12 +626,18 @@ class GrowMixin:
                 p.name, p.body[:900], str(life)[:400])}], default={}, role="helper")
         except Exception as e:  # noqa: BLE001
             log.info("想照片失败：%s", e)
+            self.share_error = f"想拍什么的时候出错了：{str(e)[:80]}"
             return False
         scene, say = str((d or {}).get("scene") or "").strip(), str((d or {}).get("say") or "").strip()[:30]
         if len(scene) < 6 or looks_like_order(say):
+            log.info("群 %s：这次没想好拍什么（%s / %s）", gid, scene, say)
+            self.share_error = "这次没想好拍什么，再点一次试试"
             return False
-        data = await self.photos.make(scene)
+        data = await self.photos.make(scene, count=count)
         if not data:
+            self.share_error = ("今天的照片名额用完了" if count and self.photos.remaining_today() <= 0
+                                else "今天的大模型花费到上限了" if not self.photos._budget_ok()
+                                else "画图接口没画出来，看日志里的“画图失败”")
             return False
         from aigroup.qq.onebot import image_seg, text_seg
         async with st.lock:
@@ -637,6 +649,7 @@ class GrowMixin:
                     self._record(gid, self.ob.self_id or 0, p.name, say, mid2, role="assistant")
             except Exception as e:  # noqa: BLE001
                 log.info("群 %s 发照片失败：%s", gid, e)
+                self.share_error = f"画好了但没发出去：{str(e)[:80]}"
                 return False
         self._note_share(gid, "photo", f"{say}（{scene}）", "照片")
         log.info("群 %s：发了一张照片（%s）", gid, scene)
