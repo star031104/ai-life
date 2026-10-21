@@ -20,6 +20,11 @@ class IdleMixin:
             self.evaluate_effects()
         except Exception as e:  # noqa: BLE001
             log.info("统计接话效果出错：%s", e)
+        if hasattr(self, "tool_reminders_tick"):               # 19.0 当面要的提醒：到点就发（免打扰、活跃时段都不管）
+            try:
+                await self.tool_reminders_tick()
+            except Exception as e:  # noqa: BLE001
+                log.warning("到点提醒出错：%s", e)
         now_dt = self.brain.now()
         if in_quiet(now_dt, self.cfg.get("quiet_hours")):
             return

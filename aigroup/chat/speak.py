@@ -359,7 +359,15 @@ class SpeakMixin:
                 if r["role"] != "user":
                     break
                 texts.insert(0, r["content"])
-            web = await self.web_block(gid, texts, mentioned)
+            web = None
+            if hasattr(self, "agent_on") and self.agent_on(gid):        # 19.0 先想一想：要不要查、要不要设提醒
+                try:
+                    web = await self.agent_think(gid, mentioned, who, trigger)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("群 %s：想一想出错，退回只搜一次：%s", gid, e)
+                    web = None
+            if web is None:
+                web = await self.web_block(gid, texts, mentioned)
         messages = await self.build_messages(gid, mentioned, owner_spoke, who, why, note=note, interest=interest,
                                              query=query, focus=focus, web=web,
                                              flags={"pestered"} if may_ignore else None)

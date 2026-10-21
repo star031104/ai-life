@@ -33,6 +33,7 @@ class Profile:
         if self.is_deepseek and not c.get("thinking") and "thinking" not in self.extra_body:
             self.extra_body["thinking"] = {"type": "disabled"}
         self.json_mode = bool(c.get("json_mode", self.is_deepseek))      # 支持 response_format=json_object
+        self.tools = bool(c.get("tools", self.is_deepseek))              # 19.0 支持工具调用（function calling）
         # 每百万 token 的价格（命中缓存, 没命中, 输出），用来估算花费；DeepSeek flash 默认值见官方定价页
         self.price = list(c.get("price") or ([0.003, 0.15, 0.6] if self.is_deepseek else [0, 0, 0]))
         self.temperature = c.get("temperature")
@@ -273,6 +274,65 @@ class LLM:
                         p.cool(e)
                     break
         raise RuntimeError(f"所有 {role} 接口都失败了：{last}")
+
+    # ---------------- 19.0 工具调用（查资料、设提醒） ----------------
+    def tool_profiles(self, role: str = "helper") -> list[Profile]:
+        """这个用途里能做工具调用的接口：DeepSeek 官方接口，或 profile 里写了 tools: true 的。"""
+        try:
+            chain = self._chain(role)
+        except RuntimeError:
+            return []
+        return [p for p in chain if p.tools]
+
+    async def chat_tools(self, messages: list[dict], tools: list[dict] | None, role: str = "helper",
+                         thinking: bool = False, tool_choice: str | None = None, max_tokens: int = 4000,
+                         effort: str | None = None) -> dict:
+        """带工具问一次。返回整条 assistant 消息（dict：content / reasoning_content / tool_calls），
+        外加 _finish（stop / tool_calls / length）。思考模式下这条消息要原样追加回 messages（DeepSeek 要求回传 reasoning_content）。
+        同一次对话里思考模式要一直开或一直关，不能中途切换。"""
+        self.budget.check(float(self.stats().get("usd", 0) or 0), self._today(), False)
+        ps = self.tool_profiles(role)
+        if not ps:
+            raise RuntimeError("没有能做工具调用的模型")
+        last: Exception | None = None
+        for p in ps:
+            extra = {k: v for k, v in p.extra_body.items() if k != "thinking"}
+            if p.is_deepseek:
+                extra["thinking"] = {"type": "enabled" if thinking else "disabled"}
+                if thinking and effort:
+                    extra["reasoning_effort"] = effort
+            kw = dict(model=p.model, messages=messages, max_tokens=max_tokens)
+            if tools:
+                kw["tools"] = tools
+                if tool_choice:
+                    kw["tool_choice"] = tool_choice
+            if not thinking:
+                kw["temperature"] = 0.3
+            if extra:
+                kw["extra_body"] = extra
+            try:
+                t0 = time.time()
+                resp = await p.client.chat.completions.create(**kw)
+                ch = resp.choices[0]
+                m = ch.message
+                d = {"role": "assistant", "content": m.content or ""}
+                rc = getattr(m, "reasoning_content", None) or (getattr(m, "model_extra", None) or {}).get("reasoning_content")
+                if rc:
+                    d["reasoning_content"] = rc
+                if m.tool_calls:
+                    d["tool_calls"] = [{"id": tc.id, "type": "function",
+                                        "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"}}
+                                       for tc in m.tool_calls]
+                d["_finish"] = ch.finish_reason or ""
+                self._record(role, p.name, True, ms=(time.time() - t0) * 1000,
+                             usage=getattr(resp, "usage", None), price=p.price)
+                return d
+            except Exception as e:  # noqa: BLE001
+                last = e
+                self._record(role, p.name, False, limited=any(x in str(e) for x in ("429", "rate")))
+                if "400" not in str(e):                   # 400 多半是我们自己的请求不对，别让接口冷却
+                    p.cool(e)
+        raise RuntimeError(f"工具调用失败：{last}")
 
     async def json(self, messages: list[dict], default=None, role: str = "helper"):
         """让模型输出 JSON，并尽量容错地解析。"""

@@ -25,6 +25,7 @@ import re
 import time
 from collections import ChainMap
 
+from aigroup.agent.mixin import AgentMixin
 from aigroup.chat.feedback import SCHEMA as EFFECT_SCHEMA
 from aigroup.chat.feedback import FeedbackMixin
 from aigroup.chat.gate import GateLog, active_weights
@@ -78,7 +79,7 @@ MSG_COLUMNS = {"to_her": "INTEGER NOT NULL DEFAULT 0",   # 这条是在叫她（
 
 
 class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, PromptMixin, PeopleMixin, DigestMixin,
-                NetMixin, GrowMixin, EvalMixin, StyleMixin, InsightMixin):
+                NetMixin, GrowMixin, EvalMixin, StyleMixin, InsightMixin, AgentMixin):
     """她在群里的一切：收消息 → 判断要不要说 → 说 → 看效果；空闲时冒泡、整理记忆。
 
     这个类只负责把各部分装起来、放共用的小工具；具体的活在各个 Mixin 里（见文件开头的说明）。
@@ -135,6 +136,7 @@ class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, Pr
         from aigroup.net.search import WebSearch
         self.links = LinkReader(cfg, brain)                 # 读群友发的链接
         self.web = WebSearch(cfg)                           # 不知道的先搜一搜
+        self.web.kv = self.db                               # 19.0 记 Tavily 这个月用了几次、免费额度用完没
         self.knowledge = Knowledge(self.db)
         from aigroup.net.voice import Hearing, Voice
         self.hearing = Hearing(cfg)                         # 13.0 听懂群友的语音

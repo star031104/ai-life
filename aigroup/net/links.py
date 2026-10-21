@@ -156,6 +156,37 @@ class _Text(HTMLParser):
         return " ".join(out)[:n]
 
 
+def page_text(html: str) -> dict:
+    """网页 → {title, date, text}。装了 trafilatura 就用它（带表格），没装就把看得见的字都留下（数据站的表格也在里面）。"""
+    title, date, text = "", "", ""
+    try:
+        import trafilatura  # type: ignore
+        meta = trafilatura.extract_metadata(html)
+        if meta is not None:
+            title, date = str(meta.title or ""), str(meta.date or "")
+        text = trafilatura.extract(html, include_comments=False, include_tables=True, favor_recall=True) or ""
+    except Exception:  # noqa: BLE001
+        text = ""
+    if len(text.strip()) < 1500:                 # 正文太短（数据站、列表页）：把看得见的字都留下，取长的那个
+        t = re.sub(r"(?is)<(script|style|noscript|svg|template|iframe)[^>]*>.*?</\1>", " ", html)
+        t = re.sub(r"(?is)<(nav|footer)[^>]*>.*?</\1>", " ", t)
+        t = re.sub(r"(?i)<br\s*/?>|</(p|div|li|tr|h\d|table|section|article)>", "\n", t)
+        t = re.sub(r"(?s)<[^>]+>", " ", t)
+        import html as _h
+        t = _h.unescape(t)
+        t = "\n".join(re.sub(r"[ \t\r\f\v]+", " ", ln).strip() for ln in t.split("\n"))
+        t = re.sub(r"\n{2,}", "\n", t).strip()
+        if len(t) > len(text):
+            text = t
+        if not title:
+            m = re.search(r"(?is)<title[^>]*>(.*?)</title>", html)
+            title = re.sub(r"\s+", " ", m.group(1)).strip() if m else ""
+    if not date:
+        m = re.search(r'(?i)(?:article:published_time|datePublished|pubdate|publishdate)["\']?\s*(?:content=|:)\s*["\']([0-9]{4}-[0-9]{2}-[0-9]{2})', html)
+        date = m.group(1) if m else ""
+    return {"title": title[:120], "date": date[:10], "text": re.sub(r"[ \t]+", " ", text).strip()}
+
+
 def _env_proxy(url: str) -> bool:
     """httpx 会自动用系统 / 环境变量里的代理；那种情况下连上的是代理，不检查对端地址。"""
     import urllib.request
@@ -350,6 +381,49 @@ class LinkReader:
         site = p.meta.get("og:site_name") or site_name(urlparse(final).hostname or "")
         return {"ok": True, "kind": "网页", "title": re.sub(r"\s+", " ", title)[:100], "desc": desc[:200],
                 "text": body, "site": site}
+
+    # ---------------- 19.0 查资料：读一个网页的正文（长一点、能翻页、表格里的数字也要） ----------------
+    async def read_text(self, url: str, offset: int = 0, n: int = 6000) -> dict:
+        """返回 {ok, title, site, date, text, total, more}；读不到时 {ok: False, error}。只访问公网地址。"""
+        url = (url or "").strip()
+        if not re.match(r"^https?://", url):
+            return {"ok": False, "error": "不是网址（要以 http:// 或 https:// 开头）"}
+        key = "full|" + url
+        hit = self._cache.get(key)
+        if hit and time.time() - hit[0] < 6 * 3600:
+            info = hit[1]
+        else:
+            info = {"ok": False}
+            try:
+                r, buf, final = await self._get(url)
+                ctype = (r.headers.get("content-type") or "").lower()
+                if "html" not in ctype and "xml" not in ctype and "text" not in ctype and ctype:
+                    raise RuntimeError(f"不是网页（{ctype.split(';')[0]}）")
+                charset = "utf-8"
+                m = re.search(r"charset=([\w-]+)", ctype) or re.search(rb"<meta[^>]+charset=[\"']?([\w-]+)", buf[:4096], re.I)
+                if m:
+                    charset = m.group(1).decode() if isinstance(m.group(1), bytes) else m.group(1)
+                try:
+                    page = buf.decode(charset, errors="ignore")
+                except LookupError:
+                    page = buf.decode("utf-8", errors="ignore")
+                info = {"ok": True, **page_text(page), "site": site_name(urlparse(final).hostname or "")}
+                if not info["text"]:
+                    raise RuntimeError("页面里没读到正文（可能要登录，或者内容是脚本加载的）")
+                if re.search(r"安全验证|人机验证|验证码|captcha|just a moment|attention required", info.get("title", ""), re.I):
+                    raise RuntimeError("网站要人机验证，看不到内容")
+            except Exception as e:  # noqa: BLE001
+                info = {"ok": False, "error": str(e)[:100]}
+            self._cache[key] = (time.time(), info)
+            if len(self._cache) > 100:
+                self._cache.pop(next(iter(self._cache)))
+        if not info.get("ok"):
+            return info
+        text = info["text"]
+        offset = max(0, int(offset or 0))
+        part = text[offset:offset + n]
+        return {**{k: v for k, v in info.items() if k != "text"}, "text": part, "total": len(text),
+                "more": offset + n < len(text)}
 
     # ---------------- 给她看的一段话 ----------------
     @staticmethod

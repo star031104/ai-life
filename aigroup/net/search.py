@@ -11,6 +11,7 @@ from __future__ import annotations
 import html
 import logging
 import re
+import time
 
 import httpx
 
@@ -106,6 +107,8 @@ class WebSearch:
         self.timeout = float(c.get("search_timeout", 12))
         self._cache: dict[str, list[dict]] = {}
         self._clients: dict[str, httpx.AsyncClient] = {}
+        self.kv = None                    # 19.0 GroupChat 挂上数据库：记 Tavily 这个月用了几次、免费额度用完没
+        self.last_engine = ""
 
     async def _client(self, name: str, home: str) -> httpx.AsyncClient:
         c = self._clients.get(name)
@@ -140,7 +143,7 @@ class WebSearch:
             return self._cache[ck]
         res: list[dict] = []
         tries = [(e[0], (lambda e=e: self._engine(*e, q, n))) for e in ENGINES]
-        if self.tavily_key:
+        if self.tavily_key and not self.tavily_out():
             tav = ("Tavily", lambda: self._tavily(q, n, fresh_days))
             tries = [tav] + tries if (self.tavily_first or fresh_days) else tries + [tav]
         for name, fn in tries:
@@ -151,6 +154,7 @@ class WebSearch:
                 continue
             if got and relevant(q, got):
                 res = got
+                self.last_engine = name
                 log.info("搜了「%s」（%s）：%d 条", q, name, len(res))
                 break
             log.info("%s搜「%s」没搜到对得上的", name, q)
@@ -159,18 +163,65 @@ class WebSearch:
             self._cache.pop(next(iter(self._cache)))
         return res
 
-    async def _tavily(self, q: str, n: int, fresh_days: int = 0) -> list[dict]:
+    # ---------------- 19.0 Tavily 免费额度：用完了这个月就只用免费的引擎 ----------------
+    def _month(self) -> str:
+        return time.strftime("%Y-%m")
+
+    def tavily_out(self) -> bool:
+        return bool(self.kv is not None and self.kv.get("tavily_out") == self._month())
+
+    def tavily_used(self) -> int:
+        return int((self.kv.get(f"tavily_n_{self._month()}") if self.kv is not None else 0) or 0)
+
+    async def _tavily(self, q: str, n: int, fresh_days: int = 0, snippet: int = 220) -> list[dict]:
         body = {"query": q, "max_results": n, "search_depth": "basic"}
         if fresh_days:
             body.update(topic="news", days=int(fresh_days))
         async with httpx.AsyncClient(timeout=self.timeout) as c:
             r = await c.post("https://api.tavily.com/search", headers={"Authorization": f"Bearer {self.tavily_key}"},
                              json=body)
+            if r.status_code in (432, 433) or (r.status_code in (401, 403) and re.search(
+                    r"limit|quota|credit|exceed|plan", r.text or "", re.I)):
+                if self.kv is not None:
+                    self.kv.set("tavily_out", self._month())
+                log.warning("Tavily 这个月的免费额度用完了（%s），这个月改用免费的搜索", r.status_code)
+                raise RuntimeError("Tavily 额度用完")
             r.raise_for_status()
             d = r.json()
+        if self.kv is not None:
+            k = f"tavily_n_{self._month()}"
+            self.kv.set(k, int(self.kv.get(k) or 0) + 1)
         return [{"title": _clean(x.get("title", ""))[:80], "url": x.get("url", ""),
-                 "snippet": _clean(x.get("content", ""))[:220], "date": pub_date(x.get("published_date"))}
+                 "snippet": _clean(x.get("content", ""))[:snippet], "date": pub_date(x.get("published_date"))}
                 for x in (d.get("results") or [])[:n]]
+
+    async def agent_search(self, query: str, n: int = 6, days: int = 0) -> tuple[list[dict], str]:
+        """给“查资料”用：Tavily 优先（带日期、摘要长一点），免费额度用完 / 出错就换百度、360（没有日期）。
+        返回（结果, 用的哪个引擎）。"""
+        q = re.sub(r"\s+", " ", query or "").strip()[:80]
+        if not self.enabled or len(q) < 2:
+            return [], ""
+        ck = f"agent|{q}|{days}"
+        hit = self._cache.get(ck)
+        if hit:
+            return hit, "缓存"
+        tries = []
+        if self.tavily_key and not self.tavily_out():
+            tries.append(("Tavily", lambda: self._tavily(q, n, int(days or 0), snippet=320)))
+        tries += [(e[0], (lambda e=e: self._engine(*e, q, n))) for e in ENGINES]
+        for name, fn in tries:
+            try:
+                got = await fn()
+            except Exception as e:  # noqa: BLE001
+                log.info("%s搜索失败（%s）：%s", name, q, e)
+                continue
+            if got:
+                self._cache[ck] = got
+                if len(self._cache) > 200:
+                    self._cache.pop(next(iter(self._cache)))
+                log.info("查资料：搜了「%s」（%s，%d 条）", q, name, len(got))
+                return got, name
+        return [], ""
 
     @staticmethod
     def block(query: str, results: list[dict], k: int = 4) -> str:

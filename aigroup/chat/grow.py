@@ -173,6 +173,28 @@ def tier(score: float) -> str:
     return name
 
 
+# 19.0 提醒：tool = 有人当面让她到点提醒（到点就发，不受活跃时段 / 每天次数限制）；digest = 整理时从聊天里看出来的约定
+PLAN_COLUMNS = {"source": "TEXT NOT NULL DEFAULT 'digest'",
+                "tries": "INTEGER NOT NULL DEFAULT 0",
+                "next_try": "REAL NOT NULL DEFAULT 0",
+                "repeat": "TEXT NOT NULL DEFAULT ''",
+                "asker": "TEXT NOT NULL DEFAULT ''"}
+REPEATS = ("daily", "weekday", "weekly")
+
+
+def next_due(ts: float, repeat: str, tz=None) -> float | None:
+    """重复的提醒：下一次是什么时候（none / 不认识的 → None）。"""
+    if repeat not in REPEATS:
+        return None
+    d = datetime.fromtimestamp(ts, tz)
+    step = 7 if repeat == "weekly" else 1
+    d = d + timedelta(days=step)
+    if repeat == "weekday":
+        while d.weekday() >= 5:
+            d = d + timedelta(days=1)
+    return d.timestamp()
+
+
 def parse_due(s: str, now: datetime) -> tuple[datetime | None, bool]:
     s = (s or "").strip().replace("：", ":").replace("/", "-")
     for fmt, all_day in (("%Y-%m-%d %H:%M", False), ("%Y-%m-%d", True)):
@@ -191,6 +213,8 @@ class GrowMixin:
 
     def _grow_init(self):
         self.db.conn.executescript(SCHEMA)
+        from aigroup.core.store import ensure_columns
+        ensure_columns(self.db.conn, "qq_plans", PLAN_COLUMNS)
         self.db.conn.commit()
 
     # ================= 熟悉度 =================
@@ -350,13 +374,180 @@ class GrowMixin:
         self.db.conn.execute("UPDATE qq_plans SET status=? WHERE id=?", (status, int(pid)))
         self.db.conn.commit()
 
+    # ================= 19.0 当面要的提醒：设、看、取消、到点发 =================
+    def _who_uid(self, gid: int, name: str, asker_uid: int, asker_name: str) -> tuple[int, str]:
+        n = (name or "").strip().lstrip("@")
+        if n in ("", "我", "自己", "我自己") or n == asker_name:
+            return asker_uid, asker_name
+        if n in ("大家", "群", "全群", "所有人", "我们"):
+            return 0, "大家"
+        names = self.names(gid)
+        for uid, nm in names.items():
+            if nm == n:
+                return int(uid), nm
+        for uid, nm in names.items():
+            if n and (n in nm or nm in n):
+                return int(uid), nm
+        return 0, n[:12]
+
+    def remind_set(self, gid: int, args: dict, asker_uid: int = 0, asker_name: str = "") -> str:
+        """有人当面让她到点提醒：记下来。返回一句给她看的结果。"""
+        what = re.sub(r"\s+", " ", str(args.get("what") or "")).strip()[:40]
+        if not what:
+            return "没记上提醒：不知道要提醒什么"
+        if looks_like_order(what):
+            return "没记上提醒：内容像是让你说奇怪的话"
+        now = self.brain.now()
+        due, all_day = parse_due(str(args.get("when") or ""), now)
+        if due is None:
+            return f"没记上提醒：时间没看懂（{args.get('when')}），问一下几点"
+        if all_day:
+            due = due.replace(hour=9)
+        ts = due.timestamp()
+        if ts < time.time() - 120:
+            return f"没记上提醒：{due:%m-%d %H:%M} 已经过去了，问一下是不是说错了"
+        if ts > time.time() + 366 * 86400:
+            return "没记上提醒：太远了（一年以后）"
+        uid, who = self._who_uid(gid, str(args.get("for_who") or ""), asker_uid, asker_name)
+        rep = str(args.get("repeat") or "none")
+        rep = rep if rep in REPEATS else ""
+        for r in self.db.conn.execute("SELECT id, what, due FROM qq_plans WHERE group_id=? AND status='open' AND source='tool'",
+                                      (gid,)).fetchall():
+            if abs(float(r["due"]) - ts) < 600 and (r["what"] in what or what in r["what"]):
+                return f"这个提醒之前已经记过了（编号 {r['id']}，{datetime.fromtimestamp(float(r['due']), self.cfg.tz):%m-%d %H:%M}）"
+        pid = self.db.conn.execute(
+            "INSERT INTO qq_plans(group_id, user_id, who, what, due, all_day, kind, created, source, repeat, asker) "
+            "VALUES (?,?,?,?,?,0,'remind',?,'tool',?,?)",
+            (gid, uid, who, what, ts, time.time(), rep, asker_name or "")).lastrowid
+        self.db.conn.commit()
+        rtxt = {"daily": "，每天", "weekday": "，工作日每天", "weekly": "，每周"}.get(rep, "")
+        log.info("群 %s：记下提醒 #%s %s 叫%s「%s」%s", gid, pid, f"{due:%m-%d %H:%M}", who, what, rtxt)
+        return f"记下了提醒（编号 {pid}）：{due:%m-%d %H:%M} 提醒{who}「{what}」{rtxt}"
+
+    def remind_list(self, gid: int) -> str:
+        rows = self.plans(gid, "open", 20)
+        if not rows:
+            return "这个群现在没有待提醒的事"
+        out = []
+        for p in rows:
+            when = datetime.fromtimestamp(float(p["due"]), self.cfg.tz)
+            kind = "提醒" if p["kind"] == "remind" else "过后问"
+            out.append(f"#{p['id']} {when:%m-%d %H:%M} {kind}{p['who'] or '大家'}「{p['what']}」"
+                       f"{'（' + p['repeat'] + '）' if p.get('repeat') else ''}")
+        return "待提醒的：" + "；".join(out)
+
+    def remind_cancel(self, gid: int, args: dict) -> str:
+        pid = args.get("id")
+        row = None
+        if pid not in (None, ""):
+            try:
+                row = self.db.conn.execute("SELECT * FROM qq_plans WHERE id=? AND group_id=? AND status='open'",
+                                           (int(pid), gid)).fetchone()
+            except (TypeError, ValueError):
+                row = None
+        if row is None and str(args.get("what") or "").strip():
+            w = str(args["what"]).strip()
+            for r in self.db.conn.execute("SELECT * FROM qq_plans WHERE group_id=? AND status='open' ORDER BY due",
+                                          (gid,)).fetchall():
+                if w in r["what"] or r["what"] in w or len(set(w) & set(r["what"])) >= min(3, len(r["what"])):
+                    row = r
+                    break
+        if row is None:
+            return "没找到要取消的提醒（可以先看一下有哪些）"
+        self.set_plan(int(row["id"]), "cancelled")
+        log.info("群 %s：取消了提醒 #%s「%s」", gid, row["id"], row["what"])
+        return f"取消了提醒 #{row['id']}「{row['what']}」"
+
+    async def tool_reminders_tick(self) -> int:
+        """每分钟一次：当面要的提醒到点了就发。不看活跃时段、免打扰、每天上限；发出去了才算完成，没发出去 5 分钟后再试，
+        第三次直接发一句固定的话；程序停了很久（过了 12 小时）的算错过。返回这次发了几条。"""
+        now = time.time()
+        rows = self.db.conn.execute(
+            "SELECT * FROM qq_plans WHERE status='open' AND source='tool' AND due<=? AND next_try<=? ORDER BY due",
+            (now, now)).fetchall()
+        n = 0
+        for r in rows:
+            p = dict(r)
+            gid = int(p["group_id"])
+            if gid not in self.groups:
+                continue
+            if now - float(p["due"]) > 12 * 3600:
+                self.set_plan(p["id"], "missed")
+                log.warning("群 %s：提醒 #%s「%s」错过了（程序停了太久）", gid, p["id"], p["what"])
+                self._plan_repeat(p)
+                continue
+            if self.muted(gid):
+                continue
+            st = self._st(gid)
+            if st.lock.locked() or st.speaking:
+                continue                                       # 正在说话：下一分钟再来
+            ok = await self._fire_tool_reminder(gid, st, p)
+            if ok:
+                n += 1
+                self.db.conn.execute("UPDATE qq_plans SET status='done', fired=? WHERE id=?", (time.time(), p["id"]))
+                self._plan_repeat(p)
+            else:
+                tries = int(p["tries"] or 0) + 1
+                self.db.conn.execute("UPDATE qq_plans SET tries=?, next_try=?, status=? WHERE id=?",
+                                     (tries, time.time() + 300, "failed" if tries >= 4 else "open", p["id"]))
+                log.info("群 %s：提醒 #%s 没发出去（第 %d 次）", gid, p["id"], tries)
+            self.db.conn.commit()
+        return n
+
+    def _plan_repeat(self, p: dict):
+        nxt = next_due(float(p["due"]), str(p.get("repeat") or ""), self.cfg.tz)
+        if nxt is None:
+            return
+        while nxt < time.time():
+            nxt = next_due(nxt, str(p["repeat"]), self.cfg.tz)
+        self.db.conn.execute(
+            "INSERT INTO qq_plans(group_id, user_id, who, what, due, all_day, kind, created, source, repeat, asker) "
+            "VALUES (?,?,?,?,?,0,'remind',?,'tool',?,?)",
+            (p["group_id"], p["user_id"], p["who"], p["what"], nxt, time.time(), p["repeat"], p.get("asker") or ""))
+        self.db.conn.commit()
+
+    async def _fire_tool_reminder(self, gid: int, st, p: dict) -> bool:
+        due = datetime.fromtimestamp(float(p["due"]), self.cfg.tz)
+        late = time.time() - float(p["due"]) > 10 * 60
+        who = p["who"] or "大家"
+        at = f"[@{who}]" if p["user_id"] else ""
+        if int(p["tries"] or 0) >= 2:                          # 试了两次她都没说出来：直接发一句固定的
+            text = f"{'@' + who + ' ' if p['user_id'] else ''}{'（晚了点）' if late else ''}到点了：{p['what']}"
+            try:
+                from aigroup.qq.onebot import text_seg
+                async with st.lock:
+                    segs = [text_seg(text)]
+                    if p["user_id"]:
+                        from aigroup.chat.plan import to_segments
+                        segs = to_segments(f"{at} {'（晚了点）' if late else ''}到点了：{p['what']}",
+                                           {who: int(p["user_id"])})
+                    mid = await self.ob.send_group(gid, segs)
+                    self._record(gid, self.ob.self_id or 0, self.brain.persona.name, text, mid, role="assistant")
+                return True
+            except Exception as e:  # noqa: BLE001
+                log.info("群 %s 提醒直接发也失败：%s", gid, e)
+                return False
+        asker = p.get("asker") or ""
+        by = f"{asker}之前让你" if asker and asker != who else "之前说好"
+        why = (f"到点了：{by} {due:%H:%M} 提醒{who}「{p['what']}」。现在就在群里提醒{'他' if p['user_id'] else '大家'}"
+               f"{'（想 @ 他就写 ' + at + '）' if at else ''}，一两句话，像朋友那样，别写成通知"
+               f"{'；已经晚了一会儿，顺口说一句晚了' if late else ''}")
+        async with st.lock:
+            try:
+                return bool(await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who=who, why=why,
+                                             must=True))
+            except Exception as e:  # noqa: BLE001
+                log.info("群 %s 提醒失败：%s", gid, e)
+                return False
+
     async def plans_tick(self, gid: int, st) -> bool:
         """到点提醒 / 事后问结果。每个群每天最多 plans_per_day 次。说了返回 True。"""
         g = self._gk(gid)
         if not g.get("plans", True):
             return False
         now = time.time()
-        self.db.conn.execute("UPDATE qq_plans SET status='expired' WHERE status='open' AND due<?", (now - 30 * 3600,))
+        self.db.conn.execute("UPDATE qq_plans SET status='expired' WHERE status='open' AND source!='tool' AND due<?",
+                             (now - 30 * 3600,))
         day_key = f"qq_plans_n_{gid}_{self.brain.now():%Y-%m-%d}"
         if int(self.db.get(day_key, 0) or 0) >= int(g.get("plans_per_day", 3)):
             return False
@@ -364,6 +555,8 @@ class GrowMixin:
             return False
         hour = self.brain.now().hour
         for p in self.plans(gid):
+            if p.get("source") == "tool":                 # 19.0 当面要的提醒走 tool_reminders_tick（到点就发）
+                continue
             due = float(p["due"])
             # 13.0 事前打个气：某个人自己的事（考试、面试、比赛）开始前 3~18 小时、白天，说一句（每件事一次）
             if (p["kind"] == "ask" and p["user_id"] and g.get("plans_cheer", True) and 8 <= hour < 23

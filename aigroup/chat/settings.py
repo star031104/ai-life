@@ -68,6 +68,14 @@ DEFAULTS = {
     "read_links": True,            # 群友发的链接 / 分享卡片点开看（标题、简介、正文开头），不用假装看过
     "web_search": True,            # 被问到她可能不知道的事（是什么 / 讲了什么 / 最新……）先搜一搜
     "search_per_hour": 12,         # 每小时最多搜几次（所有群加起来）
+    "agent": False,                # 19.0 回话前先想一想：要不要上网查（会多轮搜、读网页、交简报）、要不要设提醒（工具调用；要 DeepSeek 官方接口）
+    "agent_per_day": 60,           # 每个群每天最多查几次资料（超过了退回只搜一次）
+    "agent_quick_rounds": 2,       # 快查最多几轮
+    "agent_deep_rounds": 4,        # 深查最多几轮
+    "agent_quick_seconds": 15,     # 快查最多多少秒（到了就交卷）
+    "agent_deep_seconds": 40,      # 深查最多多少秒
+    "agent_deep_thinking": True,   # 深查打开思考模式（更准、慢一倍）
+    "agent_filler": True,          # 被问到、要深查时先说一句“等我看看”（每个群 10 分钟最多一次）
     "remember_web": True,          # 搜到 / 读到的要点记下来，以后聊到关键词想起来，常用到的变成她的兴趣
     "weekly_reflect": True,        # 每周一回想这一周，写几句“这一周的我”放进提示词（人物跟着经历慢慢变）
     # —— 4.2 人物慢慢长（chat/grow.py）——
@@ -169,6 +177,10 @@ KNOBS = {
     "read_links": ("点开群友发的链接", "bool", None, None, None, "读标题、简介和正文开头，她能接着聊"),
     "web_search": ("不知道的先搜一搜", "bool", None, None, None, "被问到作品、游戏、新闻、概念这类事时先上网查"),
     "search_per_hour": ("每小时最多搜几次", "int", 0, 60, 1, "所有群加起来"),
+    "agent": ("先想一想再回（查资料、设提醒）", "bool", None, None, None, "被问到要查的事会多搜几次、打开网页看，再用她的话说；有人让她到点提醒也会当场记下"),
+    "agent_per_day": ("每天最多查几次资料", "int", 0, 200, 5, "每个群；超过了退回只搜一次"),
+    "agent_deep_thinking": ("深查时多想想", "bool", None, None, None, "打开思考模式：更准，但要慢一倍（20~40 秒）"),
+    "agent_filler": ("要查一会儿先说“等我看看”", "bool", None, None, None, "被问到、要深查时；每个群 10 分钟最多一次"),
     "remember_web": ("记住查到的东西", "bool", None, None, None, "以后聊到关键词会想起来，常用到的会变成她的兴趣"),
     "weekly_reflect": ("每周回想一次", "bool", None, None, None, "每周一写几句“这一周的我”，人物跟着经历慢慢变"),
     "monthly_self": ("每月整理一次自己", "bool", None, None, None, "把每周的回想沉淀成“我是怎样的人”"),
