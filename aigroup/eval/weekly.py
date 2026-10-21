@@ -149,6 +149,12 @@ class EvalMixin:
                              "persona": body_hash(self.brain.persona.body), "traits": tr})
             self.db.set("eval_hist", hist[-26:])
             log.info("人格一致性：和目标平均差 %s 档，幽默 %s，差得多的：%s", tr.get("dist"), tr.get("humor"), tr.get("off"))
+        try:                                                     # 16.0 常冷场的签名变成改写建议；定向测试稀疏特质
+            self.sig_proposals()
+            if self.g.get("weekly_probe", True) and hasattr(self, "run_probes"):
+                await self.run_probes()
+        except Exception as e:  # noqa: BLE001
+            log.info("签名建议 / 定向测试出错：%s", e)
         last = self.db.get("persona_compare_last") or {}
         old = previous_body(self.db, self.brain.persona)
         if old and last.get("new_hash") != body_hash(self.brain.persona.body):
@@ -191,5 +197,6 @@ class EvalMixin:
                 "compare_items": (cmp_.get("items") or [])[:8],
                 "versions": [{"hash": v.get("hash"), "ts": v.get("ts")} for v in vs],
                 "current": body_hash(self.brain.persona.body), "running": bool(getattr(self, "_eval_running", False)),
-                "sigs": self.sig_stats()}
+                "sigs": self.sig_stats(), "probe": self.db.get("probe_last") or {},
+                "label_nb": self.db.get("label_nb_status") or {}}
 

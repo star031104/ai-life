@@ -447,6 +447,7 @@ main{max-width:1180px;padding:24px 24px 72px}
 .foot{color:var(--ink-3);font-size:12px}
 #recentHer li:nth-child(n+5){display:none}
 @media(max-width:560px){.hello{flex-direction:column;gap:12px;padding:18px}.hello .big{width:52px;height:52px;font-size:22px}.top-in{padding:12px 14px 10px}main{padding:16px 12px 56px}}
+.pck .btn.on{background:var(--accent-soft);color:var(--accent-ink)}
 </style>
 </head>
 <body>
@@ -771,7 +772,7 @@ main{max-width:1180px;padding:24px 24px 72px}
   <div class="card" style="margin-top:14px">
     <div class="card-h"><h2><span data-i="trend"></span>每周评测</h2><span class="sp"></span>
       <span class="hint">每周一挑她说过的 10 句找毛病打分（满分 100）；人设改过会和上一版盲比</span>
-      <button class="btn sm" id="evRun">现在评一次</button><button class="btn sm" id="evCmp">和上一版人设比一比</button></div>
+      <button class="btn sm" id="evRun">现在评一次</button><button class="btn sm" id="evCmp">和上一版人设比一比</button><button class="btn sm" id="evProbe">定向测试人格</button></div>
     <div class="card-b"><div id="evHist"></div><div id="evCmpBox" style="margin-top:14px"></div></div>
   </div>
 </section>
@@ -1076,7 +1077,7 @@ $("nudge").onclick=async()=>{const b=$("nudge");b.disabled=true;b.textContent="�
 let P={list:[],fields:[],sort:"recent",filter:"all",q:"",every:15,g:"all"}, DP=null, DG=null;
 async function loadPeople(){
   if(!S)await loadState();
-  const r=await api("/api/people");P.list=r.people;P.fields=r.fields;P.every=r.profile_every;renderPeople();
+  const r=await api("/api/people");P.list=r.people;P.fields=r.fields;P.every=r.profile_every;P.checks=r.checks||{};renderPeople();
 }
 const score=x=>3*x.mentions+Math.min(x.msgs,300)/10;
 function renderPeople(){
@@ -1091,7 +1092,9 @@ function renderPeople(){
   if(P.q){const q=P.q.toLowerCase();L=L.filter(x=>(x.name+" "+x.user_id+" "+x.note+" "+(x.aliases||[]).join(" ")+" "+JSON.stringify(x.profile)).toLowerCase().includes(q))}
   const nm=x=>pg?((x.per||{})[pg]||{}).msgs||0:x.msgs;
   L.sort(P.sort==="msgs"?(a,b)=>nm(b)-nm(a):P.sort==="close"?(a,b)=>score(b)-score(a):(a,b)=>(b.last_seen||0)-(a.last_seen||0));
-  $("pHint").textContent=`她每看到一个人又说了 ${P.every} 句，就会更新一次对他的画像；点卡片可以看详细、手动改。`;
+  const CK=P.checks||{};
+  $("pHint").textContent=`她每看到一个人又说了 ${P.every} 句，就会更新一次对他的画像；点卡片可以看详细、手动改，也可以给每一项点“对 / 不对”。`
+    +(CK.n?` 你抽查过 ${CK.n} 项，对了 ${Math.round((CK.acc||0)*100)}%`+((CK.fields||[]).filter(f=>f.acc<.7).length?`（最常写错：${CK.fields.filter(f=>f.acc<.7).slice(0,3).map(f=>f.field).join("、")}）`:"")+"。":"");
   $("ppl").innerHTML=L.map(x=>{const v=view(x),pr=v?(v.brief||{}):(x.profile||{}),imp=v?v.note:(pr["印象"]||x.note),mx=Math.max(1,...x.hours);
     const rows=[["称呼",pr["称呼"]],["性格",pr["性格"]],["兴趣",pr["兴趣"]],["近况",pr["近况"]]].filter(r=>r[1]);
     return `<button class="pcard" data-u="${x.user_id}"><div class="h"><div class="pa" style="background:${hue(x.user_id)}">${esc(initial(x.name))}</div>
@@ -1127,12 +1130,16 @@ async function openPerson(uid,gsel){
     <div class="field" style="margin-bottom:16px"><label>一天里什么时候说话${G?"（近 60 天）":""}${when?" · "+esc(when):""}</label><div class="chart" id="dHours"></div></div>${partners}
     <div class="field" style="margin-bottom:12px"><label for="f_aliases">别名 <span style="font-weight:400">· 群里大家还怎么叫他（真名、外号），用顿号或逗号隔开；她听到这些名字就知道说的是他。只存在你电脑上</span></label><input class="input" id="f_aliases" value="${esc((x.aliases||[]).join("、"))}" placeholder="比如：小李、老王"></div>
     <div class="pf">${P.fields.map(f=>{const v=pr[f];const full=["印象","和你","记得的事","说话风格","群里关系","怎么聊","他的反应"].includes(f);
-      return `<div class="field ${full?"full":""}"><label for="f_${f}">${f} <span style="font-weight:400">· ${HINTS[f]||""}</span></label>${f==="记得的事"?
+      const ck=(x.checks||[]).find(c=>c.field===f&&String(c.gid)===String(DG||0));
+      const cb=v&&String(v).trim()?`<span class="pck" style="float:right;display:inline-flex;gap:4px"><button type="button" class="btn sm ghost ${ck&&ck.ok?"on":""}" data-ck="${esc(f)}" data-ok="1" title="写得对" style="height:20px;padding:0 6px">对</button><button type="button" class="btn sm ghost ${ck&&!ck.ok?"on":""}" data-ck="${esc(f)}" data-ok="0" title="写得不对，下次整理时重写" style="height:20px;padding:0 6px">不对</button></span>`:"";
+      return `<div class="field ${full?"full":""}"><label for="f_${f}">${f} <span style="font-weight:400">· ${HINTS[f]||""}</span>${cb}</label>${f==="记得的事"?
         `<textarea class="input" id="f_${f}" rows="4">${esc(Array.isArray(v)?v.join("\n"):v||"")}</textarea>`:`<input class="input" id="f_${f}" value="${esc(v||"")}">`}</div>`}).join("")}</div>
     ${per.length>1?`<label class="small" style="display:flex;gap:8px;align-items:center;margin-top:4px"><input type="checkbox" id="dAll">保存时把这份画像也写到他在的其他群（默认只改「${esc(G?G.name:"")}」）</label>`:""}
     ${G&&G.fp?`<div class="field" style="margin-bottom:12px"><label>打字习惯 <span style="font-weight:400">· 每晚按他最近 30 天说的话统计，不是大模型写的</span></label><div class="small">${esc(G.fp)}</div></div>`:""}
     <div class="sec-t">他最近说的</div>
     <ul class="said-list">${x.recent.map(r=>`<li><span class="t">${fmtDay(r.ts)==="今天"?"":fmtDay(r.ts).replace(/ 星期.$/,"")+" "}${fmtTime(r.ts)}</span><span>${esc(r.content)}${S&&S.groups.length>1?` <span class="muted small">· ${esc(gname(r.group_id))}</span>`:""}</span></li>`).join("")||'<li class="muted">没有</li>'}</ul>`;
+  document.querySelectorAll("[data-ck]").forEach(b=>b.onclick=async(e)=>{e.preventDefault();try{const r=await api("/api/person/check",{uid,gid:+(DG||0),field:b.dataset.ck,ok:b.dataset.ok==="1"});toast(r.message||r.error);
+    b.parentNode.querySelectorAll("button").forEach(y=>y.classList.toggle("on",y===b))}catch(err){toast("出错了："+err.message)}});
   if(G){const box=document.createElement("div");box.innerHTML=`<div class="sec-t">画像改过的版本</div><div id="dVer"><button class="btn sm ghost" id="dVerBtn">看看她以前是怎么写他的</button></div>`;$("dBody").appendChild(box);
     $("dVerBtn").onclick=async()=>{try{const r=await api(`/api/person/versions?uid=${uid}&gid=${DG}`);
       $("dVer").innerHTML=r.versions.length?`<ul class="said-list">${r.versions.map(v=>`<li><span class="t">${fmtDay(v.ts).replace(/ 星期.$/,"")} ${fmtTime(v.ts)}</span><span>${v.diff.length?v.diff.slice(0,6).map(esc).join("<br>"):"（和后一版一样）"} <button class="btn sm ghost" data-ver="${v.id}">退回这一版</button></span></li>`).join("")}</ul>`:'<div class="small muted">还没有改过</div>';
@@ -1283,7 +1290,8 @@ const KGROUPS=[["说话多少",["talkativeness","max_per_10min","max_bubbles","c
   ["像真人（2.2）",["lore","mood","human_latency","explore_rate"]],["群冷了冒个泡",["idle_hours","idle_chance","idle_gap_hours","active_hours"]],
   ["记性",["profile_every","impression_every"]],["联网",["read_links","web_search","search_per_hour","remember_web","weekly_reflect"]],
   ["慢慢长",["monthly_self","plans","plans_per_day","fix_knowledge","celebrate","birthday_card","plans_cheer","share_per_day","share_chance","share_fresh_days","photo_share_chance"]],
-  ["人格和分寸（14.0）",["signatures","signature_k","persona_examples","example_k","hold_thoughts","pester_calls"]],
+  ["人格和分寸（14.0）",["signatures","signature_k","persona_examples","example_k","hold_thoughts","pester_calls","weekly_probe","label_nb"]],
+  ["懂人（16.0）",["rel_experience","absent_hours","state_judge"]],
   ["B 站视频和天气",["watch_videos","video_frames","weather","weather_care"]],
   ["每周评测",["weekly_eval"]]];
 let K={},KG="all";
@@ -1299,6 +1307,10 @@ async function loadEval(){let E;try{E=await api("/api/eval")}catch(e){return}
       (h.traits?`<div class="small" style="margin-top:6px">人格一致性：和人格文件平均差 ${h.traits.dist??"?"} 档${(h.traits.off||[]).length?"，差得多："+h.traits.off.map(([c,v])=>`${esc(c)} ${v>0?"+":""}${v}`).join("、"):""}；幽默 ${Object.entries(h.traits.humor||{}).map(([a,b])=>`${esc(a)} ${b}`).join("、")}${(h.traits.attack||[]).length?`<div class="meta">攻击型：${h.traits.attack.map(esc).join(" / ")}</div>`:""}</div>`:"")+
             ((h.worst||[]).length?`<ul class="rows" style="margin-top:6px">${h.worst.map(w=>`<li><span class="tag ${w.score<70?"hot":"warm"}">${w.score}</span><div class="grow">${esc(w.said)}<div class="meta">${esc(w.why)}</div></div></li>`).join("")}</ul>`:"")})()
     :`<div class="empty">还没评过（每周一自动评一次，也可以点“现在评一次”）${E.running?" · 正在评…":""}</div>`;
+  const PB=E.probe||{},NB=E.label_nb||{};
+  if(PB.n)$("evHist").innerHTML+=`<div class="small" style="margin-top:12px">定向测试（${fmtDay(PB.ts)}，每条签名、每个“不懂 / 没兴趣”编一段假聊天让她回）：平均 ${PB.avg} / 5，签名挑中率 ${Math.round((PB.coverage||0)*100)}%</div>
+    <ul class="rows" style="margin-top:6px">${(PB.items||[]).slice(0,6).map(x=>`<li><span class="tag ${x.score<=2?"hot":x.score>=4?"ok":"warm"}">${x.score}</span><div class="grow"><b>${esc(x.id)}</b>${x.picked?"":" <span class=\"tag wait\">没挑中这条签名</span>"}<div>${esc(x.reply)}</div><div class="meta">${esc(x.why)}</div></div></li>`).join("")}</ul>`;
+  if(NB.n0!==undefined||NB.trained)$("evHist").innerHTML+=`<div class="small muted" style="margin-top:8px">小判断器：${NB.trained?`用你的标注训练好了，留出准确率 ${Math.round((NB.acc||0)*100)}%`:esc(NB.why||"还没训练")}</div>`;
   const SG=E.sigs||[];
   if(SG.length)$("evHist").innerHTML+=`<div class="small" style="margin-top:10px">人格签名用上以后（近两周，她那几句有没有人接；1 直接接、0 冷场）：</div><div class="chips" style="margin-top:6px">${SG.slice(0,12).map(g=>`<span class="tag ${g.cold>=.5?"hot":g.avg>=.6?"ok":""}">${esc(g.id)} · ${g.n} 次 · ${g.avg}${g.cold>=.5?" · 常冷场":""}</span>`).join("")}</div>`;
   const C=E.compare||{};
@@ -1308,6 +1320,7 @@ async function loadEval(){let E;try{E=await api("/api/eval")}catch(e){return}
     :`<div class="small muted">${(E.versions||[]).length>1?"人设改过，还没比过：点“和上一版人设比一比”":"人设还没改过（改了人设文件、重启以后可以和上一版比）"}</div>`;
 }
 $("evRun").onclick=async()=>{try{const r=await api("/api/eval/run",{kind:"judge"});toast(r.message||r.error);setTimeout(loadEval,1500)}catch(e){toast("出错了："+e.message)}};
+$("evProbe").onclick=async()=>{try{const r=await api("/api/eval/run",{kind:"probe"});toast(r.message||r.error);setTimeout(loadEval,1500)}catch(e){toast("出错了："+e.message)}};
 $("evCmp").onclick=async()=>{try{const r=await api("/api/eval/run",{kind:"compare"});toast(r.message||r.error);setTimeout(loadEval,1500)}catch(e){toast("出错了："+e.message)}};
 async function loadKnobs(){
   loadEval();
@@ -1390,7 +1403,7 @@ async function loadLife(){
   $("lfReflect").innerHTML=L.reflect?esc(L.reflect):'<div class="empty">还没回想过（每周一会自己想一次）</div>';
   $("lfWeeks").innerHTML=(L.reflect_hist||[]).slice().reverse().map(h=>`<li><div class="w">${esc(h.week)}</div><div class="lifep">${esc(h.text)}</div></li>`).join("")||'<li class="empty">还没有</li>';
   $("lfCore").innerHTML=L.selfcore?esc(L.selfcore):'<div class="empty">攒够两周的回想后，月初会整理一次</div>';$("lfCoreText").value=L.selfcore||"";
-  $("lfProps").innerHTML=(L.proposals||[]).map(x=>`<li><span class="tag wait">她想改</span><div class="grow"><div>${esc(x.name)}：${esc(String(x.from||"?"))} → ${esc(String(x.to))}　${esc(x.why)}</div><div class="meta">${esc(x.evidence)}</div></div><span class="adm-only"><button class="btn sm" data-pacc="${esc(x.id)}">采纳</button> <button class="btn ghost sm" data-prej="${esc(x.id)}">不改</button></span></li>`).join("");
+  $("lfProps").innerHTML=(L.proposals||[]).map(x=>`<li><span class="tag wait">她想改</span><div class="grow"><div>${x.kind==="signature"?`${esc(x.name)}：${esc(x.why)}`:`${esc(x.name)}：${esc(String(x.from||"?"))} → ${esc(String(x.to))}　${esc(x.why)}`}</div><div class="meta">${esc(x.evidence)}</div></div><span class="adm-only"><button class="btn sm" data-pacc="${esc(x.id)}">采纳</button> <button class="btn ghost sm" data-prej="${esc(x.id)}">不改</button></span></li>`).join("");
   $("lfProps").querySelectorAll("[data-pacc],[data-prej]").forEach(b=>b.onclick=async()=>{try{const r=await api("/api/life/proposal",{id:b.dataset.pacc||b.dataset.prej,accept:!!b.dataset.pacc});toast(r.message||r.error);loadLife()}catch(e){toast("出错了："+e.message)}});
   $("lfPrefs").innerHTML=(L.prefs||[]).map(p=>`<span class="pref"><b>${esc(p.topic)}</b>${esc(p.v)}<button data-pdel="${esc(p.topic)}" title="删掉">×</button></span>`).join("")||'<div class="empty" style="padding:6px 0">她还没在群里说过自己喜欢什么、讨厌什么</div>';
   $("lfPrefs").querySelectorAll("[data-pdel]").forEach(b=>b.onclick=async()=>{try{const r=await api("/api/life/pref",{topic:b.dataset.pdel,delete:true});toast(r.message||r.error);loadLife()}catch(e){toast("出错了："+e.message)}});

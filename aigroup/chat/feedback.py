@@ -182,6 +182,14 @@ class FeedbackMixin:
                 log.info("给 %d 条消息补了向量", n)
         except Exception as e:  # noqa: BLE001
             log.info("补向量出错：%s", e)
+        try:                                                      # 16.0 关系网、相处经验、小判断器
+            self.update_rel_graph()
+            if self.g.get("rel_experience", True):
+                await self.rel_experience()
+            if self.g.get("label_nb", True):
+                await asyncio.to_thread(self.train_label_nb)
+        except Exception as e:  # noqa: BLE001
+            log.info("关系网 / 相处经验 / 小判断器出错：%s", e)
         for name in ("train_detector", "refresh_latency", "auto_lore", "deep_profiles"):   # 3.0 / 2.2 / 3.1：AI 腔检测器、回复延迟、群梗词条、仔细回想画像
             fn = getattr(self, name, None)
             if fn:

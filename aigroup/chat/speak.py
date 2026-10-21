@@ -225,7 +225,16 @@ class SpeakMixin:
                 and random.random() < float(self.gk(gid).get("explore_rate", 0.02))):
             ok, explore, why = True, True, f"随机试一次（{why}）"      # 少量放行本该拦下的：以后重新拟合时不偏
         judged = ""
+        nb = None
         if (not ok and not mentioned and not quiet and why.startswith("不太想插话") and talk > 0 and texts
+                and self.gk(gid).get("label_nb", True) and hasattr(self, "label_prob")
+                and p >= thr - float(self.gk(gid).get("gate_judge_band", 0.15))):
+            nb = self.label_prob(gid, feats, now)                 # 16.0 你判过的标注训练的小判断器：有把握就不用再问大模型
+            if nb is not None and nb >= 0.85:
+                judged, ok, explore, why = "say", True, True, f"小判断器说该说（{nb:.2f}）"
+            elif nb is not None and nb <= 0.15:
+                judged = "skip"
+        if (not ok and not judged and not mentioned and not quiet and why.startswith("不太想插话") and talk > 0 and texts
                 and self.gk(gid).get("gate_judge", True) and p >= thr - float(self.gk(gid).get("gate_judge_band", 0.15))
                 and self._allow(f"judge_{gid}", int(self.gk(gid).get("gate_judge_per_hour", 20)))):
             try:
@@ -753,8 +762,19 @@ class SpeakMixin:
                 hits = list(dict.fromkeys(re.findall(pat, txt)))[:3]
                 if hits:
                     words.append(f"{name}（说过：{'、'.join(hits)}）")
-            if words:
-                lines.append(f"- {rows[0]['name']}今天：{'；'.join(words)}")
+            if not words:
+                continue
+            st = self.state_of(gid, uid, len(rows)) if hasattr(self, "state_of") else None
+            if st:                                        # 16.0 便宜模型看过他今天的话：分得清玩笑和真的
+                bad = st["mood"] in ("不太好", "很糟")
+                if st["mood"] in ("看不出",) and not st.get("busy"):
+                    continue
+                desc = ("状态不太好" if bad else f"心情{st['mood']}") + ("，在忙" if st.get("busy") else "")
+                lines.append(f"- {rows[0]['name']}今天：{desc}（{st.get('why') or '从他今天的话看出来的'}）")
+                continue
+            if self.gk(gid).get("state_judge", True) and hasattr(self, "refresh_state") and self._allow(f"state_{gid}", 20):
+                self._spawn(self.refresh_state(gid, uid))     # 先按关键词说一句，模型的判断下一轮就用上
+            lines.append(f"- {rows[0]['name']}今天：{'；'.join(words)}（只是关键词，可能是玩笑）")
         if not lines:
             return ""
         return "# 在聊的这几个人今天怎么样（从他们今天的话里看出来的，别直接点破）\n" + "\n".join(lines)

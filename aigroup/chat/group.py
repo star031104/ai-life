@@ -31,6 +31,7 @@ from aigroup.chat.gate import GateLog, active_weights
 from aigroup.chat.grow import GrowMixin
 from aigroup.chat.idle import IdleMixin
 from aigroup.chat.ingest import IngestMixin
+from aigroup.chat.insight import InsightMixin
 from aigroup.chat.life import LifeMixin
 from aigroup.chat.mood import Mood
 from aigroup.chat.plan import NAME_TAIL
@@ -77,7 +78,7 @@ MSG_COLUMNS = {"to_her": "INTEGER NOT NULL DEFAULT 0",   # 这条是在叫她（
 
 
 class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, PromptMixin, PeopleMixin, DigestMixin,
-                NetMixin, GrowMixin, EvalMixin, StyleMixin):
+                NetMixin, GrowMixin, EvalMixin, StyleMixin, InsightMixin):
     """她在群里的一切：收消息 → 判断要不要说 → 说 → 看效果；空闲时冒泡、整理记忆。
 
     这个类只负责把各部分装起来、放共用的小工具；具体的活在各个 Mixin 里（见文件开头的说明）。

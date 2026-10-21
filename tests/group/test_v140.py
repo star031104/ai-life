@@ -23,7 +23,7 @@ def _with_traits(cfg, brain):
 
 def test_parse_and_render():
     t = load_traits(ROOT / "persona" / "traits.example.yaml")
-    assert not t.warnings and len(t.signatures) == 3 and t.facets["A4"]["level"] == 2
+    assert not t.warnings and len(t.signatures) == 6 and t.facets["A4"]["level"] == 2
     core = t.render_core()
     assert core.startswith("# 你的人格") and "顺从偏低" in core and "攻击 0%" in core and "1. 不让任何人" in core
     bad = parse_traits({"facets": {"Z9": 3, "A4": {"level": "x"}}, "humor": {"mix": {"亲和": 90}},

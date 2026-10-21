@@ -96,6 +96,7 @@ class GroupHome:
         r.add_post("/api/label/answer", self.label_answer)
         r.add_get("/api/person/versions", self.person_versions)  # 13.0 画像的历史版本
         r.add_post("/api/person/restore", self.person_restore)
+        r.add_post("/api/person/check", self.person_check)          # 16.0 画像抽查：这一项对 / 不对
         r.add_post("/api/lore", self.lore_set)
         r.add_post("/api/knowledge", self.knowledge_set)
         r.add_get("/api/life", self.life)                      # 她的日子
@@ -341,7 +342,8 @@ class GroupHome:
             x["groups"] = sorted(set(groups_of.get(int(x["user_id"]), [])) | {int(g) for g in per.get(int(x["user_id"]), {})})
             x["per"] = per.get(int(x["user_id"]), {})
         return web.json_response({"people": out, "fields": PROFILE_KEYS,
-                                  "profile_every": int(self.gc.g.get("profile_every", 15))})
+                                  "profile_every": int(self.gc.g.get("profile_every", 15)),
+                                  "checks": self.gc.profile_check_stats() if hasattr(self.gc, "profile_check_stats") else {}})
 
     async def person(self, req):
         try:
@@ -361,7 +363,21 @@ class GroupHome:
         x["her_to"] = self._q("SELECT COUNT(*) n FROM qq_group_messages WHERE role='assistant' AND content LIKE ?",
                               ("%@" + x["name"] + "%",))[0]["n"] if x["name"] else 0
         x["per"] = self._person_groups(uid, x["name"])
+        x["checks"] = [c for c in (self.db.get("profile_checks") or []) if c.get("uid") == uid]
         return web.json_response(x)
+
+    async def person_check(self, req):
+        """16.0 你看画像时给某一项点“对 / 不对”：算准确率；不对的那项下次整理画像时重写。"""
+        d = await self._json(req)
+        try:
+            uid, gid = int(d.get("uid")), int(d.get("gid") or 0)
+        except (TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "缺 uid"})
+        field = str(d.get("field") or "")
+        if field not in PROFILE_KEYS:
+            return web.json_response({"ok": False, "error": "没有这一项"})
+        self.gc.check_profile(uid, gid, field, bool(d.get("ok")))
+        return web.json_response({"ok": True, "message": "记下了" if d.get("ok") else "记下了，下次整理他的画像时重写这一项"})
 
     def _partners(self, gid: int, uid: int, k: int = 5) -> list[dict]:
         """在这个群里他常和谁接话：最近 4000 条里相邻两句、不同的人、3 分钟内，算一次来回。"""
@@ -967,8 +983,12 @@ class GroupHome:
         self.db.set("persona_proposals", out)
         if not hit:
             return web.json_response({"ok": False, "error": "找不到这条建议"})
-        msg = (f"记下了：去人格文件里把 {hit['facet']}（{hit['name']}）改成 {hit['to']}，重启后生效"
-               if d.get("accept") else "好，不改")
+        if hit.get("kind") == "signature":
+            msg = (f"记下了：去人格文件里改写签名 {hit['facet']} 的 do / not（或者收窄触发词），重启后生效"
+                   if d.get("accept") else "好，不改")
+        else:
+            msg = (f"记下了：去人格文件里把 {hit['facet']}（{hit['name']}）改成 {hit['to']}，重启后生效"
+                   if d.get("accept") else "好，不改")
         return web.json_response({"ok": True, "message": msg})
 
     async def eval_get(self, req):
@@ -986,6 +1006,8 @@ class GroupHome:
             try:
                 if d.get("kind") == "compare":
                     await gc.compare_persona()
+                elif d.get("kind") == "probe":
+                    await gc.run_probes()
                 else:
                     await gc.weekly_eval(force=True)
             except Exception as e:  # noqa: BLE001

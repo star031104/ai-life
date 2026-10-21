@@ -206,14 +206,21 @@ class PromptMixin:
         15.0 加上：在聊的这几个人今天的状态（短期的“心智推测”），和她之前憋着没说的话（Inner Thoughts 的想法池）。"""
         p = self.brain.persona
         from aigroup.traits import detect_flags
+        md = self.mood.get(gid) if getattr(self, "mood", None) is not None else None
         f = detect_flags(text, mentioned=mentioned, pestered=bool(flags and "pestered" in flags), ignored=ign,
-                         hour=now.hour, why=why) | set(flags or ())
+                         hour=now.hour, why=why, mood=md) | set(flags or ())
         out = []
         ps = self.people_today(gid, focus or []) if hasattr(self, "people_today") else ""
         if ps:
             out.append(ps)
             if "状态不太好" in ps:
                 f.add("sad")
+        ab = self.absent_block(gid, focus or []) if hasattr(self, "absent_block") else ""      # 16.0 谁刚回来、可能没看到
+        if ab:
+            out.append(ab)
+        rx = self.rel_exp_block(gid, focus or []) if hasattr(self, "rel_exp_block") else ""    # 16.0 和他相处的经验
+        if rx:
+            out.append(rx)
         t = getattr(p, "traits", None)
         if not hasattr(self, "_last_sigs") or not isinstance(getattr(self, "_last_sigs"), dict):
             self._last_sigs = {}
@@ -348,6 +355,7 @@ class PromptMixin:
              if self.db.get(f"qq_group_notes_{gid}") else ""),
             (f"# 这个群不成文的规矩（照着来）\n{norms}" if norms else ""),
             (f"# 关于这个群（把你拉进来的人特意交代的，照着来）\n{gnote}" if gnote else ""),
+            (self.rel_graph_block(gid) if hasattr(self, "rel_graph_block") else ""),
             (f"# 你是怎样的人（这几个月慢慢长出来的）\n{self.db.get(f'qq_selfcore_{gid}')}"
              if self.db.get(f"qq_selfcore_{gid}") else ""),
             (self.prefs_block() if hasattr(self, "prefs_block") else ""),

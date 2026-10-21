@@ -285,6 +285,12 @@ class DigestMixin:
         if facts:
             out.append("你之前记下的关于他的事：\n" + "\n".join(
                 f"[{datetime.fromtimestamp(f['t_valid'], tz):%m-%d}] {f['text']}" for f in reversed(facts)))
+        if hasattr(self, "wrong_fields"):                       # 16.0 小屋里被标了“不对”的画像字段：这次重写
+            row = self.db.conn.execute("SELECT updated FROM qq_profiles WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
+            wrong = list(dict.fromkeys(self.wrong_fields(uid, gid, float((row["updated"] if row else 0) or 0))))
+            if wrong:
+                out.append("把你拉进群的人看过你写的他的画像，标了这几项不对：" + "、".join(wrong)
+                           + "。这次把这几项按上面的证据重写，没把握就留空，别照抄原来的。")
         return "\n".join(out)
 
     async def _profile_group(self, gid: int, rows, deep: bool = False) -> int:

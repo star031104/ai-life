@@ -196,6 +196,8 @@ class Memory:
         cols = {r[1] for r in db.conn.execute("PRAGMA table_info(qq_facts)")}
         if "source" not in cols:                 # 15.0 这件事是怎么知道的：self 他自己说的 / other 别人说他的 / guess 你猜的
             db.conn.execute("ALTER TABLE qq_facts ADD COLUMN source TEXT NOT NULL DEFAULT ''")
+        if "evidence" not in cols:               # 16.0 这件事有几次独立的证据；“你猜的”要 ≥2 次才拿来用
+            db.conn.execute("ALTER TABLE qq_facts ADD COLUMN evidence INTEGER NOT NULL DEFAULT 1")
         db.conn.commit()
         self._idx: dict[int, tuple] = {}         # gid → (建索引时的最大消息 id, 行, BM25)；每 200 条新消息重建一次
 
@@ -209,12 +211,15 @@ class Memory:
             return None
         now = now or time.time()
         dup = self.db.conn.execute(
-            "SELECT id, text FROM qq_facts WHERE group_id=? AND (t_invalid IS NULL OR t_invalid>?) "
+            "SELECT id, text, source FROM qq_facts WHERE group_id=? AND (t_invalid IS NULL OR t_invalid>?) "
             "AND IFNULL(subject_id,0)=IFNULL(?,0)", (gid, now, subject)).fetchall()
         from difflib import SequenceMatcher
         for r in dup:
             if SequenceMatcher(None, r["text"], text).ratio() >= 0.85:      # 同一件事又说了一遍：算想起一次
-                self.db.conn.execute("UPDATE qq_facts SET hits=hits+1, last_hit=? WHERE id=?", (now, r["id"]))
+                self.db.conn.execute("UPDATE qq_facts SET hits=hits+1, last_hit=?, evidence=evidence+1 WHERE id=?",
+                                     (now, r["id"]))
+                if r["source"] == "guess" and source in ("self", "other"):   # 猜的被证实了：升级来源
+                    self.db.conn.execute("UPDATE qq_facts SET source=? WHERE id=?", (source, r["id"]))
                 self.db.conn.commit()
                 return int(r["id"])
         for rid in replaces or []:                       # 新说法替代旧的：旧的标失效（不删，以后还能查“以前”）
@@ -270,6 +275,7 @@ class Memory:
             best = sorted(fused, key=lambda k: -fused[k] * (1 + sc[k[1]] / (1 + max(sc))))[:k_msgs]
             out["messages"] = sorted((dict(rows[i]) for _, i in best), key=lambda r: r["ts"])
         frows = self.db.conn.execute("SELECT * FROM qq_facts WHERE group_id=? AND (t_invalid IS NULL OR t_invalid>?) "
+                                     "AND NOT (source='guess' AND evidence<2) "      # 16.0 只猜过一次的先不拿来用
                                      "ORDER BY id DESC LIMIT 2000", (gid, time.time())).fetchall()
         if frows:
             bm = BM25([tokens(r["text"]) for r in frows])

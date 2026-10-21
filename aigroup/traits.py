@@ -52,6 +52,9 @@ FLAGS = {
     "idle": "群里冷了，她想冒泡",
     "newcomer": "群里来了新人",
     "about_ai": "大家在聊她是怎么做的、AI、机器人",
+    "mood_annoyed": "她这会儿有点不服气（刚被怼、被冷落）",
+    "mood_down": "她这会儿有点低落",
+    "mood_high": "她这会儿心情很好、有点小得意",
 }
 FLAG_WORDS = {
     "praised": r"厉害|牛|不赖|聪明|可爱|好会|会接|太强|nb|NB|6{2,}",
@@ -167,9 +170,19 @@ class Traits:
 
 
 def detect_flags(text: str, *, mentioned: bool = False, pestered: bool = False, ignored: int = 0,
-                 hour: int | None = None, why: str = "") -> set[str]:
-    """从这一批消息和程序状态里认出情境（给签名挑选用）。"""
+                 hour: int | None = None, why: str = "", mood: dict | None = None) -> set[str]:
+    """从这一批消息和程序状态里认出情境（给签名挑选用）。mood（16.0）：chat/mood.py 的 {v, a}，心情也是情境。"""
     f: set[str] = set()
+    if mood:
+        v, a = float(mood.get("v") or 0), float(mood.get("a") or 0)
+        if v >= 0.5:
+            f.add("mood_high")
+        elif -0.35 < v < 0.05 and a >= 0.2:
+            f.add("mood_annoyed")
+        elif v <= -0.35 and a >= 0.1:
+            f.add("mood_annoyed")
+        elif v <= -0.35:
+            f.add("mood_down")
     if mentioned:
         f.add("mentioned")
     if pestered:
