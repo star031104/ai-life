@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS qq_feed (
 );
 CREATE INDEX IF NOT EXISTS idx_qq_feed ON qq_feed(group_id, ts);
 """
-SPLIT = re.compile(r"[、，,/；;\s]+")
+SPLIT = re.compile(r"[、，,/；;：:\s]+|和|与|及")
 
 
 def _bg(t: str) -> set:
@@ -82,8 +82,9 @@ class FeedMixin:
                 except ValueError:
                     continue
                 for field in ("兴趣", "在意"):
-                    for t in SPLIT.split(str(prof.get(field) or "")):
-                        t = t.strip("。.的 ")
+                    raw = re.sub(r"[（(][^）)]*[）)]?", "", str(prof.get(field) or ""))   # 括号里的补充说明不当话题
+                    for t in SPLIT.split(raw):
+                        t = re.sub(r"^(爱|喜欢|常|玩|看|聊)", "", t.strip("。.的 "))
                         if 2 <= len(t) <= 10:
                             score[t] += 1.0 if field == "兴趣" else 0.6
                             who[t].add(str(r["name"] or ""))

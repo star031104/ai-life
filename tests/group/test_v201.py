@@ -316,3 +316,38 @@ def test_web_endpoints(cfg, brain):
                 assert r.status == 200, path
                 await r.json()
     asyncio.run(go())
+
+
+# ---------------- 20.4.1 标注修复：上下文只取那一刻前 30 分钟；一键清空 ----------------
+def test_label_context_window_and_reset(cfg, brain, tmp_path):
+    import sqlite3
+
+    from aigroup.eval.label import context_lines
+    gc, ob = _gc(cfg, brain)
+    now = time.time()
+    for i, (ago, t) in enumerate([(5000, "一个多小时前的话"), (900, "十五分钟前"), (60, "刚才"), (0, "最后一句")]):
+        brain.db.conn.execute("INSERT INTO qq_group_messages(ts, group_id, user_id, name, role, content) VALUES (?,?,?,?,?,?)",
+                              (now - ago, GROUP, FRIEND, "小王", "user", t))
+    brain.db.conn.commit()
+    lines = context_lines(brain.db, GROUP, now)
+    assert not any("一个多小时前" in x for x in lines) and "最后一句" in lines[-1]
+    assert any("过了 14 分钟" in x for x in lines)
+    gid = gc.gate.add(GROUP, False, 0.3, 0.4, False, {})
+    brain.db.conn.execute("UPDATE qq_gate_log SET human=1, human_act='回答', weak=0 WHERE id=?", (gid,))
+    brain.db.set("label_nb_status", {"trained": False})
+    brain.db.conn.commit()
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("reset_labels", Path(__file__).resolve().parents[2] / "scripts" / "reset_labels.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    dbp = tmp_path / "g.db"
+    src = brain.db.conn
+    dst = sqlite3.connect(dbp)
+    src.backup(dst)
+    dst.close()
+    out = m.reset(dbp)
+    assert out["labels"] == 1 and Path(out["backup"]).exists()
+    c = sqlite3.connect(dbp)
+    assert c.execute("SELECT COUNT(*) FROM qq_gate_log WHERE human IS NOT NULL OR weak IS NOT NULL").fetchone()[0] == 0
+    assert c.execute("SELECT COUNT(*) FROM kv WHERE k='label_nb_status'").fetchone()[0] == 0

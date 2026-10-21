@@ -125,12 +125,28 @@ def feat_words(feats: dict) -> str:
     return "、".join(out[:4])
 
 
-def _pack(db, r, tz=None) -> dict:
+def context_lines(db, gid: int, ts: float, tz=None, n: int = 10, window: float = 1800) -> list[str]:
+    """20.4.1 那一刻之前的聊天：最多 n 句，只要那一刻前 30 分钟内的（以前固定 12 句，常常混进一个小时前的话，看不出在聊什么）；
+    隔了 10 分钟以上插一行“过了 x 分钟”。"""
     ctx = list(reversed(db.conn.execute(
-        "SELECT ts, name, role, content FROM qq_group_messages WHERE group_id=? AND ts<=? ORDER BY id DESC LIMIT 12",
-        (r["group_id"], r["ts"] + 1)).fetchall()))
-    lines = [f"[{datetime.fromtimestamp(c['ts'], tz):%m-%d %H:%M}] {'她' if c['role'] == 'assistant' else c['name']}："
-             f"{str(c['content'])[:120]}" for c in ctx]
+        "SELECT ts, name, role, content FROM qq_group_messages WHERE group_id=? AND ts<=? AND ts>=? ORDER BY id DESC LIMIT ?",
+        (gid, ts + 1, ts - window, n)).fetchall()))
+    if len(ctx) < 3:                                  # 太冷清：至少给 3 句
+        ctx = list(reversed(db.conn.execute(
+            "SELECT ts, name, role, content FROM qq_group_messages WHERE group_id=? AND ts<=? ORDER BY id DESC LIMIT 3",
+            (gid, ts + 1)).fetchall()))
+    lines, prev = [], None
+    for c in ctx:
+        if prev is not None and float(c["ts"]) - prev >= 600:
+            lines.append(f"（……过了 {int((float(c['ts']) - prev) / 60)} 分钟）")
+        prev = float(c["ts"])
+        lines.append(f"[{datetime.fromtimestamp(c['ts'], tz):%H:%M}] {'她' if c['role'] == 'assistant' else c['name']}："
+                     f"{str(c['content'])[:120]}")
+    return lines
+
+
+def _pack(db, r, tz=None) -> dict:
+    lines = context_lines(db, r["group_id"], float(r["ts"]), tz)
     if r["spoke"] and r["her_text"]:
         did = f"她说了：{r['her_text']}"
     elif r["spoke"]:
