@@ -14,6 +14,7 @@ ROLES: dict[str, str] = {
     "night": "写日记、排日程、周日来信",
     "vision": "看你发的图",
     "image": "画图（她的照片）",
+    "image_ref": "画她自己（带 data/avatar/ 里的参考图）",
     "embed": "记忆检索（文字转向量）",
 }
 TEXT_ROLES = ("chat", "helper", "memory", "night")

@@ -13,7 +13,7 @@ version = { attr = "ailife.__version__" }
 include = ["ailife*", "aigroup*"]
 
 [tool.setuptools.package-data]
-ailife = ["web/*.html"]
+ailife = ["web/*.html", "web/*.css"]
 aigroup = ["web/*.html"]
 
 [tool.pytest.ini_options]

@@ -311,7 +311,7 @@ class InsightMixin:
             situ = "\n".join(s.render() for s in picked)
             sysm = p.body[:6000]
             user = (f"# 最近的群聊记录\n{chat}\n\n" + (f"# 这种时候的你（你一贯是这样的）\n{situ}\n\n" if situ else "")
-                    + f"（系统：最后一句是在跟你说话。像群里的朋友那样回一两句，只输出你要发的话。）")
+                    + "（系统：最后一句是在跟你说话。像群里的朋友那样回一两句，只输出你要发的话。）")
             try:
                 reply = await self.brain.llm.chat([{"role": "system", "content": sysm}, {"role": "user", "content": user}],
                                                   role="chat", background=True, max_tokens=120)

@@ -19,8 +19,12 @@ class PhotoMaker:
         self.max_per_day = int(c.get("max_per_day", 3))
         self._cfg_look = c.get("look") or DEFAULT_LOOK
         self.persona = None             # Brain 挂上：人设里的 look 优先
+        from pathlib import Path
+
         from ailife.llm.image import ImageGen
         self.gen = ImageGen(cfg)
+        self.ref_gen = ImageGen(cfg, "image_ref")       # 17.0 画她自己：带 data/avatar/ 里的立绘当参考图
+        self.avatar_dir = Path(cfg.root) / "data" / "avatar"
         self.db = db
         self.tz = cfg.tz
 
@@ -35,10 +39,31 @@ class PhotoMaker:
     def look(self) -> str:
         return (getattr(self.persona, "look", "") or self._cfg_look or "").strip()
 
+    SELFIE_WORDS = ("自拍", "我", "穿", "表情", "比", "脸", "合照")
+
+    def is_selfie(self, scene: str) -> bool:
+        return any(w in scene for w in self.SELFIE_WORDS)
+
+    def avatar_refs(self) -> list[bytes]:
+        """data/avatar/ 里的参考图（同一个形象，1~3 张；立绘排前面）。"""
+        if not self.avatar_dir.is_dir():
+            return []
+        files = sorted((f for f in self.avatar_dir.iterdir() if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")),
+                       key=lambda f: (0 if "portrait" in f.stem.lower() else 1, f.name))
+        return [f.read_bytes() for f in files[:3] if f.stat().st_size < 6 * 1024 * 1024]
+
+    @property
+    def can_draw_self(self) -> bool:
+        return self.ref_gen.ready and bool(self.avatar_refs())
+
+    def build_ref_prompt(self, scene: str) -> str:
+        name = getattr(self.persona, "name", "") or "她"
+        return (f"保持参考图里这个角色的长相、发型、服装风格完全一致（她叫{name}）。画面：{scene.strip()}。"
+                "手机自拍视角，自然光，温馨日常，画面干净，画面里不要出现任何文字")
+
     def build_prompt(self, scene: str) -> str:
         scene = scene.strip()
-        selfie_words = ("自拍", "我", "穿", "表情", "比", "脸", "合照")
-        if any(w in scene for w in selfie_words):
+        if self.is_selfie(scene):
             if not self.look:                   # 人设里没写长相：拍她看到的东西，不画人脸
                 return f"日系动漫插画风格的第一人称手机照片，画面里不出现人脸：{scene}。生活感，自然光，画面干净"
             return f"{self.look}。画面：{scene}。手机自拍视角，自然光，温馨日常，画面干净"
@@ -46,7 +71,8 @@ class PhotoMaker:
 
     async def make(self, scene: str) -> bytes | None:
         """返回图片字节；超出当日上限或失败返回 None。"""
-        if not self.enabled or not self.gen.ready:
+        selfie = self.is_selfie(scene) and self.can_draw_self
+        if not self.enabled or not (self.gen.ready or selfie):
             return None
         if self.remaining_today() <= 0:
             log.info("今天的照片额度用完了")
@@ -58,9 +84,12 @@ class PhotoMaker:
                 llm.budget.check(float(llm.stats().get("usd", 0) or 0), llm._today(), False)
             except BudgetExceeded:
                 return None
-        prompt = self.build_prompt(scene)
         t0 = time.time()
-        data = await self.gen.generate(prompt, self.size)
+        data = None
+        if selfie:
+            data = await self.ref_gen.generate(self.build_ref_prompt(scene), self.size, refs=self.avatar_refs())
+        if not data and self.gen.ready:
+            data = await self.gen.generate(self.build_prompt(scene), self.size)
         if not data:
             return None
         if llm is not None and hasattr(llm, "add_cost"):

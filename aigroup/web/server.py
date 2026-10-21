@@ -24,6 +24,8 @@ from aigroup.memory.people import MEMORY_CHARS, PROFILE_CHARS, PROFILE_KEYS, PRO
 
 log = logging.getLogger("aigroup.web")
 PAGE = Path(__file__).with_name("page.html")
+TOKENS = Path(__file__).resolve().parents[2] / "ailife" / "web" / "tokens.css"   # 17.0 和有希的小屋共用一份
+AVATAR_EXT = (".webp", ".png", ".jpg", ".jpeg")
 LOCAL = ("127.0.0.1", "localhost", "[::1]", "::1")
 
 @web.middleware
@@ -60,6 +62,9 @@ class GroupHome:
         r = a.router
         r.add_get("/", self.page)
         r.add_get("/api/state", self.state)
+        r.add_get("/tokens.css", self.tokens_css)
+        r.add_get("/avatar/{kind}", self.avatar)
+        r.add_get("/api/insight", self.insight)               # 17.0 只读：关系网、相处经验（每晚算好存着的）
         r.add_get("/api/messages", self.messages)
         r.add_get("/api/people", self.people)
         r.add_get("/api/person", self.person)
@@ -183,6 +188,42 @@ class GroupHome:
     async def page(self, req):
         return web.Response(text=PAGE.read_text(encoding="utf-8"), content_type="text/html",
                             headers={"Cache-Control": "no-store"})
+
+    async def tokens_css(self, req):
+        return web.Response(text=TOKENS.read_text(encoding="utf-8"), content_type="text/css",
+                            headers={"Cache-Control": "no-cache"})
+
+    async def avatar(self, req):
+        """小满的立绘 / 头像：data/avatar/ 里的图（也是画她自己用的参考图）。"""
+        kind = req.match_info["kind"]
+        d = Path(self.cfg.root) / "data" / "avatar"
+        if kind not in ("portrait", "avatar") or not d.is_dir():
+            raise web.HTTPNotFound()
+        files = sorted(f for f in d.iterdir() if f.is_file() and f.suffix.lower() in AVATAR_EXT)
+        for want in ((kind,) if kind == "portrait" else ("avatar", "portrait")):
+            for f in files:
+                if want in f.stem.lower():
+                    return web.FileResponse(f, headers={"Cache-Control": "max-age=600"})
+        if files and kind == "portrait":
+            return web.FileResponse(files[0], headers={"Cache-Control": "max-age=600"})
+        raise web.HTTPNotFound()
+
+    async def insight(self, req):
+        """关系网（谁和谁常聊）和她和每个人相处的经验：只读出每晚整理好的结果，不现算。"""
+        gid = self._gid(req)
+        g = self.db.get(f"qq_relgraph_{gid}") or {}
+        exp = []
+        for r in self._q("SELECT k FROM kv WHERE k LIKE ?", (f"qq_relexp_{gid}_%",)):
+            d = self.db.get(r["k"]) or {}
+            try:
+                uid = int(str(r["k"]).rsplit("_", 1)[1])
+            except ValueError:
+                continue
+            if d.get("lines"):
+                exp.append({"uid": uid, "name": d.get("name") or str(uid), "lines": list(d["lines"]), "ts": d.get("ts"),
+                            "good": d.get("good", 0), "bad": d.get("bad", 0)})
+        exp.sort(key=lambda x: -(x["ts"] or 0))
+        return web.json_response({"gid": gid, "pairs": g.get("pairs") or [], "pairs_ts": g.get("ts"), "experience": exp})
 
     def _wechat_status(self) -> dict:
         try:

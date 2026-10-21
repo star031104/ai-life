@@ -222,7 +222,7 @@ class PromptMixin:
         if rx:
             out.append(rx)
         t = getattr(p, "traits", None)
-        if not hasattr(self, "_last_sigs") or not isinstance(getattr(self, "_last_sigs"), dict):
+        if not hasattr(self, "_last_sigs") or not isinstance(self._last_sigs, dict):
             self._last_sigs = {}
         self._last_sigs[gid] = []
         if t is not None and t.signatures and self.gk(gid).get("signatures", True):

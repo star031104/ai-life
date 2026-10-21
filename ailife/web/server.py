@@ -20,6 +20,8 @@ from ailife.web.system import SystemMixin
 
 log = logging.getLogger("ailife.web")
 PAGE = Path(__file__).with_name("page.html")
+TOKENS = Path(__file__).with_name("tokens.css")          # 17.0 B 版：和群小屋共用的颜色、时段主题、组件
+AVATAR_EXT = (".webp", ".png", ".jpg", ".jpeg")
 WEEK = "一二三四五六日"
 
 
@@ -44,6 +46,8 @@ class Dashboard(RecordsMixin, LifeWebMixin, PersonaWebMixin, SystemMixin):
         a.router.add_get("/", self.page)
         a.router.add_get("/api/state", self.state)
         a.router.add_get("/photos/{name}", self.photo)
+        a.router.add_get("/tokens.css", self.tokens_css)
+        a.router.add_get("/avatar/{kind}", self.avatar)
         return a
 
     async def start(self):
@@ -79,6 +83,17 @@ class Dashboard(RecordsMixin, LifeWebMixin, PersonaWebMixin, SystemMixin):
     # ---------------- 页面 ----------------
     async def page(self, req):
         return web.Response(text=PAGE.read_text(encoding="utf-8"), content_type="text/html")
+
+    async def tokens_css(self, req):
+        return web.Response(text=TOKENS.read_text(encoding="utf-8"), content_type="text/css",
+                            headers={"Cache-Control": "no-cache"})
+
+    async def avatar(self, req):
+        """她的立绘 / 头像：data/avatar/ 里文件名带 portrait / avatar 的图（不进 GitHub）。同一批图也是画她自己的参考图。"""
+        p = avatar_file(Path(self.cfg.root) / "data" / "avatar", req.match_info["kind"])
+        if p is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(p, headers={"Cache-Control": "max-age=600"})
 
     async def photo(self, req):
         import re
@@ -177,3 +192,15 @@ class Dashboard(RecordsMixin, LifeWebMixin, PersonaWebMixin, SystemMixin):
             return await req.json()
         except Exception:  # noqa: BLE001
             return {}
+
+
+def avatar_file(d: Path, kind: str) -> Path | None:
+    """kind 只认 portrait（立绘）/ avatar（头像）；头像没有就用立绘。"""
+    if kind not in ("portrait", "avatar") or not d.is_dir():
+        return None
+    files = sorted(f for f in d.iterdir() if f.is_file() and f.suffix.lower() in AVATAR_EXT)
+    for want in ((kind,) if kind == "portrait" else ("avatar", "portrait")):
+        for f in files:
+            if want in f.stem.lower():
+                return f
+    return files[0] if files and kind == "portrait" else None
