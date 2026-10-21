@@ -196,6 +196,8 @@ net:
   agent_per_day: 40           # 每天最多查几次（超了退回只搜一次）
   agent_deep_thinking: true   # 深查打开思考模式（更准、慢一倍）
   agent_filler: true          # 要深查时先说一句“等我看看”（10 分钟最多一次）
+  browser: auto               # 19.3 读脚本加载的网页时开无头浏览器：auto 装了 playwright 就用 / false 不用
+  tavily_extract: true        # 19.3 国内打不开、被拦的网页让 Tavily 去读（一次算一个额度）
 
 
 # ---------------- 软件更新 ----------------

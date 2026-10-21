@@ -173,8 +173,10 @@ class WebSearch:
     def tavily_used(self) -> int:
         return int((self.kv.get(f"tavily_n_{self._month()}") if self.kv is not None else 0) or 0)
 
-    async def _tavily(self, q: str, n: int, fresh_days: int = 0, snippet: int = 220) -> list[dict]:
+    async def _tavily(self, q: str, n: int, fresh_days: int = 0, snippet: int = 220, site: str = "") -> list[dict]:
         body = {"query": q, "max_results": n, "search_depth": "basic"}
+        if site:
+            body["include_domains"] = [site]
         if fresh_days:
             body.update(topic="news", days=int(fresh_days))
         async with httpx.AsyncClient(timeout=self.timeout) as c:
@@ -195,20 +197,41 @@ class WebSearch:
                  "snippet": _clean(x.get("content", ""))[:snippet], "date": pub_date(x.get("published_date"))}
                 for x in (d.get("results") or [])[:n]]
 
-    async def agent_search(self, query: str, n: int = 6, days: int = 0) -> tuple[list[dict], str]:
+    async def extract(self, url: str) -> dict:
+        """19.3 让 Tavily 的服务器去读一个网页（国内打不开的、被拦的）：{title, text}（Markdown）。5 个网址算 1 个额度，这里一次一个。"""
+        if not self.tavily_key or self.tavily_out():
+            return {}
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post("https://api.tavily.com/extract", headers={"Authorization": f"Bearer {self.tavily_key}"},
+                             json={"urls": [url], "format": "markdown", "extract_depth": "basic"})
+            if r.status_code in (432, 433):
+                if self.kv is not None:
+                    self.kv.set("tavily_out", self._month())
+                raise RuntimeError("Tavily 额度用完")
+            r.raise_for_status()
+            d = r.json()
+        if self.kv is not None:
+            k = f"tavily_n_{self._month()}"
+            self.kv.set(k, int(self.kv.get(k) or 0) + 1)
+        res = (d.get("results") or [{}])[0] if d.get("results") else {}
+        return {"title": str(res.get("title") or ""), "text": str(res.get("raw_content") or "")}
+
+    async def agent_search(self, query: str, n: int = 6, days: int = 0, site: str = "") -> tuple[list[dict], str]:
         """给“查资料”用：Tavily 优先（带日期、摘要长一点），免费额度用完 / 出错就换百度、360（没有日期）。
         返回（结果, 用的哪个引擎）。"""
         q = re.sub(r"\s+", " ", query or "").strip()[:80]
+        site = re.sub(r"^https?://|/.*$", "", (site or "").strip().lower())[:60]
         if not self.enabled or len(q) < 2:
             return [], ""
-        ck = f"agent|{q}|{days}"
+        ck = f"agent|{q}|{days}|{site}"
         hit = self._cache.get(ck)
         if hit:
             return hit, "缓存"
         tries = []
         if self.tavily_key and not self.tavily_out():
-            tries.append(("Tavily", lambda: self._tavily(q, n, int(days or 0), snippet=320)))
-        tries += [(e[0], (lambda e=e: self._engine(*e, q, n))) for e in ENGINES]
+            tries.append(("Tavily", lambda: self._tavily(q, n, int(days or 0), snippet=320, site=site)))
+        qq = f"site:{site} {q}" if site else q                   # 19.3 只搜某个网站（百度 / 360 认 site:）
+        tries += [(e[0], (lambda e=e: self._engine(*e, qq, n))) for e in ENGINES]
         for name, fn in tries:
             try:
                 got = await fn()

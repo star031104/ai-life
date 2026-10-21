@@ -156,6 +156,19 @@ class _Text(HTMLParser):
         return " ".join(out)[:n]
 
 
+def visible_text(html: str) -> str:
+    """页面上看得见的字（去掉脚本、样式、导航、页脚），一块一行。"""
+    t = re.sub(r"(?is)<(script|style|noscript|svg|template|iframe)[^>]*>.*?</\1>", " ", html or "")
+    t = re.sub(r"(?is)<(nav|footer)[^>]*>.*?</\1>", " ", t)
+    t = re.sub(r"(?i)<br\s*/?>|</(p|div|li|tr|h\d|table|section|article)>", "\n", t)
+    t = re.sub(r"(?i)</t[dh]>", " | ", t)
+    t = re.sub(r"(?s)<[^>]+>", " ", t)
+    import html as _h
+    t = _h.unescape(t)
+    t = "\n".join(re.sub(r"[ \t\r\f\v]+", " ", ln).strip(" |") for ln in t.split("\n"))
+    return re.sub(r"\n{2,}", "\n", t).strip()
+
+
 def page_text(html: str) -> dict:
     """网页 → {title, date, text}。装了 trafilatura 就用它（带表格），没装就把看得见的字都留下（数据站的表格也在里面）。"""
     title, date, text = "", "", ""
@@ -168,14 +181,7 @@ def page_text(html: str) -> dict:
     except Exception:  # noqa: BLE001
         text = ""
     if len(text.strip()) < 1500:                 # 正文太短（数据站、列表页）：把看得见的字都留下，取长的那个
-        t = re.sub(r"(?is)<(script|style|noscript|svg|template|iframe)[^>]*>.*?</\1>", " ", html)
-        t = re.sub(r"(?is)<(nav|footer)[^>]*>.*?</\1>", " ", t)
-        t = re.sub(r"(?i)<br\s*/?>|</(p|div|li|tr|h\d|table|section|article)>", "\n", t)
-        t = re.sub(r"(?s)<[^>]+>", " ", t)
-        import html as _h
-        t = _h.unescape(t)
-        t = "\n".join(re.sub(r"[ \t\r\f\v]+", " ", ln).strip() for ln in t.split("\n"))
-        t = re.sub(r"\n{2,}", "\n", t).strip()
+        t = visible_text(html)
         if len(t) > len(text):
             text = t
         if not title:

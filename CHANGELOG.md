@@ -1,5 +1,26 @@
 # 更新记录
 
+## 19.3 — 什么网页都能看：一层不行换下一层；B 站、电竞、天气、算数接进“查资料”
+
+- **读任何网页**（`aigroup/net/fetch.py`）：借 Scrapling、Crawl4AI、Playwright MCP、Firecrawl / Tavily Extract 的思路（没整包装进来），四层兜底：
+  直连 → 被 403 / 412 / 429 / 人机验证拦下就换**仿浏览器指纹**（curl_cffi）→ 脚本加载的空壳（“正在加载”“安全检测”、正文太短）
+  开**无头浏览器**（playwright，一次一个页面、图片字体视频不加载、每个请求都查是不是公网、闲 2 分钟自动关）→ 国内打不开的
+  （维基、GitHub、DNS 被污染的）和前面都被拦的交给 **Tavily Extract**。读出来的是带表格的 Markdown；读到的只是验证页不算读到
+- **`read_url` 变聪明**：`find` 只给和问题有关的段落（按关键词给段落打分，表格整块保留；正文抽取丢掉的侧栏 / 阵容表也会翻）；
+  `links=true` 附上页面上的链接（同站的排前面），能接着点进详情页；B 站视频链接自动走 B 站通道，Liquipedia 链接自动走它的 API
+- **新工具**（`aigroup/agent/tools.py`，群里和有希共用一个工具箱，一共 7 个）：
+  - `bili`：搜视频（综合 / 播放多 / 最新）、搜 UP 主、热门、看一个视频（简介、字幕原话、弹幕最热闹的几段、热评，能看某个时间点；
+    群里看过的视频直接用当时记下的原话和画面）。用游客 cookie + wbi 签名，配了 `net.cookies` 的 B 站 cookie 就用登录的
+  - `esports`：Liquipedia（无畏契约、英雄联盟、CS、DOTA2、王者荣耀、守望先锋……同一套），先搜条目再读选手 / 战队 / 赛事页；
+    按它的 API 规矩来（带联系方式的 User-Agent、2 秒一次、解析页面 30 秒一次，等不及就读 wikitext、缓存 6 小时、注明 CC-BY-SA）
+  - `weather`（Open-Meteo）、`calc`（只算数：数字、+ - * / ** %、几个数学函数；指数太大、别的代码一律不算）
+  - `web_search` 加 `site`：只搜某个网站（Tavily 的 include_domains；百度 / 360 用 site:）
+- 研究员提示词写清楚什么时候用哪个工具；判断层把天气、B 站、电竞、“这个链接里写了啥”、“要算一下”也算作要查
+- 小屋“她查过什么”上面多一行“读网页：直连 → 仿浏览器 → 无头浏览器 → Tavily 代读”（现在能用的几层）
+- 配置 `net.browser`（auto / false）、`net.tavily_extract`（true / false）、`net.browser_path`（服务用别的用户跑时浏览器装在哪）；
+  install.sh 会装 curl_cffi 和 playwright 的无头浏览器（国内自动换 npmmirror 镜像，`AILIFE_BROWSER=0` 跳过），都是可选的
+- 题库加了 6 道（B 站 UP 主新视频、战队阵容、天气、涨了百分之几、HLTV 排名、豆瓣新片榜）
+
 ## 19.2 — 有希也会自己查；提醒发出去才算完成；小屋看得到她查了什么、约定的历史
 
 - **有希先想一想**（`ailife/chat/research.py`，`config.yaml` 的 `net.agent`，默认关）：和群里同一套判断层 + 研究员

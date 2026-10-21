@@ -341,6 +341,7 @@ def test_home_agent_view_and_plan_edit(cfg, brain):
         async with TestClient(TestServer(GroupHome(cfg, brain, ob, gc).app())) as c:
             a = await (await c.get(f"/api/agent?gid={GROUP}")).json()
             assert a["enabled"] and [x["goal"] for x in a["logs"]] == ["aspas 近况"]
+            assert a["reader"][0] == "直连" and "esports" in a["tools"] and "bili" in a["tools"]
             assert a["logs"][0]["rounds"] == 4 and a["logs"][0]["brief"]["answer_points"] == ["还在 MIBR"]
             r = await (await c.post("/api/life/plan", json={"id": pid, "when": later})).json()
             assert r["ok"], r

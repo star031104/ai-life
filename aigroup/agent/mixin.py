@@ -197,7 +197,9 @@ class AgentMixin:
                     rounds=f"这次最多查 {rounds} 轮，一般 {max(1, rounds - 1)} 轮就该交卷。")},
                 {"role": "user", "content": P.RESEARCH_USER.format(goal=goal, context=self.transcript(gid, 6))}]
         try:
-            res = await tool_loop(self.brain.llm, msgs, P.RESEARCH_TOOLS, lambda n, a: self._agent_exec(gid, n, a),
+            tb = self.toolbox()
+            res = await tool_loop(self.brain.llm, msgs, tb.schemas(recall=True),
+                                  lambda n, a: tb.run(n, a, recall=lambda q: self._agent_recall(gid, q)),
                                   max_rounds=rounds, thinking=thinking, deadline_s=deadline, finish_prompt=P.FINISH)
         except Exception as e:  # noqa: BLE001
             log.info("群 %s：查资料失败：%s", gid, e)
@@ -231,37 +233,32 @@ class AgentMixin:
         except Exception as e:  # noqa: BLE001
             log.info("群 %s：“等我看看”没发出去：%s", gid, e)
 
+    def toolbox(self):
+        """19.3 研究员的工具箱（和有希共用 aigroup/agent/tools.py）：搜索、读任何网页、翻记忆、B 站、电竞、天气、算数。"""
+        tb = getattr(self, "_toolbox", None)
+        if tb is None:
+            from aigroup.agent.tools import Toolbox
+            tb = self._toolbox = Toolbox(self.cfg, self.links, self.web, where=getattr(self, "where", None),
+                                         tz=self.cfg.tz, video_cache=lambda bv: self.db.get(f"qq_video_{bv}"))
+        return tb
+
     async def _agent_exec(self, gid: int, name: str, args: dict) -> str:
-        if name == "web_search":
-            try:
-                days = max(0, min(365, int(args.get("days") or 0)))
-            except (TypeError, ValueError):
-                days = 0
-            res, eng = await self.web.agent_search(str(args.get("query") or ""), 6, days)
-            return format_results(res, eng)
-        if name == "read_url":
-            url = str(args.get("url") or "")
-            try:
-                off = max(0, int(args.get("offset") or 0))
-            except (TypeError, ValueError):
-                off = 0
-            return format_page(await self.links.read_text(url, off), url, off)
-        if name == "recall":
-            q = str(args.get("query") or "")
-            out = []
-            try:
-                found = self.memory.recall(gid, q, k_msgs=6, k_facts=6)
-                blk = self.memory.prompt_block(found, self.names(gid))
-                if blk:
-                    out.append(blk)
-            except Exception as e:  # noqa: BLE001
-                log.info("翻记忆出错：%s", e)
-            kn = getattr(self, "knowledge", None)
-            if kn is not None:
-                es = kn.recall(gid, q, k=4)
-                if es:
-                    out.append("以前查到过的：\n" + "\n".join(f"- {e['topic']}：{e['summary']}"
-                                                         f"（{datetime.fromtimestamp(e['ts'], self.cfg.tz):%Y-%m-%d}）"
-                                                         for e in es))
-            return "\n".join(out) or "（没想起来相关的）"
-        return f"（没有 {name} 这个工具）"
+        return await self.toolbox().run(name, args, recall=lambda q: self._agent_recall(gid, q))
+
+    async def _agent_recall(self, gid: int, q: str) -> str:
+        out = []
+        try:
+            found = self.memory.recall(gid, q, k_msgs=6, k_facts=6)
+            blk = self.memory.prompt_block(found, self.names(gid))
+            if blk:
+                out.append(blk)
+        except Exception as e:  # noqa: BLE001
+            log.info("翻记忆出错：%s", e)
+        kn = getattr(self, "knowledge", None)
+        if kn is not None:
+            es = kn.recall(gid, q, k=4)
+            if es:
+                out.append("以前查到过的：\n" + "\n".join(f"- {e['topic']}：{e['summary']}"
+                                                     f"（{datetime.fromtimestamp(e['ts'], self.cfg.tz):%Y-%m-%d}）"
+                                                     for e in es))
+        return "\n".join(out) or "（没想起来相关的）"

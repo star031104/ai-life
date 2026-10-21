@@ -46,6 +46,25 @@ cases:
     chat: ["小李：现在金价多少一克"]
     expect: research
     depth: quick
+  # ---------- 19.3 B 站 / 电竞 / 天气 / 算数 / 读网页 ----------
+  - id: bili-up
+    chat: ["小王：B站上 aspas 最近有啥新视频"]
+    expect: research
+  - id: esports-roster
+    chat: ["老张：Sentinels 现在无畏契约的阵容是谁"]
+    expect: research
+  - id: weather-city
+    chat: ["小李：珠海明天会下雨吗，我要去出差"]
+    expect: research
+  - id: calc-price
+    chat: ["小王：iPhone 18 Pro 比上一代贵了百分之几"]
+    expect: research
+  - id: site-ranking
+    chat: ["老张：hltv 现在 CS 排名第一的是哪个队"]
+    expect: research
+  - id: douban-chart
+    chat: ["小李：豆瓣新片榜现在第一是啥"]
+    expect: research
   # ---------- 前提错误类 ----------
   - id: premise-retired
     chat: ["小王：TenZ 最近的职业比赛数据怎么样"]

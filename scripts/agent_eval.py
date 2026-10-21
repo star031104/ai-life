@@ -92,25 +92,21 @@ def check_route(case: dict, r: dict, now: datetime) -> tuple[bool, str]:
     return True, ""
 
 
-async def research(llm, P, web, links, goal: str, depth: str, now: datetime, name: str, ctx: str) -> dict:
+async def research(llm, P, web, links, goal: str, depth: str, now: datetime, name: str, ctx: str, cfg=None) -> dict:
     from aigroup.agent.loop import tool_loop
-    from aigroup.agent.mixin import format_page, format_results, parse_brief
+    from aigroup.agent.mixin import parse_brief
+    from aigroup.agent.tools import Toolbox
+    tb = Toolbox(cfg, links, web, tz=cfg.tz)
 
     async def ex(n, a):
-        if n == "web_search":
-            res, eng = await web.agent_search(str(a.get("query") or ""), 6, int(a.get("days") or 0))
-            return format_results(res, eng)
-        if n == "read_url":
-            off = int(a.get("offset") or 0)
-            return format_page(await links.read_text(str(a.get("url") or ""), off), str(a.get("url") or ""), off)
-        return "（评测里没有她的记忆）"
+        return await tb.run(n, a)
     deep = depth == "deep"
     rounds = 4 if deep else 2
     msgs = [{"role": "system", "content": P.RESEARCH_SYSTEM.format(
                 now=f"{now:%Y-%m-%d %H:%M} 星期{P.WEEK[now.weekday()]}", name=name,
                 rounds=f"这次最多查 {rounds} 轮，一般 {rounds - 1} 轮就该交卷。")},
             {"role": "user", "content": P.RESEARCH_USER.format(goal=goal, context=ctx)}]
-    res = await tool_loop(llm, msgs, P.RESEARCH_TOOLS, ex, max_rounds=rounds, thinking=deep,
+    res = await tool_loop(llm, msgs, tb.schemas(), ex, max_rounds=rounds, thinking=deep,
                           deadline_s=40 if deep else 15, finish_prompt=P.FINISH)
     return {"brief": parse_brief(res.text), "rounds": res.rounds, "seconds": round(res.seconds, 1), "forced": res.forced,
             "steps": res.steps}
@@ -160,7 +156,7 @@ async def main():
             depth = "deep" if call["args"].get("depth") == "deep" else "quick"
             try:
                 rr = await research(llm, P, web, links, str(call["args"].get("goal") or ""), depth, now, name,
-                                    transcript(c["chat"], now))
+                                    transcript(c["chat"], now), cfg)
                 if depth == "quick":
                     quick_s.append(r["seconds"] + rr["seconds"])
                 prem = ("这道题的前提本身有问题（比如人已经退役 / 东西还没出），简报（premise 或要点里）没指出来就不能通过。"

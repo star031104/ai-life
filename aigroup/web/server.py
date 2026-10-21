@@ -260,6 +260,8 @@ class GroupHome:
             "enabled": bool(g.get("agent", False)), "today": n_today, "per_day": int(g.get("agent_per_day", 60) or 60),
             "tavily_used": web_.tavily_used() if web_ is not None and hasattr(web_, "tavily_used") else 0,
             "tavily_out": bool(web_ is not None and hasattr(web_, "tavily_out") and web_.tavily_out()),
+            "reader": gc.toolbox().reader.layers() if hasattr(gc, "toolbox") else [],
+            "tools": gc.toolbox().names(recall=True) if hasattr(gc, "toolbox") else [],
             "logs": [{"ts": x.get("ts"), "goal": x.get("goal"), "depth": x.get("depth"), "thinking": x.get("thinking"),
                       "rounds": x.get("rounds"), "seconds": x.get("seconds"), "forced": x.get("forced"),
                       "steps": (x.get("steps") or [])[:12], "brief": x.get("brief") or {}} for x in logs[:30]]})

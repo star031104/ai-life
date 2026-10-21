@@ -12,14 +12,15 @@ import time
 
 from aigroup.agent import prompts as P
 from aigroup.agent.loop import parse_args, tool_loop
-from aigroup.agent.mixin import brief_block, format_page, format_results, parse_brief
+from aigroup.agent.mixin import brief_block, parse_brief
 
 log = logging.getLogger("ailife.research")
 
 ROUTER_SYSTEM = """现在是 {now}（北京时间）。你是聊天角色「{name}」的助手：她马上要回他的消息，你先决定要不要替她上网查点东西。
 你只能调用工具或回复“无”，不用写她要说的话。
 
-- 他在问一件得查才能答准的事（新闻、近况、比赛和数据、价格、发布和更新、作品 / 人物 / 概念、“最近有什么……”），
+- 他在问一件得查才能答准的事（新闻、近况、比赛和数据、价格、发布和更新、作品 / 人物 / 概念、“最近有什么……”、
+  天气、B 站上的视频和 UP 主、电竞选手 / 战队 / 赛事、某个网页或链接里写了什么、要算一下的数），
   或者她接下来的话要靠事实撑着 → 调 research。depth：单个事实、一条新闻、是什么 → quick；
   近况、数据、对比、“怎么样”、要几个来源互相印证的 → deep。
 - 闲聊、撒娇、玩笑、说心情、问她自己、问他自己的事、让她提醒 / 记事 → 什么都不调用，只回复一个字：无。
@@ -141,7 +142,8 @@ class Researcher:
                     rounds=f"这次最多查 {rounds} 轮，一般 {max(1, rounds - 1)} 轮就该交卷。")},
                 {"role": "user", "content": RESEARCH_USER.format(goal=goal, context=self._transcript(6))}]
         try:
-            res = await tool_loop(self.brain.llm, msgs, P.RESEARCH_TOOLS, self._exec, max_rounds=rounds,
+            tb = self.toolbox()
+            res = await tool_loop(self.brain.llm, msgs, tb.schemas(), self._exec, max_rounds=rounds,
                                   thinking=thinking, deadline_s=deadline, finish_prompt=P.FINISH)
         except Exception as e:  # noqa: BLE001
             log.info("查资料失败：%s", e)
@@ -157,31 +159,23 @@ class Researcher:
             self.db.add_memory(f"我查过「{goal[:30]}」：{'；'.join(d['answer_points'][:2])}"[:200], 2, "self")
         return brief_block(goal, d)
 
-    async def _exec(self, name: str, args: dict) -> str:
-        if name == "web_search":
-            try:
-                days = max(0, min(365, int(args.get("days") or 0)))
-            except (TypeError, ValueError):
-                days = 0
-            res, eng = await self._web_().agent_search(str(args.get("query") or ""), 6, days)
-            return format_results(res, eng)
-        if name == "read_url":
-            url = str(args.get("url") or "")
-            try:
-                off = max(0, int(args.get("offset") or 0))
-            except (TypeError, ValueError):
-                off = 0
-            return format_page(await self._links_().read_text(url, off), url, off)
-        if name == "recall":
-            q = str(args.get("query") or "")
-            out = []
-            for owner, tag in (("user", "关于他的"), ("self", "她自己的")):
-                try:
-                    rows = await self.brain.memory.recall(q, owner=owner, limit=5)
-                except Exception as e:  # noqa: BLE001
-                    log.info("翻记忆出错：%s", e)
-                    rows = []
-                out += [f"- （{tag}）{r['content']}" for r in rows]
-            return "\n".join(out) or "（没想起来相关的）"
-        return f"（没有 {name} 这个工具）"
+    def toolbox(self):
+        """19.3 和群里共用的工具箱（aigroup/agent/tools.py）：搜索、读任何网页、翻记忆、B 站、电竞、天气、算数。"""
+        if getattr(self, "_tb", None) is None:
+            from aigroup.agent.tools import Toolbox
+            self._tb = Toolbox(self.cfg, self._links_(), self._web_(), recall=self._recall, tz=self.cfg.get("tz"))
+        return self._tb
 
+    async def _exec(self, name: str, args: dict) -> str:
+        return await self.toolbox().run(name, args)
+
+    async def _recall(self, q: str) -> str:
+        out = []
+        for owner, tag in (("user", "关于他的"), ("self", "她自己的")):
+            try:
+                rows = await self.brain.memory.recall(q, owner=owner, limit=5)
+            except Exception as e:  # noqa: BLE001
+                log.info("翻记忆出错：%s", e)
+                rows = []
+            out += [f"- （{tag}）{r['content']}" for r in rows]
+        return "\n".join(out) or "（没想起来相关的）"

@@ -153,6 +153,8 @@ wechat:
 net:
   search: true                   # 能不能上网搜（关掉就只读群友发的链接）
   tavily_key: ""                 # 可选：Tavily 的 Key（写 ${TAVILY_KEY}，Key 放 .env），百度 / 360 / 搜狗都不行时兜底；每月 1000 次免费
+  browser: auto                  # 19.3 读脚本加载的网页时开无头浏览器：auto 装了 playwright 就用 / false 不用
+  tavily_extract: true           # 19.3 国内打不开、被拦的网页让 Tavily 去读（一次算一个额度）
   asr: {}                        # 4.4 看 B 站视频时把声音转成文字：默认借你 llm 里硅基流动接口的 Key，用 FunAudioLLM/SenseVoiceSmall；
                                  #     自己写：{base_url: ..., api_key: ${KEY}, model: ..., max_minutes: 20}；enabled: false 关掉
   cookies: {}                    # 可选：要登录才能看的网站，填你自己浏览器里的 cookie，比如 {"zhihu.com": "z_c0=…"}（只用来读群友发的链接）

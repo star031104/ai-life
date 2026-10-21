@@ -1283,7 +1283,8 @@ async function loadHumane(){let h;try{h=await api(`/api/humane?gid=${LSEL}`)}cat
 /* 19.0 她查过什么 */
 async function loadAgent(){let a;try{a=await api(`/api/agent?gid=${LSEL}`)}catch(e){return}
   $("agentStat").textContent=(a.enabled?(a.on?"开着":"开着，但现在的模型不支持工具调用（退回只搜一次）"):"没开（性格开关 → 联网 → “先想一想再回”）")
-    +` · 今天查了 ${a.today} / ${a.per_day} 次 · Tavily 这个月 ${a.tavily_used} 次${a.tavily_out?"（免费额度用完了，改用免费搜索）":""}`;
+    +` · 今天查了 ${a.today} / ${a.per_day} 次 · Tavily 这个月 ${a.tavily_used} 次${a.tavily_out?"（免费额度用完了，改用免费搜索）":""}`
+    +((a.reader||[]).length?` · 读网页：${a.reader.join(" → ")}`:"");
   const DEP={deep:"深查",quick:"快查"};
   $("agentList").innerHTML=(a.logs||[]).map(x=>{const b=x.brief||{};const pts=(b.answer_points||[]).slice(0,4);
     const src=(b.sources||[]).filter(s=>s&&typeof s==="object").slice(0,4).map(s=>esc(s.site||s.title||"")+(s.date?`（${esc(s.date)}）`:"")).join("；");
