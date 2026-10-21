@@ -54,6 +54,6 @@ def stats(db) -> dict:
     fp = sum(1 for r in rows if r["spoke"] and r["human"] == 0)
     fn = sum(1 for r in rows if not r["spoke"] and r["human"] == 1)
     agree = sum(1 for r in rows if bool(r["spoke"]) == bool(r["human"]))
-    return {"n": n, "agree": round(agree / n, 3) if n else None,
+    return {"n": n, "n1": sum(1 for r in rows if r["human"] == 1), "n0": sum(1 for r in rows if r["human"] == 0), "agree": round(agree / n, 3) if n else None,
             "precision": round(tp / (tp + fp), 3) if tp + fp else None,
             "recall": round(tp / (tp + fn), 3) if tp + fn else None}

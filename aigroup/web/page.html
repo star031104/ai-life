@@ -1156,12 +1156,12 @@ const pct=v=>v==null?"—":Math.round(v*100)+"%";
 async function loadLabel(){try{const r=await api(`/api/label/next?gid=${LSEL}`);LAB=r.moment;const s=r.stats;
   if(NBS===null){try{NBS=(await api("/api/eval")).label_nb||{}}catch(e){NBS={}}}
   $("labStat").textContent=s.n?`判了 ${s.n} 条 · 她和你一致 ${pct(s.agree)} · 她说的该说 ${pct(s.precision)} · 该说的她说了 ${pct(s.recall)}`:"你判的会直接用来调她什么时候开口（每晚重新拟合时权重最高）";
-  const n0=NBS.n0,n1=NBS.n1,need=30;
+  const n0=s.n0??NBS.n0,n1=s.n1??NBS.n1,need=30;      // 18.1 进度用现在判过的条数（以前是每晚数一次，判了也不动）
   const prog=`<div class="lab-prog">
     <div><div class="k"><span>这次判了</span><b class="num">${LABN} 条</b></div><div class="small muted">一共 ${s.n} 条 · 键盘 <span class="kbd">Y</span> 该说 <span class="kbd">N</span> 不该说 <span class="kbd">S</span> 看不出来</div></div>
     ${n0!==undefined?`<div><div class="k"><span>小判断器要的“不该说”</span><b class="num">${Math.min(n0,need)} / ${need}</b></div><div class="bar" role="progressbar" aria-label="不该说的标注进度" aria-valuemin="0" aria-valuemax="${need}" aria-valuenow="${Math.min(n0,need)}"><span style="width:${Math.min(100,n0/need*100)}%"></span></div></div>
     <div><div class="k"><span>“该说”</span><b class="num">${Math.min(n1,need)} / ${need}</b></div><div class="bar" role="progressbar" aria-label="该说的标注进度" aria-valuemin="0" aria-valuemax="${need}" aria-valuenow="${Math.min(n1,need)}"><span style="width:${Math.min(100,n1/need*100)}%"></span></div></div>`:""}
-  </div>${n0!==undefined?'<div class="small muted" style="margin:-6px 0 12px">进度是每晚整理时数的，今天判的明早算进去</div>':""}`;
+  </div>${n0!==undefined?`<div class="small muted" style="margin:-6px 0 12px">${NBS.trained?`小判断器已经在用（留出准确率 ${Math.round((NBS.acc||0)*100)}%），每晚用新标注重新训练`:n0>=need&&n1>=need?"两类都够了，今晚整理时训练好，明天开始用":"两类各够 30 条后，当晚训练、第二天开始用"}</div>`:""}`;
   if(!LAB){$("labBox").innerHTML=prog+'<div class="small muted">暂时没有要判的（群里聊一阵子就有了）</div>';return}
   $("labBox").innerHTML=prog+`${LAB.context.length?`<div class="lab-q">${LAB.context.map(esc).join("<br>")}</div>`:""}
     <div class="lab-did">这之后：<b>${esc(LAB.did)}</b> <span class="muted small">（想说的程度 ${LAB.p}，门槛 ${LAB.thr}）</span></div>

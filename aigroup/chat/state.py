@@ -27,6 +27,7 @@ class GroupState:
     name: str = ""
     last_repeat: str = ""          # 她上次跟着复读的那句（同一轮复读只跟一次）
     mentioned_since: float = 0.0   # 被叫到、还没回的时候从什么时候开始等
+    mention_due: float = 0.0       # 18.1 被叫到后定下的回复时刻：后来的新消息只合进这一批，不再往后推
     speaking: bool = False         # 正在“说”（问大模型、打字、发）：这时候来的新消息不打断她
     to_her_ts: float = 0.0         # 最近一次有人直接找她的时间（说到一半有人找她，剩下的就不发了）
     wait: dict | None = None       # 她在等谁开口：{"uid", "until"}

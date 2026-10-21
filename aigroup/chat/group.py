@@ -94,6 +94,9 @@ class GroupChat(IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, Pr
         self.groups = {int(g) for g in groups or []}
         p = brain.persona
         self.aliases = [a for a in {p.name, getattr(p, "formal_name", "") or "", *(aliases or [])} if a and len(a) >= 2]
+        q = cfg.get("wechat" if cfg.get("channel") == "wechat" else "qq") or {}
+        self.not_aliases = {str(a).strip() for a in (q.get("not_aliases") or []) if str(a).strip()}   # 18.1 这些不算叫她
+        self.aliases = [a for a in self.aliases if a not in self.not_aliases]
         from aigroup.core.config import chan_group, set_channel
         self.channel = str(cfg.get("channel") or "wechat")
         set_channel(self.channel)

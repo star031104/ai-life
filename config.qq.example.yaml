@@ -67,6 +67,7 @@ qq:
   owner_id: 0                    # ★ 你自己的 QQ 号（她把你当群里的老朋友）
   groups: []                     # ★ 她待的群（白名单，别的群一律不说话）
   aliases: []                    # 群里这样叫也算叫她（人设里的名字自动算）
+  not_aliases: []                # 这些不算叫她（比如她的 QQ 昵称其实是你的名字，大家叫它是在叫你）
   napcat_dir: ""                 # 她那份 NapCat 的文件夹（没开就自动启动；setup 会写）
   napcat_qq: 0                   # 她的 QQ 小号（自动登录用；setup 会写）
   napcat_hidden: true            # NapCat 在后台跑（不开窗口，输出在 data/logs/napcat.log）
@@ -93,7 +94,7 @@ qq:
     pace: 1.0                    # 下面这些等待时间的倍数（0＝全部立刻回）
     read_delay: [2, 12]          # 被叫到、她有空：几秒后看到
     notice_delay: [5, 40]        # 想插话时，刷到群消息要多久
-    busy_delay_minutes: [1, 8]   # 她正在上课 / 上班时被叫到：几分钟后偷空回
+    busy_delay_minutes: [1, 2]   # 她正在上课 / 上班时被叫到：几分钟后偷空回
     repeat_chance: 0.5           # 群里在复读时她跟着复读的概率
     react_chance: 0.08           # 不说话时给消息点个表情的概率
     welcome_chance: 0.7          # 新人进群欢迎一下

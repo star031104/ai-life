@@ -67,6 +67,7 @@ wechat:
   owner: ""                      # ★ 你自己的微信号（wxid_ 开头那个；setup 从群成员里让你选）
   groups: []                     # ★ 她待的群（白名单，群 id 形如 12345678@chatroom；setup 会列出来让你选）
   aliases: []                    # 群里这样叫也算叫她（人设里的名字、她的微信昵称和群昵称自动算）
+  not_aliases: []                # 这些不算叫她（比如她的微信昵称其实是你的名字，大家叫它是在叫你）
   self_names: []                 # 别人 @ 她时可能用的名字（一般不用填：自动从群昵称、微信昵称里取）
   data_dir: ""                   # 微信数据目录（xwechat_files）；空着自动找
   account: ""                    # 电脑上登过好几个微信号时，指定用哪个（账号目录名或微信号；setup 会写）
@@ -110,7 +111,7 @@ wechat:
     pace: 1.0                    # 下面这些等待时间的倍数（0＝全部立刻回）
     read_delay: [2, 12]          # 被叫到、她有空：几秒后看到
     notice_delay: [5, 40]        # 想插话时，刷到群消息要多久
-    busy_delay_minutes: [1, 8]   # 她正在上课 / 上班时被叫到：几分钟后偷空回
+    busy_delay_minutes: [1, 2]   # 她正在上课 / 上班时被叫到：几分钟后偷空回
     repeat_chance: 0.5           # 群里在复读时她跟着复读的概率
     react_chance: 0              # 微信没有给消息点表情（保持 0）
     welcome_chance: 0.7          # 新人进群欢迎一下

@@ -264,11 +264,17 @@ class SpeakMixin:
             delay = self.secs("busy_delay_minutes", gid) * 60 if busy else self.human_delay(gid, "read_delay", 0.5)
         else:
             delay = self.human_delay(gid, "notice_delay", 1.0)
+        if st.mention_due and now - st.mention_due > 120:
+            st.mentioned_since = st.mention_due = 0.0    # 上次定的时刻早过了（中间没回成）：这次重新算
+        if mentioned and st.mention_due:
+            delay = max(0.0, st.mention_due - now)       # 18.1 已经定好什么时候回：新消息不让她重新等
         if mentioned and st.mentioned_since and now - st.mentioned_since > 600:
             delay = 0                                    # 叫她已经等了 10 分钟（中间一直有新消息）：别再拖
         if delay > 0:
             if mentioned and not st.mentioned_since:
                 st.mentioned_since = now
+            if mentioned and not st.mention_due:
+                st.mention_due = now + delay
             try:
                 await asyncio.sleep(delay)
             except asyncio.CancelledError:
@@ -281,7 +287,7 @@ class SpeakMixin:
                 st.batch_callers = callers + st.batch_callers
                 self.gate.drop(gate_id)
                 return
-        st.mentioned_since = 0.0
+        st.mentioned_since = st.mention_due = 0.0
         note = ""
         if busy and activity:
             note = f"你现在正在：{activity}。" + ("偷空看了眼手机，回一句就好。" if mentioned else "抽空看了眼群。")

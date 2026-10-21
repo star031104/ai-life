@@ -33,7 +33,7 @@ DEFAULTS = {
     "pace": 1.0,
     "read_delay": [2, 12],         # 被叫到、她有空：几秒后看到
     "notice_delay": [5, 40],       # 没人叫她、她想插话：刷到群消息要多久
-    "busy_delay_minutes": [1, 8],  # 她正忙（上课 / 上班……）时被叫到：过几分钟偷空回
+    "busy_delay_minutes": [1, 2],  # 她正忙（上课 / 上班……）时被叫到：过几分钟偷空回
     "repeat_chance": 0.5,          # 群里在复读时她跟着复读的概率
     "react_chance": 0.0,           # 不说话时给那条消息点个表情的概率（微信没有这个功能，保持 0）
     "welcome_chance": 0.7,         # 新人进群欢迎一下

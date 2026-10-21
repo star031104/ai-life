@@ -92,7 +92,7 @@ async def add_self_names(ob, gc):
     names = set()
     for g in ob.groups:
         names |= set(ob.data.self_names(g))
-    new = [n for n in names if n and len(n) >= 2 and n not in gc.aliases]
+    new = [n for n in names if n and len(n) >= 2 and n not in gc.aliases and n not in getattr(gc, "not_aliases", ())]
     if new:
         gc.aliases += new
         log.info("群里叫这些名字也算叫她：%s", "、".join(gc.aliases))

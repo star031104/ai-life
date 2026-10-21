@@ -185,3 +185,26 @@ def test_guess_fact_needs_two(cfg, brain):
     assert m.facts(GROUP, FRIEND)[0]["source"] == "self"              # 他自己说了：升级来源
     b = m.add_fact(GROUP, "小王周末去爬山", subject=FRIEND, source="self")
     assert b in [f["id"] for f in m.recall(GROUP, "爬山")["facts"]]
+
+
+def test_label_stats_live_counts(cfg, brain):
+    """18.1 判一条，“该说 / 不该说”的条数马上变（小屋里的进度条不用等到第二天）。"""
+    from aigroup.chat.gate import GateLog
+    from aigroup.eval.label import answer, stats
+    g = GateLog(brain.db)
+    a = g.add(1, False, 0.4, 0.5, False, {})
+    b = g.add(1, False, 0.6, 0.5, True, {})
+    answer(brain.db, a, 0)
+    answer(brain.db, b, 1)
+    s = stats(brain.db)
+    assert s["n"] == 2 and s["n0"] == 1 and s["n1"] == 1
+
+
+def test_not_aliases(cfg, brain):
+    """18.1 not_aliases 里的名字不算叫她（比如她的微信昵称其实是你的名字）。"""
+    from aigroup.chat.group import GroupChat
+    key = "wechat" if cfg.get("channel") == "wechat" else "qq"
+    cfg[key] = {**dict(cfg.get(key) or {}), "not_aliases": ["star"]}
+    gc = GroupChat(cfg, brain, None, 0, [1], ["star", "满满"])
+    assert "star" not in gc.aliases and "满满" in gc.aliases
+    assert not gc._called("star能不能请我喝奶茶") and gc._called("满满你好")
