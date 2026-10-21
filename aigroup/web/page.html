@@ -5,454 +5,256 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>群聊小屋</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
-/* 17.0：颜色令牌、时段主题、深色模式在 tokens.css（和有希的小屋共用一份），这里只剩群小屋自己的样子 */
-/* ============ 基础 ============ */
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-html,body{margin:0;background:var(--bg);color:var(--ink)}
-body{font:14px/1.6 var(--font);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
-button,input,select,textarea{font:inherit;color:inherit}
-svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.num{font-variant-numeric:tabular-nums}
-.muted,.ink3{color:var(--ink-3)} .ink2{color:var(--ink-2)} .small{font-size:12.5px}
-.mono{font-family:var(--mono)}
-
-/* ============ 顶栏 ============ */
-.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);
-  backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
-.top-in{max-width:1180px;margin:0 auto;padding:12px 20px 0;display:flex;flex-direction:column;gap:10px}
-.brand{display:flex;align-items:center;gap:12px;min-width:0}
-.ava{width:40px;height:40px;border-radius:50%;flex:none;color:#fff;display:grid;place-items:center;font-weight:650;font-size:17px;position:relative;
-  background:var(--solid)}
-.ava::after{content:"";position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;border-radius:50%;background:var(--ink-3);border:2px solid var(--bg)}
-.ava.on::after{background:var(--good)} .ava.busy::after{background:var(--warn)} .ava.sleep::after{background:#7d7fd8}
-.brand h1{margin:0;font-size:16px;font-weight:650;letter-spacing:.2px}
-.brand .sub{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.brand .grow{flex:1;min-width:0}
-.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer;color:var(--ink-2)}
-.iconbtn:hover{color:var(--ink);border-color:var(--line-2)}
-nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -4px}
-nav.tabs::-webkit-scrollbar{display:none}
-nav.tabs button{border:0;background:none;padding:9px 12px 11px;cursor:pointer;color:var(--ink-3);font-weight:550;white-space:nowrap;
-  display:flex;align-items:center;gap:6px;border-bottom:2px solid transparent;margin-bottom:-1px}
-nav.tabs button:hover{color:var(--ink)}
-nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
-
-
-/* ============ 4.2 她的日子 / 管理 ============ */
-nav.tabs button.adm{display:none}
-body.admin nav.tabs button.adm{display:flex}
-nav.tabs .tsep{flex:1}
-nav.tabs button.admbtn{color:var(--ink-3)}
-body.admin nav.tabs button.admbtn{color:var(--accent-ink)}
+/* 18.0「小屋」：颜色、字号、圆角、按钮、卡片都在 tokens.css（和有希的小屋共用）。
+   这里只有群小屋独有的几块排法，也只用 tokens 里的变量。 */
+body:not(.on-home) .homeonly{display:none!important}
+.bw-brand .ava{font-size:13px}
+.ava img,.pa img{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.pa{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-size:var(--fs-meta);font-weight:700;position:relative;overflow:hidden}
 .rows .ava::after{display:none}
-.meter{height:6px;border-radius:4px;background:var(--surface-3);overflow:hidden;margin-top:6px}
-.meter i{display:block;height:100%;border-radius:4px;background:var(--accent)}
-.lifep{white-space:pre-wrap;line-height:1.8;font-size:14px}
-.weeks{list-style:none;margin:0;padding:0}
-.weeks li{padding:10px 0;border-top:1px dashed var(--line)} .weeks li:first-child{border-top:0}
-.weeks .w{font:600 12px var(--mono);color:var(--accent-ink);margin-bottom:2px}
-.pref{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:13px}
-.pref b{font-weight:600} .pref button{border:0;background:none;color:var(--ink-3);cursor:pointer;padding:0 4px;font-size:15px;line-height:1}
-.pref button:hover{color:var(--bad)}
-.form2{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px} .form2 .input{flex:1;min-width:120px}
-.bdgrid{display:grid;grid-template-columns:1fr 1.4fr;gap:18px}
-.bdlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
-.bd{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:6px 8px}
-.bd span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
-.bd input{width:72px;height:28px;padding:0 8px;font-size:12.5px}
-@media (max-width:800px){.bdgrid{grid-template-columns:1fr}}
-.kcard{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--surface)}
-.kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
-.kcard .h{display:flex;gap:8px;align-items:center;margin-bottom:4px} .kcard .h b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kcard p{margin:0;color:var(--ink-2);font-size:13px}
-@media (max-width:640px){.form2 .input{min-width:100%}}
+.said-b{min-width:0}
+.wb-only{display:none} body.wbmode .wb-only{display:grid}
+body.wbmode .role-only{display:none}
 
-/* ============ 布局 ============ */
-main{max-width:1180px;margin:0 auto;padding:20px 20px 64px}
-.page{display:none} .page.on{display:block;animation:fade .18s ease}
-@keyframes fade{from{opacity:.4;transform:translateY(2px)}to{opacity:1;transform:none}}
-.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
-.c12{grid-column:span 12}.c8{grid-column:span 8}.c7{grid-column:span 7}.c6{grid-column:span 6}.c5{grid-column:span 5}.c4{grid-column:span 4}
-@media(max-width:920px){.c8,.c7,.c6,.c5,.c4{grid-column:span 12}}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);min-width:0}
-.card-h{display:flex;align-items:center;gap:10px;padding:16px 18px 0;flex-wrap:wrap}
-.card-h h2{margin:0;font-size:14px;font-weight:650;display:flex;align-items:center;gap:8px}
-.card-h h2 svg{color:var(--ink-3)}
-.card-h .sp{flex:1}
-.card-h .hint{font-size:12px;color:var(--ink-3)}
-.card-b{padding:14px 18px 18px}
-.empty{color:var(--ink-3);font-size:13px;padding:22px 8px;text-align:center}
-.sec-t{font-size:12px;font-weight:650;color:var(--ink-3);letter-spacing:.4px;margin:22px 2px 10px}
-
-/* ============ 概览 ============ */
-.hero{position:relative;overflow:hidden}
-.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 220px at 0% 0%,var(--accent-soft),transparent 70%);pointer-events:none}
-.hello{position:relative;display:flex;gap:18px;align-items:flex-start;padding:22px}
-.hello .big{width:68px;height:68px;font-size:28px;box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 30%,transparent)}
-.hello .big::after{width:15px;height:15px}
-.hello h2{margin:0;font-size:20px;font-weight:650;letter-spacing:.2px}
-.hello .doing{margin-top:4px;font-size:14.5px;color:var(--ink-2)}
-.hello .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:13px;background:var(--surface-2);color:var(--ink-2);font-size:12.5px;border:1px solid var(--line);white-space:nowrap}
-.pill b{color:var(--ink);font-weight:600}
-.pill.ok{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-ink)} .pill.ok b{color:var(--accent-ink)}
-.pill.bad{background:color-mix(in srgb,var(--bad) 10%,transparent);border-color:transparent;color:var(--bad)}
-.pill.night{background:var(--accent-soft);border-color:transparent;color:var(--accent-ink)}
-.said{margin-top:14px;padding:10px 14px;border-radius:4px 14px 14px 14px;background:var(--surface-2);max-width:680px;font-size:14px}
-.said small{display:block;color:var(--ink-3);font-size:11.5px;margin-bottom:2px}
-.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line);border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden;position:relative}
-.kpi{padding:14px 18px;background:var(--surface)}
-.kpi .l{font-size:12px;color:var(--ink-3)}
-.kpi .v{font-size:23px;font-weight:650;line-height:1.3;margin-top:2px;letter-spacing:-.2px;font-variant-numeric:tabular-nums}
-.kpi .v small{font-size:12px;color:var(--ink-3);font-weight:500;margin-left:3px}
-.kpi.acc .v{color:var(--accent)}
-@media(max-width:860px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:560px){
-  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .kpi{padding:12px 14px} .kpi .v{font-size:20px}
-  .top-in{padding:10px 14px 0} main{padding:14px 12px 48px}
-  .hello{padding:16px;gap:14px} .hello .big{width:52px;height:52px;font-size:22px} .hello h2{font-size:17px}
-  .card-h{padding:14px 14px 0} .card-b{padding:12px 14px 14px} .card-h .hint{display:none}
-}
-
-/* 图表 */
-.chart{position:relative}
-.chart svg{display:block;width:100%;height:auto;overflow:visible}
-.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:10px;align-items:center}
-.legend span{display:inline-flex;align-items:center;gap:6px}
-.legend i{width:10px;height:10px;border-radius:3px;background:var(--c)}
-.legend .sp{flex:1}
-.tip{position:absolute;pointer-events:none;z-index:5;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-lg);
-  border-radius:10px;padding:8px 10px;font-size:12px;min-width:110px;display:none;white-space:nowrap}
-.tip .t{color:var(--ink-3);margin-bottom:3px}
-.tip .r{display:flex;gap:10px;justify-content:space-between;align-items:center}
-.tip .r span{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
-.tip .r i{width:8px;height:8px;border-radius:2px;background:var(--c)}
-.tip .r b{font-weight:650}
-
-/* 时间线 */
-.tl{list-style:none;margin:0;padding:0}
-.tl li{display:grid;grid-template-columns:96px 1fr;gap:12px;padding:9px 0;border-top:1px dashed var(--line)}
-.tl li:first-child{border-top:0}
-.tl .t{font-size:12px;color:var(--accent-ink);font-weight:600;font-family:var(--mono);padding-top:1px;white-space:nowrap}
-.tl li.now{background:linear-gradient(90deg,var(--accent-soft),transparent);border-radius:8px;padding-left:8px;margin-left:-8px}
-.tl li.now .t::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:2px}
-.tl li.past{color:var(--ink-3)} .tl li.past .t{color:var(--ink-3)}
-.rows{list-style:none;margin:0;padding:0}
-.rows li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
-.rows li:first-child{border-top:0}
-.rows .grow{flex:1;min-width:0;word-break:break-word}
-.rows .meta{font-size:11.5px;color:var(--ink-3);margin-top:1px}
-@media(max-width:560px){#p-learn .rows li{flex-wrap:wrap;gap:6px} #p-learn .rows .grow{flex-basis:100%} #p-learn .rows .chips{margin-left:auto}}
-
-/* 群卡片 */
-.groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-.gcard{border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;background:var(--surface);display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow)}
+/* ---------- 首页：工作台 ---------- */
+.home-h{display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap;margin-bottom:var(--sp-4)}
+.home-h h2{margin:0;font-size:var(--fs-t2);font-weight:700;display:flex;align-items:center;gap:10px}
+.home-h .sp{flex:1}
+.wb-pills{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin:0 0 var(--sp-4)}
+.wb-pills:empty{display:none}
+details.more.nums{margin-top:var(--sp-3);border-top:0;padding-top:0}
+details.more.nums .minis{margin-top:var(--sp-3)}
+.groups{display:flex;flex-direction:column;gap:var(--sp-3)}
+.groups.multi{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.gcard{border-radius:var(--r);padding:14px 16px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px}
 .gcard .h{display:flex;gap:12px;align-items:center}
-.gava{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;color:#fff;font-weight:650;font-size:16px;flex:none}
-.gcard .nm{font-weight:650;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.gcard .id{font-size:12px;color:var(--ink-3);font-family:var(--mono)}
+.gava{width:40px;height:40px;border-radius:var(--r);display:grid;place-items:center;color:#fff;font-weight:700;flex:none}
+.gcard .nm{font-weight:700}
+.gcard .id{font-size:var(--fs-micro);color:var(--ink-3);font-family:var(--mono)}
 .gstats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.gstats div{background:var(--surface-2);border-radius:10px;padding:7px 8px;text-align:center}
-.gstats b{display:block;font-size:16px;font-variant-numeric:tabular-nums}
-.gstats span{font-size:11px;color:var(--ink-3)}
-.glast{font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border-radius:10px;padding:8px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.glast b{font-weight:600}
+.gstats div{background:var(--surface);border-radius:var(--r-sm);padding:6px 4px;text-align:center}
+.gstats b{display:block;font-size:var(--fs-t3);font-variant-numeric:tabular-nums}
+.gstats span{font-size:var(--fs-micro);color:var(--ink-3)}
+.glast{font-size:var(--fs-meta);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gcard .f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-
-/* 标签 */
-.tag{display:inline-flex;align-items:center;gap:4px;height:21px;padding:0 8px;border-radius:7px;background:var(--surface-2);color:var(--ink-2);font-size:11.5px;border:1px solid var(--line);white-space:nowrap}
-.tag.ok{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
-.tag.warm{background:color-mix(in srgb,var(--s2) 14%,transparent);color:var(--warn);border-color:transparent}
-.tag.hot{background:var(--rose-soft);color:var(--rose);border-color:transparent}
-.tag.wait{background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn);border-color:transparent}
-.tag.no{color:var(--ink-3)}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-
-/* ============ 按钮 / 表单 ============ */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 13px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;font-weight:550;font-size:13px;white-space:nowrap;text-decoration:none;color:inherit}
-.btn:hover{background:var(--surface-2)}
-.btn.pri{background:var(--solid);border-color:var(--solid);color:#fff}
-.btn.pri:hover{filter:brightness(1.1);background:var(--solid)}
-.btn:disabled{opacity:.55;cursor:default}
-.btn.sm{height:28px;padding:0 10px;font-size:12.5px;border-radius:8px}
-.btn.ghost{border-color:transparent;background:none;color:var(--ink-3)}
-.btn.ghost:hover{background:var(--surface-2);color:var(--ink)}
-.btn.danger:hover{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
-.input,select.input,textarea.input{height:36px;border:1px solid var(--line-2);background:var(--surface);border-radius:10px;padding:0 12px;min-width:0;outline:none;transition:border-color .15s,box-shadow .15s}
-textarea.input{height:auto;padding:9px 12px;width:100%;resize:vertical;line-height:1.7}
-.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-.field{display:flex;flex-direction:column;gap:6px}
-.field label{font-size:12px;color:var(--ink-3);font-weight:550}
-.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.search{position:relative;flex:1;min-width:160px}
-.search svg{position:absolute;left:11px;top:10px;color:var(--ink-3)}
-.search .input{width:100%;padding-left:34px}
-.seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);flex-wrap:wrap}
-.seg button{border:0;background:none;height:28px;padding:0 12px;border-radius:7px;cursor:pointer;color:var(--ink-2);font-size:12.5px;font-weight:550;white-space:nowrap}
-.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.seg.seg-sel{padding:0;background:none;border:0}
-.seg button .n{color:var(--ink-3);margin-left:4px;font-weight:500}
-.switch{position:relative;width:38px;height:22px;flex:none;display:inline-block}
-.switch input{opacity:0;width:0;height:0;position:absolute}
-.switch span{position:absolute;inset:0;border-radius:11px;background:var(--surface-3);transition:.2s;cursor:pointer;border:1px solid var(--line-2)}
-.switch span::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:.2s}
-.switch input:checked+span{background:var(--accent);border-color:var(--accent)}
-.switch input:checked+span::after{transform:translateX(16px)}
-.switch input:focus-visible+span{box-shadow:0 0 0 3px var(--accent-soft)}
-
-/* ============ 群聊记录 ============ */
-.chatwrap{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px}
-@media(max-width:920px){.chatwrap{grid-template-columns:1fr}}
-.chatwrap>.card{min-height:calc(62vh + 64px)}
-@media(max-width:640px){.tools .search{flex-basis:100%}}
-.chat{display:flex;flex-direction:column;gap:4px;flex:1 1 auto;height:62vh;min-height:320px;overflow:auto;padding:14px 16px;scrollbar-width:thin;background:
-  linear-gradient(var(--surface),var(--surface))}
-.daysep{align-self:center;font-size:11.5px;color:var(--ink-3);background:var(--surface-2);border-radius:10px;padding:2px 10px;margin:10px 0 6px}
-.m{display:flex;gap:9px;max-width:82%;align-items:flex-start;margin-top:6px}
-.m.cont{margin-top:0} .m.cont .pa{visibility:hidden;height:0}
-.pa{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:650}
-.m .body{display:flex;flex-direction:column;gap:2px;min-width:0}
-.m .who{font-size:11.5px;color:var(--ink-3);padding:0 4px;display:flex;gap:6px;align-items:center}
-.m .who b{color:var(--ink-2);font-weight:600}
-.m .b{padding:8px 12px;border-radius:4px 14px 14px 14px;background:var(--surface-2);white-space:pre-wrap;word-break:break-word;line-height:1.6}
-.m.her{align-self:flex-end;flex-direction:row-reverse}
-.m.her .body{align-items:flex-end}
-.m.her .b{background:var(--solid);color:#fff;border-radius:14px 4px 14px 14px}
-.m.owner .b{background:color-mix(in srgb,var(--s3) 12%,var(--surface-2))}
-.m .b .at{color:var(--accent-ink);font-weight:600} .m.her .b .at{color:#fff;text-decoration:underline}
-.m .b .sys{color:var(--ink-3);font-size:12.5px}
-.m .tm{font-size:10.5px;color:var(--ink-3);padding:0 4px}
-mark{background:color-mix(in srgb,var(--s4) 35%,transparent);color:inherit;border-radius:3px;padding:0 1px}
-.composer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);align-items:flex-end}
-.composer textarea{flex:1;min-height:38px;max-height:120px}
-.notice{display:flex;gap:10px;align-items:center;padding:10px 14px;border-radius:var(--r);background:color-mix(in srgb,var(--warn) 10%,transparent);color:var(--warn);font-size:13px;margin-bottom:12px}
-
-/* ============ 群友 ============ */
-.ppl{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-top:14px}
-.pcard{border:1px solid var(--line);border-radius:var(--r-lg);padding:14px;background:var(--surface);cursor:pointer;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,box-shadow .15s,transform .15s;text-align:left;box-shadow:var(--shadow)}
-.pcard:hover{border-color:var(--accent-line);box-shadow:var(--shadow-lg);transform:translateY(-1px)}
-.pcard .h{display:flex;gap:10px;align-items:center}
-.pcard .pa{width:40px;height:40px;font-size:15px}
-.pcard .nm{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pcard .uid{font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
-.pcard .imp{font-size:13.5px;color:var(--ink);line-height:1.6;min-height:22px}
-.pcard .imp.none{color:var(--ink-3);font-style:italic}
-.pcard .kv2{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12.5px}
-.pcard .kv2 dt{color:var(--ink-3)} .pcard .kv2 dd{margin:0;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.knob.off{opacity:.45}
-.typing{padding:4px 16px;font-size:12px;color:var(--ink-3)}
-.newmsg{position:absolute;right:18px;bottom:78px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
-.chatwrap>.card{position:relative}
-.cmp{width:100%;border-collapse:collapse;font-size:13px}
+.cmp{width:100%;border-collapse:collapse;font-size:var(--fs-meta)}
 .cmp th,.cmp td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-.cmp th{color:var(--ink-3);font-weight:550;font-size:12px;white-space:nowrap}
-.cmp td.win{color:var(--ink);font-weight:650}
+.cmp th{color:var(--ink-3);font-weight:500;white-space:nowrap}
+.cmp td.win{color:var(--ink);font-weight:700}
 .cmp td small{color:var(--ink-3);font-weight:400}
 .gdots{display:inline-flex;gap:4px;margin-left:6px;vertical-align:middle}
 .gdots i{width:8px;height:8px;border-radius:50%;display:inline-block}
-.dtabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-.pcard .ft{display:flex;align-items:flex-end;gap:10px;font-size:11.5px;color:var(--ink-3);margin-top:auto}
+#recentHer li:nth-child(n+6){display:none}
+
+/* ---------- 她的日子 ---------- */
+.lifep{white-space:pre-wrap;line-height:1.85}
+.weeks{list-style:none;margin:0;padding:0}
+.weeks li{padding:10px 0;border-top:1px dashed var(--line-2)} .weeks li:first-child{border-top:0}
+.weeks .w{font:600 var(--fs-micro) var(--mono);color:var(--accent-ink);margin-bottom:2px}
+.pref{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:var(--r-pill);background:var(--tint-2);font-size:var(--fs-sm)}
+.pref b{font-weight:600} .pref button{border:0;background:none;color:var(--ink-3);cursor:pointer;padding:0 6px;font-size:var(--fs-body);line-height:1}
+.pref button:hover{color:var(--bad)}
+.sched{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-5)}
+.sched h4{margin:0 0 var(--sp-2);font-size:var(--fs-sm);color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.sched h4 svg{color:var(--honey)}
+@media (max-width:1000px){.sched{grid-template-columns:1fr}}
+.bdlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:var(--sp-2);margin-top:var(--sp-3)}
+.bd{display:flex;align-items:center;gap:8px;border-radius:var(--r-sm);padding:6px 8px;background:var(--surface-2)}
+.bd span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-meta)}
+.bd input{width:76px;min-height:30px;padding:0 8px;font-size:var(--fs-meta)}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--sp-3)}
+.kcard{border-radius:var(--r);padding:12px 14px;background:var(--surface-2)}
+.kcard .h{display:flex;gap:8px;align-items:center;margin-bottom:4px} .kcard .h b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kcard p{margin:0;color:var(--ink-2);font-size:var(--fs-meta)}
+.kgrid .empty{grid-column:1/-1}
+.scrollbox{max-height:460px;overflow:auto;scrollbar-width:thin}
+
+/* ---------- 她 ---------- */
+.persona-h{display:flex;gap:var(--sp-4);align-items:center;margin-bottom:var(--sp-4)}
+.persona-h .ava{width:60px;height:60px;font-size:24px}
+.persona-h .nm{font-size:var(--fs-t2);font-weight:700}
+
+/* ---------- 工作台：群聊 ---------- */
+.chatwrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:var(--gap);align-items:start}
+@media (max-width:1100px){.chatwrap{grid-template-columns:1fr}}
+.chatcard{overflow:hidden;display:flex;flex-direction:column}
+.chat{display:flex;flex-direction:column;gap:4px;height:64vh;min-height:320px;overflow:auto;padding:14px 16px;scrollbar-width:thin}
+.daysep{align-self:center;font-size:var(--fs-micro);color:var(--ink-3);background:var(--surface-2);border-radius:var(--r-pill);padding:2px 12px;margin:10px 0 6px}
+.m{display:flex;gap:9px;max-width:82%;align-items:flex-start;margin-top:6px}
+.m.cont{margin-top:0} .m.cont .pa{visibility:hidden;height:0}
+.m .body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.m .who{font-size:var(--fs-micro);color:var(--ink-3);padding:0 4px;display:flex;gap:6px;align-items:center}
+.m .who b{color:var(--ink-2);font-weight:600}
+.m .b{padding:8px 12px;border-radius:4px 16px 16px 16px;background:var(--surface-2);white-space:pre-wrap;word-break:break-word;line-height:1.6}
+.m.her{align-self:flex-end;flex-direction:row-reverse}
+.m.her .body{align-items:flex-end}
+.m.her .b{background:var(--solid);color:var(--on-solid);border-radius:16px 4px 16px 16px}
+.m.owner .b{background:var(--tint-4)}
+.m .b .at{color:var(--accent-ink);font-weight:600} .m.her .b .at{color:var(--on-solid);text-decoration:underline}
+.m .b .sys{color:var(--ink-3);font-size:var(--fs-meta)}
+.m.her .b .sys{color:var(--on-solid);opacity:.85}
+.m .tm{font-size:var(--fs-micro);color:var(--ink-3);padding:0 4px}
+mark{background:var(--warn-soft);color:inherit;border-radius:3px;padding:0 1px}
+.composer{display:flex;gap:var(--sp-2);padding:12px 16px;border-top:1px solid var(--line);align-items:flex-end}
+.composer textarea{flex:1;min-height:40px;max-height:120px}
+.typing{padding:4px 16px;font-size:var(--fs-micro);color:var(--ink-3)}
+.newmsg{position:absolute;right:18px;bottom:78px;box-shadow:var(--shadow-lg)}
+.chatcard{position:relative}
+.panels{display:flex;flex-direction:column;gap:var(--sp-3)}
+.panels details.card>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:16px 18px;font-weight:700}
+.panels details.card>summary::-webkit-details-marker{display:none}
+.panels details.card>summary svg{color:var(--honey)}
+.panels details.card>summary::after{content:"";margin-left:auto;width:7px;height:7px;border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(45deg);transition:transform .15s}
+.panels details[open].card>summary::after{transform:rotate(-135deg)}
+.panels details.card>.card-b{padding-top:0}
+.chatbar{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center;margin-bottom:var(--sp-4)}
+.chk{display:inline-flex;gap:8px;align-items:center;font-size:var(--fs-meta);color:var(--ink-2);cursor:pointer}
+
+/* ---------- 工作台：群友 ---------- */
+.ppl{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--sp-3);margin-top:var(--sp-3)}
+.pcard{border:0;border-radius:var(--r-lg);padding:14px;background:var(--surface);cursor:pointer;display:flex;flex-direction:column;gap:10px;transition:box-shadow .15s,transform .15s;text-align:left;box-shadow:var(--shadow);font:inherit;color:inherit}
+.pcard:hover{box-shadow:var(--shadow-lg);transform:translateY(-1px)}
+.pcard .h{display:flex;gap:10px;align-items:flex-start}
+.pcard .pa{width:40px;height:40px;font-size:var(--fs-sm)}
+.pcard .nmw{flex:1;min-width:0}
+.pcard .nm{font-weight:700;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.pcard .uid{font-size:var(--fs-micro);color:var(--ink-3);font-family:var(--mono)}
+.pcard .imp{font-size:var(--fs-sm);color:var(--ink);line-height:1.6;min-height:22px}
+.pcard .imp.none{color:var(--ink-3)}
+.pcard .kv2{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:var(--fs-meta);margin:0}
+.pcard .kv2 dt{color:var(--ink-3)} .pcard .kv2 dd{margin:0;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard .ft{display:flex;align-items:flex-end;gap:10px;font-size:var(--fs-micro);color:var(--ink-3);margin-top:auto}
+.pcard .ft b{color:var(--ink);font-size:var(--fs-meta)}
 .spark{display:flex;gap:1px;align-items:flex-end;height:22px;flex:1}
-.spark i{flex:1;background:var(--accent);opacity:.75;border-radius:1px;min-height:1px}
+.spark i{flex:1;background:var(--s1);opacity:.7;border-radius:1px;min-height:1px}
 .spark i.z{background:var(--surface-3);opacity:1}
-
-/* 弹层 */
-.drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
-.drawer-bg.on{opacity:1;pointer-events:auto}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100vw);background:var(--bg);z-index:41;transform:translateX(102%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);border-left:1px solid var(--line)}
-.drawer.on{transform:none}
-.drawer .dh{display:flex;gap:12px;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
-.drawer .dh .pa{width:48px;height:48px;font-size:18px}
-.drawer .db{flex:1;overflow:auto;padding:16px 18px 30px}
-.drawer .df{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
-.pf{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.pf .full{grid-column:span 2}
-@media(max-width:520px){.pf{grid-template-columns:1fr}.pf .full{grid-column:span 1}}
-.minis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
-.minis div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
-.minis b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
-.minis span{font-size:11px;color:var(--ink-3)}
-.said-list{list-style:none;margin:0;padding:0}
-.said-list li{padding:7px 0;border-top:1px dashed var(--line);font-size:13px;display:flex;gap:10px}
-.said-list li:first-child{border-top:0}
-.said-list .t{font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap;padding-top:2px}
-
-/* ============ 她 ============ */
-.persona-h{display:flex;gap:16px;align-items:center}
-.kv{display:grid;grid-template-columns:90px 1fr;gap:9px 14px;font-size:13.5px;margin:16px 0 0}
-.kv dt{color:var(--ink-3)} .kv dd{margin:0;word-break:break-word}
-.paper{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;background:var(--surface);margin-bottom:10px}
-.paper .d{font-size:12px;color:var(--ink-3);display:flex;gap:8px;align-items:center;margin-bottom:6px}
-.paper .d b{color:var(--ink);font-weight:600}
-.paper p{margin:0;white-space:pre-wrap;line-height:1.85}
-details.raw summary{cursor:pointer;color:var(--ink-2);font-weight:550;font-size:13px;padding:4px 0}
-details.raw pre{white-space:pre-wrap;font:13px/1.8 var(--font);background:var(--surface-2);border-radius:var(--r);padding:12px 14px;max-height:520px;overflow:auto;margin:8px 0 0}
-
-
-/* ============ 性格开关 ============ */
-.knobs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px}
-@media(max-width:760px){.knobs{grid-template-columns:1fr}}
-.knob{padding:13px 0;border-top:1px solid var(--line)}
-.knob .top-l{display:flex;align-items:center;gap:8px}
-.knob .lb{font-weight:550;flex:1}
-.knob .val{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent-ink);min-width:54px;text-align:right}
-.knob .hint{font-size:12px;color:var(--ink-3);margin-top:2px}
-.knob .base{font-size:11.5px;color:var(--ink-3)}
-.knob input[type=range]{width:100%;accent-color:var(--accent);margin:8px 0 0}
-.knob.changed .lb::after{content:"已调";margin-left:8px;font-size:11px;font-weight:600;color:var(--accent-ink);background:var(--accent-soft);padding:1px 6px;border-radius:6px}
-
-/* ============ 大模型 / 日志 ============ */
-table.dt{width:100%;border-collapse:collapse;font-size:12.5px}
-table.dt th,table.dt td{text-align:right;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
-table.dt th:first-child,table.dt td:first-child{text-align:left}
-table.dt td.l{text-align:left;white-space:normal;word-break:break-all}
-table.dt th{color:var(--ink-3);font-weight:500}
-.tblwrap{overflow-x:auto}
-.route{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
-.route:first-child{border-top:0}
-.route b{min-width:64px;font-family:var(--mono);font-size:12.5px}
-.route .arrow{color:var(--ink-3)}
-.logbox{background:#0f1210;color:#cfe3d6;font:12px/1.65 var(--mono);border-radius:var(--r);padding:12px 14px;height:64vh;overflow:auto;white-space:pre-wrap;word-break:break-all}
-.logbox .w{color:#ffc56b} .logbox .e{color:#ff8a8a} .logbox .s{color:#7ee2a8} .logbox .d{color:#71806f}
-.steps{display:flex;flex-direction:column;gap:12px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,8px);opacity:0;background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:10px;font-size:13px;z-index:60;transition:all .2s;pointer-events:none;max-width:90vw}
-.toast.on{opacity:1;transform:translate(-50%,0)}
-.foot{margin-top:28px;text-align:center;color:var(--ink-3);font-size:12px}
-
-/* ============ 14.1 小屋新样子（17.0 起颜色交给 tokens.css） ============ */
-body{font-size:14px;letter-spacing:.1px}
-/* 顶栏：一行，品牌在左，胶囊导航居中靠左，按钮在右 */
-.top{background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid transparent;transition:border-color .2s}
-.top-in{padding:14px 24px 12px;gap:12px}
-.brand h1{font-size:15px;font-weight:650}
-.brand .sub{font-size:12px}
-.iconbtn{border-color:transparent;background:transparent;border-radius:10px;width:34px;height:34px}
-.iconbtn:hover{background:var(--surface-2);border-color:transparent}
-nav.tabs{gap:2px;margin:0;padding:3px;background:var(--surface-2);border-radius:12px;width:max-content;max-width:100%;border:1px solid var(--line)}
-nav.tabs button{padding:6px 12px;border:0;border-radius:9px;margin:0;font-weight:550;font-size:13px;color:var(--ink-2)}
-nav.tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px var(--line)}
-nav.tabs button span[data-i] svg,nav.tabs button svg{width:15px;height:15px}
-nav.tabs .tsep{flex:0 0 12px}
-@media(max-width:720px){nav.tabs{width:auto}}
-main{max-width:1180px;padding:24px 24px 72px}
-/* 卡片：扁平、留白多一点、标题小而稳 */
-.grid{gap:18px}
-.card{border-color:var(--line);box-shadow:var(--shadow)}
-.card-h{padding:18px 20px 0}
-.card-h h2{font-size:13.5px;font-weight:600;letter-spacing:.2px}
-.card-h h2 svg{color:var(--accent);opacity:.85}
-.card-h .hint{font-size:12px}
-.card-b{padding:14px 20px 20px}
-.sec-t{font-size:13px;font-weight:600;color:var(--ink-2);letter-spacing:.2px;margin:28px 2px 12px}
-/* 概览的头：去掉渐变，名字大一点，状态条安静一点 */
-.hero::before{display:none}
-.hello{padding:24px 24px 20px;gap:20px}
-.hello .big{width:64px;height:64px;font-size:26px;box-shadow:none}
-.hello h2{font-size:22px;font-weight:650;letter-spacing:-.2px}
-.hello .doing{font-size:14px;color:var(--ink-2)}
-.hello .meta{gap:6px;margin-top:12px}
-.pill{height:24px;padding:0 9px;border:0;background:var(--surface-2);font-size:12px;border-radius:7px}
-.pill.ok{background:var(--accent-soft)}
-.said{margin-top:16px;padding:10px 14px 10px 16px;border-radius:12px;background:var(--surface-2);position:relative}
-.said::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--accent)}
-.kpis{gap:0;background:none;border-top:1px solid var(--line)}
-.kpi{padding:16px 20px;background:none;position:relative}
-.kpi+.kpi::before{content:"";position:absolute;left:0;top:16px;bottom:16px;width:1px;background:var(--line)}
-.kpi .l{font-size:12px}
-.kpi .v{font-size:26px;font-weight:600;letter-spacing:-.4px}
-@media(max-width:860px){.kpi:nth-child(3n+1)::before{display:none}}
-@media(max-width:560px){.kpi:nth-child(odd)::before{display:none}.kpi:nth-child(3n+1)::before{display:block}.kpi:nth-child(odd)::before{display:none}}
-/* 概览两列：各自往下排，不再因为一边高另一边留大片空白 */
-.cols{grid-column:span 12;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px;align-items:start}
-.cols .col{display:flex;flex-direction:column;gap:18px;min-width:0}
-@media(max-width:920px){.cols{grid-template-columns:minmax(0,1fr)}}
-/* 列表、标签、按钮 */
-.rows li{padding:12px 0}
-.tl li{padding:10px 0}
-.tag{border:0;border-radius:6px;height:20px}
-.btn{border-radius:10px;border-color:var(--line-2)}
-.btn.pri{background:var(--solid);border-color:var(--solid);color:var(--on-solid)}
-.btn.pri:hover{background:var(--solid);filter:brightness(1.08)}
-.input,select.input,textarea.input{border-color:var(--line-2);border-radius:10px;background:var(--surface)}
-.seg{background:var(--surface-2);border-color:var(--line);border-radius:10px}
-.seg button.on{box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px var(--line)}
-.gcard{box-shadow:var(--shadow);border-radius:var(--r-lg)}
-.gstats div{border-radius:10px}
-.gstats b{font-size:17px;font-weight:600}
-.kcard{border-radius:14px}
-.foot{color:var(--ink-3);font-size:12px}
-#recentHer li:nth-child(n+5){display:none}
-@media(max-width:560px){.hello{flex-direction:column;gap:12px;padding:18px}.hello .big{width:52px;height:52px;font-size:22px}.top-in{padding:12px 14px 10px}main{padding:16px 12px 56px}}
-.pck .btn.on{background:var(--accent-soft);color:var(--accent-ink)}
-</style>
-<link rel="stylesheet" href="tokens.css">
-<style>
-/* ============ 17.0 B 版「窗边日常」：群小屋在 tokens.css 之上的部分 ============ */
-main{max-width:1180px;margin:0 auto;padding:32px 32px 72px}
-@media(max-width:860px){main{padding:20px 16px 56px}}
-body:not(.on-home) .homeonly{display:none!important}
-.bw-brand .ava{width:30px;height:30px;font-size:13px;letter-spacing:0}
-.bw-brand .ava::after{width:9px;height:9px;border-color:var(--hero-bg)}
-.ava{overflow:visible}
-.ava img,.pa img{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover}
-.pa{position:relative;overflow:hidden}
-.card{border:0;border-radius:var(--r-lg)}
-.card-h h2 svg{color:var(--accent-ink)}
-.tag{border-radius:999px}
-.pill{border-radius:999px}
-.seg,.seg button{border-radius:999px}
-.wb-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 14px}
-.wb-h h2{margin:0;font-size:22px;font-weight:700}
-.wb-h .sp{flex:1}
-.wb-pills{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
-.wb-pills .pill{height:30px;padding:0 12px;background:var(--surface);font-size:13px}
-.wb-pills .pill.ok{background:var(--accent-soft)}
-.wb-pills .pill.bad{background:var(--surface);box-shadow:inset 0 0 0 1px var(--bad);color:var(--bad)}
-.kpis{border-radius:var(--r-lg)}
-.lab-q{border-radius:var(--r);background:var(--surface-2);padding:12px 14px;font-size:13px;color:var(--ink-2);line-height:1.75;max-height:300px;overflow:auto}
-.lab-did{margin:12px 0;font-size:14px}
-.lab-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.lab-acts .btn{min-height:40px;padding:0 16px;font-size:14px}
-.lab-prog{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
-.lab-prog .k{font-size:12.5px;color:var(--ink-3);display:flex;justify-content:space-between;margin-bottom:6px}
-.rel{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:18px}
+.ppl .empty{grid-column:1/-1}
+.rel{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:var(--sp-5)}
+.rel h4{margin:0 0 var(--sp-2);font-size:var(--fs-sm);color:var(--ink-2)}
 .relpair{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
 .relpair:first-child{border-top:0}
 .relpair .w{flex:1;min-width:0}
 .relpair .bar{width:90px;flex:none}
 .exp{padding:10px 0;border-top:1px solid var(--line)} .exp:first-child{border-top:0}
-.exp ul{margin:4px 0 0;padding-left:18px;color:var(--ink-2);font-size:13.5px}
-.pck .btn{height:24px!important;padding:0 8px!important}
-.fsrc{font-size:11.5px}
-.knob .switch{cursor:pointer}
+.exp ul{margin:4px 0 0;padding-left:18px;color:var(--ink-2);font-size:var(--fs-sm)}
+.exp.fold li:nth-child(n+3){display:none}
+.exp .lk{padding:2px 0;font-size:var(--fs-micro)}
+.relstat{display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-3)}
+
+/* 弹层 */
+.drawer-bg{position:fixed;inset:0;background:rgba(30,20,14,.32);z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer-bg.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100vw);background:var(--bg);z-index:61;transform:translateX(102%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:var(--shadow-lg)}
+.drawer.on{transform:none}
+.drawer .dh{display:flex;gap:12px;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
+.drawer .dh .pa{width:48px;height:48px;font-size:var(--fs-t3)}
+.drawer .dh .nm{font-weight:700;font-size:var(--fs-t3)}
+.drawer .db{flex:1;overflow:auto;padding:16px 18px 30px}
+.drawer .df{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
+.drawer .df .sp{flex:1}
+.pf{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pf .full{grid-column:span 2}
+@media (max-width:520px){.pf{grid-template-columns:1fr}.pf .full{grid-column:span 1}}
+.drawer .minis{margin-bottom:16px}
+.said-list{list-style:none;margin:0;padding:0}
+.said-list li{padding:7px 0;border-top:1px dashed var(--line-2);font-size:var(--fs-meta);display:flex;gap:10px}
+.said-list li:first-child{border-top:0}
+.said-list .t{font-family:var(--mono);font-size:var(--fs-micro);color:var(--ink-3);white-space:nowrap;padding-top:2px}
+.dtabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.sec-t{font-size:var(--fs-sm);font-weight:700;color:var(--ink-2);margin:var(--sp-5) 0 var(--sp-2)}
+.sec-t:first-child{margin-top:0}
+.pck{float:right;display:inline-flex;gap:4px}
+.pck .btn{min-height:22px;padding:0 8px;font-size:var(--fs-micro)}
+
+/* ---------- 工作台：学到的 ---------- */
+.lab-q{border-radius:var(--r);background:var(--surface-2);padding:12px 14px;font-size:var(--fs-sm);color:var(--ink-2);line-height:1.75;max-height:300px;overflow:auto}
+.lab-did{margin:12px 0}
+.lab-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lab-acts .btn{min-height:44px;padding:0 18px;font-size:var(--fs-sm)}
+.lab-prog{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
+.lab-prog .k{font-size:var(--fs-meta);color:var(--ink-3);display:flex;justify-content:space-between;margin-bottom:6px}
+#labCard{box-shadow:0 0 0 2px var(--accent-line),var(--shadow)}
+.gate3 .stat{background:var(--surface-2);box-shadow:none}
+.grid>.card.is-empty{grid-column:span 6} .grid>.card.is-empty.wide{grid-column:span 12}
+.grid>.card.is-empty .card-b{padding-top:var(--sp-2);padding-bottom:var(--sp-4)}
+@media (max-width:860px){.grid>.card.is-empty{grid-column:span 12}}
+.gate3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-3)}
+@media (max-width:560px){.gate3{grid-template-columns:1fr}}
+.rows li .tri{margin-left:auto}
+.lrow-acts{display:flex;gap:6px;align-items:center;flex:none}
+.stks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--sp-3)}
+.stk{padding:10px;text-align:center;border-radius:var(--r);background:var(--surface-2);display:flex;flex-direction:column;gap:6px;align-items:center}
+.stk img{max-width:100%;height:90px;object-fit:contain}
+.fsrc{font-size:var(--fs-micro)}
+
+/* ---------- 工作台：性格开关 ---------- */
+.kbar{display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center;margin-bottom:var(--sp-3)}
+.kdir{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--sp-4)}
+.kdir button{border:0;background:var(--surface-2);color:var(--ink-2);border-radius:var(--r-pill);min-height:30px;padding:0 12px;cursor:pointer;font-size:var(--fs-meta)}
+.kdir button:hover{background:var(--accent-soft);color:var(--accent-ink)}
+.kdir button .n{color:var(--accent-ink);font-weight:700;margin-left:4px}
+.knobs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--sp-6)}
+@media (max-width:760px){.knobs{grid-template-columns:1fr}}
+.kgroup{scroll-margin-top:16px}
+.kgroup .sec-t{margin-top:var(--sp-5)}
+.knob{padding:10px 0;border-top:1px solid var(--line)}
+.knob .top-l{display:flex;align-items:center;gap:8px}
+.knob .lb{font-weight:600;flex:1;min-width:0}
+.knob .val{font-family:var(--mono);font-size:var(--fs-meta);font-weight:700;color:var(--accent-ink);min-width:54px;text-align:right}
+.knob .hint{font-size:var(--fs-micro);color:var(--ink-3);margin-top:2px}
+.knob .base{color:var(--ink-3)}
+.knob input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}
+.knob.changed .lb::after{content:"已调";margin-left:8px;font-size:var(--fs-micro);font-weight:700;color:var(--accent-ink);background:var(--accent-soft);padding:1px 8px;border-radius:var(--r-pill)}
+.knob.off{opacity:.5}
+.knob .input{min-height:32px}
+.knob .top-l{flex-wrap:wrap}
+.knob .lb{min-width:8em}
+.knob .input.wide{width:100%;flex-basis:100%} .knob .input.short{width:140px}
+.evbars{display:flex;gap:6px;align-items:flex-end;height:110px}
+.evbars>div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.evbars i{display:block;width:100%;max-width:42px;background:var(--s1);border-radius:6px 6px 2px 2px}
+
+/* ---------- 工作台：大模型 / 日志 ---------- */
+.route{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line);font-size:var(--fs-meta)}
+.route:first-child{border-top:0}
+.route b{min-width:64px;font-family:var(--mono)}
+.route .arrow{color:var(--ink-3)}
+.steps{display:flex;flex-direction:column;gap:12px}
+.logbox{background:#1B1714;color:#E7DCCF;font:12px/1.65 var(--mono);border-radius:var(--r);padding:12px 14px;height:64vh;overflow:auto;white-space:pre-wrap;word-break:break-all}
+.logbox .w{color:#F2C36B} .logbox .e{color:#FF9A9A} .logbox .s{color:#8EDDB0} .logbox .d{color:#9C8E82}
+.mb{margin-bottom:var(--sp-4)}
+.grow-x{flex:1;min-width:0}
+.wbmain{min-width:0}
+.home-h .emo{width:34px;height:34px;border-radius:12px;display:inline-grid;place-items:center;background:var(--honey-soft);color:var(--honey)}
+body:not(.admin) .side .adm-gt{display:none}
+.mt{margin-top:var(--sp-3)}
 </style>
 </head>
 <body>
 
-<div class="band" id="band">
+<div class="band home" id="band">
   <div class="band-in">
     <header class="bw-head">
       <a class="bw-brand" href="#home" id="brand"><span class="ava" id="ava" aria-hidden="true">满</span><span id="name">群聊小屋</span><span class="sub" id="sub">正在连接…</span></a>
       <nav class="bw-nav" id="tabs" aria-label="主导航">
         <button data-p="home" class="on">首页</button>
         <button data-p="life">她的日子</button>
-        <button data-p="chat">群聊</button>
-        <button data-p="ppl">群友</button>
         <button data-p="her">她</button>
-        <button data-p="learn">学到的</button>
-        <button class="admbtn" id="admbtn" type="button"><span data-i="sliders"></span>管理</button>
-        <button class="adm" data-p="knobs">性格开关</button>
-        <button class="adm" data-p="llm">大模型</button>
-        <button class="adm" data-p="log">日志</button>
+        <span class="vsep" aria-hidden="true"></span>
+        <button data-p="chat" data-wb="1"><span data-i="list"></span>工作台</button>
       </nav>
       <div class="bw-tools">
         <a class="bw-ib" id="hub" href="../" title="回小屋首页" aria-label="回小屋首页" hidden></a>
-        <button class="bw-ib" id="theme" title="切换深浅色" aria-label="切换深浅色"></button>
-        <button class="bw-ib" id="refresh" title="刷新" aria-label="刷新"></button>
-        <a class="bw-ib" id="helpdoc" href="https://github.com/star031104/ai-life/blob/main/docs/%E5%B0%8F%E5%B1%8B.md" target="_blank" rel="noopener" title="小屋使用说明：每一页、每个开关是干什么的" aria-label="使用说明">?</a>
-        <button class="bw-ib bw-menu" id="menuBtn" aria-label="菜单" aria-expanded="false" aria-controls="tabs"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        <button class="bw-ib" id="menuBtn" aria-label="更多" aria-haspopup="menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+        <div class="menu" id="menu" role="menu" hidden>
+          <button id="theme" role="menuitem"><span id="themeIco"></span><span id="themeTxt">切到深色</span></button>
+          <button id="refresh" role="menuitem"><span data-i="refresh"></span>刷新</button>
+          <a id="helpdoc" role="menuitem" href="https://github.com/star031104/ai-life/blob/main/docs/%E5%B0%8F%E5%B1%8B.md" target="_blank" rel="noopener" title="小屋使用说明：每一页、每个开关是干什么的"><span data-i="book"></span>使用说明</a>
+          <hr>
+          <button class="admbtn" id="admbtn" type="button" role="menuitem"><span data-i="sliders"></span><span id="admTxt">打开管理（性格开关、大模型、日志）</span></button>
+        </div>
       </div>
     </header>
 
@@ -461,10 +263,11 @@ body:not(.on-home) .homeonly{display:none!important}
         <div class="hero-when num"><span class="dot" id="hDot"></span><span id="hWhen">…</span></div>
         <div class="hero-eyebrow" id="eyebrow">小满此刻</div>
         <h1 id="hello">…</h1>
+        <p class="detail" id="helloMore" hidden></p>
         <p class="mood" id="doing"></p>
         <div class="hero-said" id="said" hidden>
           <img src="avatar/avatar" alt="" id="saidAva"><span class="ini" id="saidIni" hidden>满</span>
-          <div style="min-width:0"><div class="ht" id="saidText"></div><div class="hm" id="saidWhen"></div></div>
+          <div class="said-b"><div class="ht" id="saidText"></div><div class="hm" id="saidWhen"></div></div>
         </div>
         <div class="hero-acts">
           <button class="bbtn pri" data-go="chat">看群聊</button>
@@ -483,128 +286,171 @@ body:not(.on-home) .homeonly{display:none!important}
 <main id="main">
 <!-- ================= 首页 ================= -->
 <section class="page on" id="p-home">
-  <div class="wb-h"><h2>工作台</h2><div class="seg" id="wbseg" hidden></div><span class="sp"></span><span class="small muted" id="wbHint"></span></div>
-  <div class="meta wb-pills" id="pills"></div>
-  <div class="grid">
-    <div class="card c12"><div class="kpis" id="kpis" style="border-top:0"></div></div>
-    <div class="cols">
-      <div class="col">
-    <div class="card">
-      <div class="card-h"><h2><span data-i="bars"></span>今天的群</h2><span class="sp"></span><div class="seg hseg" id="hseg" hidden></div><span class="hint">每小时的消息数</span></div>
-      <div class="card-b"><div class="chart" id="hourChart"></div>
-        <div class="legend"><span style="--c:var(--surface-3)"><i></i>群友</span><span style="--c:var(--s1)"><i></i>她</span><span class="sp"></span><span id="hourSum" class="muted"></span></div>
+  <div class="home-h"><h2><span class="emo sec-emo"><span data-i="bars"></span></span>今天的群</h2><div class="seg" id="wbseg" hidden></div><span class="sp"></span><span class="meta" id="wbHint"></span></div>
+  <div class="wb-pills" id="pills"></div>
+  <div class="stats" id="kpis"></div>
+  <details class="more nums"><summary>更多数字</summary><div class="minis" id="kpiMore"></div></details>
+  <div class="grid sec">
+    <div class="card c8">
+      <div class="card-h"><h3><span data-i="bars"></span><span id="chartT">今天每小时的消息</span></h3><span class="sp"></span>
+        <div class="seg" id="chartSeg"><button data-c="hour" class="on">今天</button><button data-c="day">两周</button></div>
+        <div class="seg hseg" id="hseg" hidden></div><div class="seg hseg" id="dseg" hidden></div></div>
+      <div class="card-b">
+        <div id="hourBox"><div class="chart" id="hourChart"></div>
+          <div class="legend"><span style="--c:var(--surface-3)"><i></i>群友</span><span style="--c:var(--s1)"><i></i>她</span><span class="sp"></span><span id="hourSum" class="muted"></span></div></div>
+        <div id="dayBox" hidden><div class="chart" id="dayChart"></div>
+          <div class="legend"><span style="--c:var(--surface-3)"><i></i>群消息</span><span style="--c:var(--s1)"><i></i>她说的</span><span style="--c:var(--s2)"><i></i>大模型调用</span></div></div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-h"><h2><span data-i="trend"></span>最近两周</h2><span class="sp"></span><div class="seg hseg" id="dseg" hidden></div><span class="hint">每天的群消息 / 她说的 / 大模型调用</span></div>
-      <div class="card-b"><div class="chart" id="dayChart"></div>
-        <div class="legend"><span style="--c:var(--surface-3)"><i></i>群消息</span><span style="--c:var(--s1)"><i></i>她说的</span><span style="--c:var(--s2)"><i></i>大模型调用</span></div>
-      </div>
-    </div>
-      </div>
-      <div class="col">
-    <div class="card">
-      <div class="card-h"><h2><span data-i="cal"></span>她今天的安排</h2><span class="sp"></span><button class="btn ghost sm" id="replan">重新排</button></div>
+    <div class="card c4">
+      <div class="card-h"><h3><span data-i="cal"></span>她今天的安排</h3><span class="sp"></span><button class="btn ghost sm" id="replan">重新排</button></div>
       <div class="card-b"><ul class="tl" id="plan"></ul></div>
     </div>
-    <div class="card">
-      <div class="card-h"><h2><span data-i="quote"></span>她最近说的</h2></div>
+    <div class="card c8" id="recentCard">
+      <div class="card-h"><h3><span data-i="quote"></span>她最近说的</h3></div>
       <div class="card-b"><ul class="rows" id="recentHer"></ul></div>
     </div>
-      </div>
+    <div class="card c4" id="groupsCard">
+      <div class="card-h"><h3><span data-i="users"></span>她待的群</h3></div>
+      <div class="card-b"><div class="groups" id="groups"></div></div>
+    </div>
+    <div class="card c12" id="cmpCard" hidden>
+      <div class="card-h"><h3><span data-i="bars"></span>几个群放一起看</h3><span class="sp"></span><span class="hint">她在哪边更放得开、说完有没有人接；数字大的加粗</span></div>
+      <div class="card-b tblwrap"><table class="cmp" id="cmp"></table></div>
     </div>
   </div>
-  <div class="card" id="cmpCard" hidden style="margin-top:16px">
-    <div class="card-h"><h2><span data-i="bars"></span>几个群放一起看</h2><span class="sp"></span><span class="hint">她在哪边更放得开、说完有没有人接；数字大的加粗</span></div>
-    <div class="card-b" style="overflow:auto"><table class="cmp" id="cmp"></table></div>
-  </div>
-  <div class="sec-t">她待的群</div>
-  <div class="groups" id="groups"></div>
   <div class="foot">小屋只在这台电脑上能打开 · 每 20 秒自动刷新</div>
 </section>
 
-<!-- ================= 她的日子（4.2） ================= -->
+<!-- ================= 她的日子 ================= -->
 <section class="page" id="p-life">
-  <div class="tools" style="margin-bottom:14px"><div class="seg" id="lifeSeg"></div><span class="sp"></span>
-    <span class="small muted">她这段时间过成了什么样：每周回想、慢慢长出来的性格、说过的喜好、和大家多熟、记着的约定、分享过的、学到的</span></div>
+  <div class="tools mb"><div class="seg" id="lifeSeg"></div><span class="sp"></span>
+    <span class="meta">每周回想、慢慢长出来的性格、说过的喜好、和大家多熟、记着的约定、分享过的、知道的</span></div>
   <div class="grid">
-    <div class="card c7">
-      <div class="card-h"><h2><span data-i="note"></span>这一周的她</h2><span class="sp"></span><span class="hint">每周一自己回想一次</span></div>
+    <div class="card c8">
+      <div class="card-h"><h3><span data-i="note"></span>这一周的她</h3><span class="sp"></span><span class="hint">每周一自己回想一次</span></div>
       <div class="card-b"><div class="lifep" id="lfReflect"></div>
-        <details class="raw" style="margin-top:10px"><summary>以前的每一周</summary><ul class="weeks" id="lfWeeks"></ul></details></div>
+        <details class="more"><summary>以前的每一周</summary><ul class="weeks" id="lfWeeks"></ul></details></div>
     </div>
-    <div class="card c5">
-      <div class="card-h"><h2><span data-i="heart"></span>她是怎样的人</h2><span class="sp"></span><span class="hint">每月初把几周的回想沉淀一次</span></div>
-      <div class="card-b"><div class="lifep" id="lfCore"></div><ul class="rows" id="lfProps" style="margin-top:8px"></ul>
-        <details class="raw adm-only" style="margin-top:10px"><summary>改一改</summary>
-          <textarea class="input" id="lfCoreText" rows="5" style="width:100%;margin-top:8px"></textarea>
-          <button class="btn sm" id="lfCoreSave" style="margin-top:8px">保存</button></details></div>
+    <div class="card c4">
+      <div class="card-h"><h3><span data-i="heart"></span>她是怎样的人</h3><span class="sp"></span><span class="hint">每月初沉淀一次</span></div>
+      <div class="card-b"><div class="lifep" id="lfCore"></div><ul class="rows" id="lfProps"></ul>
+        <details class="more adm-only"><summary>改一改</summary>
+          <textarea class="input mt" id="lfCoreText" rows="5"></textarea>
+          <button class="btn sm mt" id="lfCoreSave">保存</button></details></div>
     </div>
-    <div class="card c12">
-      <div class="card-h"><h2><span data-i="star"></span>她说过的喜好</h2><span class="sp"></span><span class="hint">亲口说过的就一直这样，不会改口；不对的可以删、可以改</span></div>
+    <div class="card c6">
+      <div class="card-h"><h3><span data-i="star"></span>她说过的喜好</h3><span class="sp"></span><span class="hint">亲口说过的不会改口</span></div>
       <div class="card-b"><div class="chips" id="lfPrefs"></div>
         <div class="form2"><input class="input" id="lfPT" placeholder="话题，比如：香菜" maxlength="12">
-          <input class="input" id="lfPV" placeholder="她的态度，比如：讨厌，一口都不吃" maxlength="24" style="flex:2">
+          <input class="input" id="lfPV" placeholder="她的态度，比如：讨厌，一口都不吃" maxlength="24">
           <button class="btn sm" id="lfPAdd">加一条</button></div></div>
     </div>
     <div class="card c6">
-      <div class="card-h"><h2><span data-i="users"></span>和大家多熟</h2><span class="sp"></span><span class="hint">找她聊天会慢慢变熟，越熟越敢损、越会关心</span></div>
-      <div class="card-b" style="max-height:460px;overflow:auto"><ul class="rows" id="lfPeople"></ul>
-        <details class="raw" style="margin-top:10px"><summary>最近变熟的</summary><ul class="rows" id="lfClose"></ul></details></div>
-    </div>
-    <div class="card c6">
-      <div class="card-h"><h2><span data-i="cal"></span>她记着的约定</h2><span class="sp"></span><span class="hint">到点提醒大家，考试面试这类事过后问一句</span></div>
-      <div class="card-b"><ul class="rows" id="lfPlans"></ul>
-        <details class="raw" style="margin-top:10px"><summary>手动加一件</summary>
-          <div class="form2"><input class="input" id="lfWhat" placeholder="什么事，比如：周四开黑" maxlength="40">
-            <input class="input" id="lfWhen" placeholder="2026-10-24 20:00">
-            <select class="input" id="lfKind"><option value="remind">到点提醒大家</option><option value="ask">过后问结果</option></select>
-            <button class="btn sm" id="lfPlanAdd">记下</button></div></details>
-        <details class="raw" style="margin-top:10px"><summary>说过的</summary><ul class="rows" id="lfPlansDone"></ul></details></div>
+      <div class="card-h"><h3><span data-i="users"></span>和大家多熟</h3><span class="sp"></span><span class="hint">越熟越敢损、越会关心</span></div>
+      <div class="card-b"><div class="scrollbox"><ul class="rows" id="lfPeople"></ul></div>
+        <details class="more"><summary>最近变熟的</summary><ul class="rows" id="lfClose"></ul></details></div>
     </div>
     <div class="card c12">
-      <div class="card-h"><h2><span data-i="route"></span>大家在哪</h2><span class="sp"></span><span class="hint">群友说“在珠海出差”“到成都了”她会记下；在外地、那边要变天会提醒一句</span></div>
-      <div class="card-b"><ul class="rows" id="lfWhere"></ul>
-        <details class="raw" style="margin-top:10px"><summary>手动加一个</summary>
-          <div class="form2"><select class="input" id="lfWU"></select><input class="input" id="lfWC" placeholder="城市，比如：珠海" maxlength="20">
-            <select class="input" id="lfWW"><option>出差</option><option>旅游</option><option>回家</option><option>住</option><option>上学</option><option>工作</option></select>
-            <input class="input" id="lfWT" placeholder="到哪天（可不填），比如 2026-10-25" maxlength="10">
-            <button class="btn sm" id="lfWAdd">记下</button></div></details></div>
-    </div>
-    <div class="card c12">
-      <div class="card-h"><h2><span data-i="cal"></span>生日和节日</h2><span class="sp"></span><span class="hint">填了生日，那天上午她会在那个人常待的群里祝一句；节日也会应个景</span></div>
-      <div class="card-b"><div class="bdgrid">
-        <div><div class="small muted" style="margin-bottom:6px">接下来一个月</div><ul class="rows" id="lfUp"></ul></div>
-        <div><div class="small muted" style="margin-bottom:6px">群友的生日（月-日，比如 05-21；空着就是不知道）</div><div class="bdlist" id="lfBd"></div></div>
+      <div class="card-h"><h3><span data-i="cal"></span>日程</h3><span class="sp"></span><span class="hint">约定到点提醒、考试面试过后问一句；群友在外地、过生日她都记着</span></div>
+      <div class="card-b"><div class="sched">
+        <div><h4><span data-i="clock"></span>她记着的约定</h4><ul class="rows" id="lfPlans"></ul>
+          <details class="more"><summary>手动加一件</summary>
+            <div class="form2"><input class="input" id="lfWhat" placeholder="什么事，比如：周四开黑" maxlength="40">
+              <input class="input" id="lfWhen" placeholder="2026-10-24 20:00">
+              <select class="input" id="lfKind"><option value="remind">到点提醒大家</option><option value="ask">过后问结果</option></select>
+              <button class="btn sm" id="lfPlanAdd">记下</button></div></details>
+          <details class="more"><summary>说过的</summary><ul class="rows" id="lfPlansDone"></ul></details></div>
+        <div><h4><span data-i="route"></span>大家在哪</h4><ul class="rows" id="lfWhere"></ul>
+          <details class="more"><summary>手动加一个</summary>
+            <div class="form2"><select class="input" id="lfWU"></select><input class="input" id="lfWC" placeholder="城市，比如：珠海" maxlength="20">
+              <select class="input" id="lfWW"><option>出差</option><option>旅游</option><option>回家</option><option>住</option><option>上学</option><option>工作</option></select>
+              <input class="input" id="lfWT" placeholder="到哪天（可不填），比如 2026-10-25" maxlength="10">
+              <button class="btn sm" id="lfWAdd">记下</button></div></details></div>
+        <div><h4><span data-i="star"></span>接下来一个月的生日和节日</h4><ul class="rows" id="lfUp"></ul>
+          <details class="more"><summary>填群友的生日</summary><p class="meta">月-日，比如 05-21；空着就是不知道。那天上午她会在那个人常待的群里祝一句。</p><div class="bdlist" id="lfBd"></div></details></div>
       </div></div>
     </div>
     <div class="card c12">
-      <div class="card-h"><h2><span data-i="send"></span>她分享过的</h2><span class="sp"></span>
+      <div class="card-h"><h3><span data-i="send"></span>她分享过的</h3><span class="sp"></span>
         <button class="btn sm" id="lfShare">现在分享一次</button><button class="btn sm" id="lfPhoto">发张照片</button></div>
       <div class="card-b"><ul class="rows" id="lfShares"></ul></div>
     </div>
     <div class="card c12">
-      <div class="card-h"><h2><span data-i="book"></span>她最近知道的事</h2><span class="sp"></span><span class="hint">搜到的、读到的、群友纠正过的；聊到关键词会想起来</span></div>
+      <div class="card-h"><h3><span data-i="book"></span>她最近知道的事</h3><span class="sp"></span><span class="hint">搜到的、读到的、群友纠正过的；聊到关键词会想起来</span></div>
       <div class="card-b"><div class="kgrid" id="lfKnow"></div>
-        <details class="raw" style="margin-top:12px"><summary>教她一件事</summary>
+        <details class="more"><summary>教她一件事</summary>
           <div class="form2"><input class="input" id="lfKT" placeholder="话题，比如：禁忌岛" maxlength="20">
             <input class="input" id="lfKK" placeholder="关键词，逗号隔开" maxlength="80">
-            <input class="input" id="lfKS" placeholder="一两句话说清楚" maxlength="160" style="flex:3">
+            <input class="input" id="lfKS" placeholder="一两句话说清楚" maxlength="160">
             <button class="btn sm" id="lfKAdd">记下</button></div></details></div>
     </div>
   </div>
 </section>
 
+<!-- ================= 她 ================= -->
+<section class="page" id="p-her">
+  <div class="grid">
+    <div class="card c5">
+      <div class="card-b">
+        <div class="persona-h"><div class="ava plain" id="ava3">满</div>
+          <div><div class="nm" id="hName"></div><div class="meta" id="hSub"></div></div></div>
+        <dl class="kv" id="hKv"></dl>
+        <div id="hWarn" class="notice mt" hidden></div>
+      </div>
+    </div>
+    <div class="card c7">
+      <div class="card-h"><h3><span data-i="cal"></span>这几天的安排</h3><span class="sp"></span><span class="hint">每天早上自己排，群里聊起来前后一致</span></div>
+      <div class="card-b scrollbox" id="plans"></div>
+    </div>
+    <div class="card c6">
+      <div class="card-h"><h3><span data-i="star"></span>她感兴趣的</h3><span class="sp"></span><span class="hint">聊到这些更容易插话</span></div>
+      <div class="card-b">
+        <div class="chips mb" id="intChips"></div>
+        <textarea class="input" id="intText" rows="3" placeholder="用逗号或换行隔开，每个至少两个字，比如：画画, 黑猫, 奶茶"></textarea>
+        <button class="btn sm mt" id="saveInt">保存</button>
+      </div>
+    </div>
+    <div class="card c6">
+      <div class="card-h"><h3><span data-i="note"></span>她记得自己的事</h3><span class="sp"></span><span class="hint">每个群分开记</span></div>
+      <div class="card-b"><div class="seg mb" id="sseg" hidden></div>
+        <textarea class="input" id="selfNotes" rows="6" placeholder="比如：- 说过周末要去看展"></textarea>
+        <button class="btn sm mt" id="saveSelf">保存</button>
+      </div>
+    </div>
+    <div class="card c12">
+      <div class="card-h"><h3><span data-i="file"></span>人设全文</h3><span class="sp"></span><span class="hint" id="pFile"></span></div>
+      <div class="card-b"><details class="raw"><summary>展开看看</summary><pre id="pBody"></pre></details>
+        <p class="meta">想改人设：直接改 persona 文件夹里的这个文件，然后在托盘里点“重启”。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 工作台 ================= -->
+<div class="wbwrap wb-only" id="wbwrap">
+  <nav class="side" id="wbSide" aria-label="工作台">
+    <div class="gt">工作台</div>
+    <button data-p="chat"><span data-i="chat"></span>群聊</button>
+    <button data-p="ppl"><span data-i="users"></span>群友</button>
+    <button data-p="learn"><span data-i="book"></span>学到的</button>
+    <div class="gt adm-gt">管理</div>
+    <button class="adm" data-p="knobs"><span data-i="sliders"></span>性格开关</button>
+    <button class="adm" data-p="llm"><span data-i="cpu"></span>大模型</button>
+    <button class="adm" data-p="log"><span data-i="list"></span>日志</button>
+    <div class="admhint">性格开关、大模型、日志在右上角“…”里打开管理后出现</div>
+  </nav>
+  <div class="wbmain">
+
 <!-- ================= 群聊 ================= -->
 <section class="page" id="p-chat">
-  <div class="tools" style="margin-bottom:14px">
+  <div class="chatbar">
     <div class="seg" id="gseg"></div>
     <div class="search"><span data-i="search"></span><input class="input" id="cq" placeholder="搜聊天记录（内容或名字）"></div>
-    <label class="tools small" style="gap:8px"><span class="switch"><input type="checkbox" id="mute"><span></span></span>这个群先别说话</label>
+    <label class="chk"><span class="switch"><input type="checkbox" id="mute"><span></span></span>这个群先别说话</label>
   </div>
   <div id="muteNote" class="notice" hidden><span data-i="pause"></span>她在这个群“闭麦”中：消息照样记、照样认识人，只是不主动说话（你替她说的除外）。</div>
   <div class="chatwrap">
-    <div class="card" style="overflow:hidden;display:flex;flex-direction:column">
+    <div class="card chatcard">
       <div class="chat" id="chat"></div>
       <div class="typing" id="typing" hidden></div>
       <button class="btn sm pri newmsg" id="newMsg" hidden>有新消息 ↓</button>
@@ -613,32 +459,37 @@ body:not(.on-home) .homeonly{display:none!important}
         <button class="btn pri" type="submit"><span data-i="send"></span>发</button>
       </form>
     </div>
-    <div style="display:flex;flex-direction:column;gap:16px">
-      <div class="card">
-        <div class="card-h"><h2><span data-i="spark"></span>让她开口</h2></div>
+    <div class="panels">
+      <details class="card" open>
+        <summary><span data-i="spark"></span>让她开口</summary>
         <div class="card-b">
           <div class="field"><label for="topic">想让她聊点什么（可不填）</label><input class="input" id="topic" placeholder="比如：周末去哪玩"></div>
-          <button class="btn" id="nudge" style="margin-top:10px;width:100%">让她现在说点什么</button>
-          <div class="small muted" style="margin-top:8px">会照她的人设和群里最近的话题说，跟她平时自己说话一样。</div>
+          <button class="btn pri mt" id="nudge">让她现在说点什么</button>
+          <p class="meta">会照她的人设和群里最近的话题说，跟她平时自己说话一样。</p>
         </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><h2><span data-i="book"></span>她记得这个群的事</h2></div>
+      </details>
+      <details class="card">
+        <summary><span data-i="book"></span>她记得这个群的事</summary>
         <div class="card-b">
           <textarea class="input" id="gnotes" rows="8" placeholder="群里最近的事、大家常玩的梗……她每攒一批消息会自己整理一次，也可以手动改"></textarea>
-          <button class="btn sm" id="saveNotes" style="margin-top:8px">保存</button>
+          <button class="btn sm mt" id="saveNotes">保存</button>
         </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><h2><span data-i="info"></span>这个群</h2></div>
-        <div class="card-b"><dl class="kv" id="ginfo" style="margin:0"></dl></div>
-      </div>
+      </details>
+      <details class="card">
+        <summary><span data-i="info"></span>这个群</summary>
+        <div class="card-b"><dl class="kv" id="ginfo"></dl></div>
+      </details>
     </div>
   </div>
 </section>
 
 <!-- ================= 群友 ================= -->
 <section class="page" id="p-ppl">
+  <div class="card mb" id="relCard">
+    <div class="card-h"><h3><span data-i="users"></span>关系网和相处经验</h3><div class="seg" id="relseg" hidden></div><span class="sp"></span><span class="hint" id="relHint">每晚整理一次：谁和谁常聊，她对谁说的话常被接、常冷场</span></div>
+    <div class="card-b"><div class="rel"><div><h4>谁和谁常聊</h4><div id="relPairs"></div></div>
+      <div><h4>她和他相处的经验</h4><div id="relExp"></div></div></div></div>
+  </div>
   <div class="tools">
     <div class="search"><span data-i="search"></span><input class="input" id="pq" placeholder="搜名字、印象、兴趣…"></div>
     <div class="seg" id="psort">
@@ -649,104 +500,63 @@ body:not(.on-home) .homeonly{display:none!important}
       <button data-f="all" class="on">全部<span class="n" id="nAll"></span></button><button data-f="prof">有画像<span class="n" id="nProf"></span></button><button data-f="none">还没画像<span class="n" id="nNone"></span></button>
     </div>
   </div>
-  <div class="card" id="relCard" style="margin-top:14px">
-    <div class="card-h"><h2><span data-i="users"></span>关系网和相处经验</h2><div class="seg" id="relseg" hidden></div><span class="sp"></span><span class="hint" id="relHint">每晚整理一次：谁和谁常聊（回复、@、紧接着说话），以及她对谁说的话常被接、常冷场</span></div>
-    <div class="card-b"><div class="rel"><div><div class="sec-t" style="margin-top:0">谁和谁常聊</div><div id="relPairs"></div></div>
-      <div><div class="sec-t" style="margin-top:0">她和他相处的经验</div><div id="relExp"></div></div></div></div>
-  </div>
-  <div class="small muted" style="margin-top:14px" id="pHint"></div>
+  <p class="meta" id="pHint"></p>
   <div class="ppl" id="ppl"></div>
-</section>
-
-<!-- ================= 她 ================= -->
-<section class="page" id="p-her">
-  <div class="grid">
-    <div class="card c5">
-      <div class="card-b" style="padding-top:18px">
-        <div class="persona-h"><div class="ava big" id="ava3" style="width:60px;height:60px;font-size:24px">满</div>
-          <div><div style="font-size:19px;font-weight:650" id="hName"></div><div class="muted small" id="hSub"></div></div></div>
-        <dl class="kv" id="hKv"></dl>
-        <div id="hWarn" class="notice" style="margin:14px 0 0" hidden></div>
-      </div>
-    </div>
-    <div class="card c7">
-      <div class="card-h"><h2><span data-i="cal"></span>这几天的安排</h2><span class="sp"></span><span class="hint">每天早上自己排，群里聊起来前后一致</span></div>
-      <div class="card-b" id="plans" style="max-height:420px;overflow:auto"></div>
-    </div>
-    <div class="card c6">
-      <div class="card-h"><h2><span data-i="star"></span>她感兴趣的</h2><span class="sp"></span><span class="hint">聊到这些更容易插话</span></div>
-      <div class="card-b">
-        <div class="chips" id="intChips" style="margin-bottom:10px"></div>
-        <textarea class="input" id="intText" rows="3" placeholder="用逗号或换行隔开，每个至少两个字，比如：画画, 黑猫, 奶茶"></textarea>
-        <button class="btn sm" id="saveInt" style="margin-top:8px">保存</button>
-      </div>
-    </div>
-    <div class="card c6">
-      <div class="card-h"><h2><span data-i="note"></span>她记得自己的事</h2><span class="sp"></span><span class="hint">她在群里说过的关于自己的事（每个群分开记）</span></div>
-      <div class="card-b"><div class="seg" id="sseg" hidden style="margin-bottom:10px"></div>
-        <textarea class="input" id="selfNotes" rows="6" placeholder="比如：- 说过周末要去看展"></textarea>
-        <button class="btn sm" id="saveSelf" style="margin-top:8px">保存</button>
-      </div>
-    </div>
-    <div class="card c12">
-      <div class="card-h"><h2><span data-i="file"></span>人设全文</h2><span class="sp"></span><span class="hint" id="pFile"></span></div>
-      <div class="card-b"><details class="raw"><summary>展开看看</summary><pre id="pBody"></pre></details>
-        <div class="small muted" style="margin-top:8px">想改人设：直接改 persona 文件夹里的这个文件，然后在托盘里点“重启”。</div></div>
-    </div>
-  </div>
 </section>
 
 <!-- ================= 学到的 ================= -->
 <section class="page" id="p-learn">
-  <div class="tools" style="margin-bottom:14px"><div class="seg" id="lseg"></div><span class="sp"></span>
-    <span class="small muted" id="learnOff" hidden>“跟着群里学说话”在性格开关里关着</span></div>
+  <div class="tools mb"><div class="seg" id="lseg"></div><span class="sp"></span>
+    <span class="meta" id="learnOff" hidden>“跟着群里学说话”在性格开关里关着</span></div>
   <div class="grid">
-    <div class="card c12">
-      <div class="card-h"><h2><span data-i="route"></span>她现在想不想开口</h2><span class="sp"></span><span class="hint">最近 1 小时的发言配额：概率过了阈值才会去想说什么</span></div>
-      <div class="card-b"><div class="minis" id="gateKpi" style="grid-template-columns:repeat(auto-fit,minmax(104px,1fr))"></div><div id="gateAtt" class="chips"></div></div>
-    </div>
-    <div class="card c7">
-      <div class="card-h"><h2><span data-i="quote"></span>说话方式</h2><span class="sp"></span><span class="hint">“当……时，可以说……”，出现 2 次以上自动用</span></div>
-      <div class="card-b"><ul class="rows" id="exList"></ul></div>
-    </div>
-    <div class="card c5">
-      <div class="card-h"><h2><span data-i="book"></span>群里的黑话</h2><span class="sp"></span><span class="hint">离开这个群就看不懂的才算</span></div>
-      <div class="card-b"><ul class="rows" id="jgList"></ul></div>
-    </div>
-    <div class="card c12">
-      <div class="card-h"><h2><span data-i="quote"></span>帮她挑一句</h2><span class="sp"></span><span class="hint" id="pairStat">两种说法里哪个更像她？你挑的会用来教她（AI 腔检测器）</span></div>
-      <div class="card-b" id="pairBox"></div>
-    </div>
     <div class="card c12" id="labCard">
-      <div class="card-h"><h2><span data-i="quote"></span>这一刻她该不该说</h2><span class="sp"></span><span class="hint" id="labStat">你判的会直接用来调她什么时候开口（每晚重新拟合时权重最高）</span></div>
+      <div class="card-h"><h3><span data-i="quote"></span>这一刻她该不该说</h3><span class="sp"></span><span class="hint" id="labStat">你判的会直接用来调她什么时候开口（每晚重新拟合时权重最高）</span></div>
       <div class="card-b" id="labBox"></div>
     </div>
     <div class="card c12">
-      <div class="card-h"><h2><span data-i="book"></span>群梗词条</h2><span class="sp"></span><span class="hint">聊到关键词才告诉她这个梗的意思；提过以后“冷却”条消息内不再提</span></div>
-      <div class="card-b"><ul class="rows" id="loreList"></ul>
-        <div class="tools" style="margin-top:10px;gap:8px;flex-wrap:wrap"><input class="input" id="loreKeys" placeholder="关键词，逗号隔开" style="width:180px">
-          <input class="input" id="loreText" placeholder="这个梗是什么意思、什么时候用" style="flex:1;min-width:200px">
-          <button class="btn sm" id="loreAdd">加一条</button></div></div>
+      <div class="card-h"><h3><span data-i="route"></span>她现在想不想开口</h3><span class="sp"></span><span class="hint">最近 1 小时的发言配额：概率过了阈值才会去想说什么</span></div>
+      <div class="card-b"><div class="gate3" id="gate3"></div>
+        <div class="chips mt" id="gateAtt"></div>
+        <details class="more"><summary id="gateMore">门控细节</summary><div class="minis mt" id="gateKpi"></div></details></div>
     </div>
     <div class="card c12">
-      <div class="card-h"><h2><span data-i="book"></span>她从网上看来、记住的</h2><span class="sp"></span><span class="hint">群友发的链接、她被问到时搜的；聊到关键词会想起来，常用到的会变成她的兴趣</span></div>
-      <div class="card-b"><ul class="rows" id="knowList"></ul></div>
+      <div class="card-h"><h3><span data-i="quote"></span>帮她挑一句</h3><span class="sp"></span><span class="hint" id="pairStat">两种说法里哪个更像她？你挑的会用来教她（AI 腔检测器）</span></div>
+      <div class="card-b" id="pairBox"></div>
     </div>
     <div class="card c7">
-      <div class="card-h"><h2><span data-i="book"></span>她记的事</h2><span class="sp"></span><span class="hint">聊到了会想起来；过时的点“过时”</span></div>
+      <div class="card-h"><h3><span data-i="quote"></span>说话方式</h3><span class="sp"></span><span class="hint">“当……时，可以说……”，出现 2 次以上自动用</span></div>
+      <div class="card-b"><ul class="rows" id="exList"></ul></div>
+    </div>
+    <div class="card c5">
+      <div class="card-h"><h3><span data-i="book"></span>群里的黑话</h3><span class="sp"></span><span class="hint">离开这个群就看不懂的才算</span></div>
+      <div class="card-b"><ul class="rows" id="jgList"></ul></div>
+    </div>
+    <div class="card c7">
+      <div class="card-h"><h3><span data-i="book"></span>她记的事</h3><span class="sp"></span><span class="hint">聊到了会想起来；过时的点“过时”</span></div>
       <div class="card-b"><ul class="rows" id="factList"></ul></div>
     </div>
     <div class="card c5">
-      <div class="card-h"><h2><span data-i="quote"></span>群规矩</h2><span class="sp"></span><span class="hint">整理群聊时总结的，她会照着来</span></div>
+      <div class="card-h"><h3><span data-i="quote"></span>群规矩</h3><span class="sp"></span><span class="hint">整理群聊时总结的，她会照着来</span></div>
       <div class="card-b"><textarea class="input" id="normText" rows="5" placeholder="比如：- 大家都不怎么 @人"></textarea>
-        <button class="btn sm" id="saveNorms" style="margin-top:8px">保存</button></div>
+        <button class="btn sm mt" id="saveNorms">保存</button></div>
     </div>
     <div class="card c12">
-      <div class="card-h"><h2><span data-i="book"></span>存的表情包</h2><span class="sp"></span><span class="hint">群里被 2 个以上的人发过的才存；意思是从大家什么时候发它猜的</span></div>
-      <div class="card-b"><div id="stkList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"></div></div>
+      <div class="card-h"><h3><span data-i="book"></span>群梗词条</h3><span class="sp"></span><span class="hint">聊到关键词才告诉她这个梗的意思；提过以后“冷却”条消息内不再提</span></div>
+      <div class="card-b"><ul class="rows" id="loreList"></ul>
+        <div class="form2"><input class="input" id="loreKeys" placeholder="关键词，逗号隔开">
+          <input class="input" id="loreText" placeholder="这个梗是什么意思、什么时候用">
+          <button class="btn sm" id="loreAdd">加一条</button></div></div>
     </div>
     <div class="card c12">
-      <div class="card-h"><h2><span data-i="book"></span>群日报</h2><span class="sp"></span><span class="hint">每天早上整理前一天</span></div>
+      <div class="card-h"><h3><span data-i="book"></span>她从网上看来、记住的</h3><span class="sp"></span><span class="hint">群友发的链接、她被问到时搜的</span></div>
+      <div class="card-b"><ul class="rows" id="knowList"></ul></div>
+    </div>
+    <div class="card c12">
+      <div class="card-h"><h3><span data-i="book"></span>存的表情包</h3><span class="sp"></span><span class="hint">群里被 2 个以上的人发过的才存；意思是从大家什么时候发它猜的</span></div>
+      <div class="card-b"><div class="stks" id="stkList"></div></div>
+    </div>
+    <div class="card c12">
+      <div class="card-h"><h3><span data-i="book"></span>群日报</h3><span class="sp"></span><span class="hint">每天早上整理前一天</span></div>
       <div class="card-b"><ul class="rows" id="dailyList"></ul></div>
     </div>
   </div>
@@ -756,18 +566,23 @@ body:not(.on-home) .homeonly{display:none!important}
 <!-- ================= 性格开关 ================= -->
 <section class="page" id="p-knobs">
   <div class="card">
-    <div class="card-h"><h2><span data-i="sliders"></span>性格开关</h2><span class="sp"></span>
+    <div class="card-h"><h3><span data-i="sliders"></span>性格开关</h3><span class="sp"></span>
       <span class="hint" id="kHint">拖动马上生效，存在她的数据里（重启也还在）；没调过的用 config.yaml 里的值</span>
       <button class="btn sm" id="resetAll">全部恢复</button></div>
-    <div class="card-b" id="kSegBox" hidden style="padding-bottom:0"><div class="seg" id="kseg"></div>
-      <div class="small muted" style="margin-top:8px" id="kNote"></div></div>
-    <div class="card-b" id="knobs"></div>
+    <div class="card-b" id="kSegBox" hidden><div class="seg" id="kseg"></div>
+      <p class="meta" id="kNote"></p></div>
+    <div class="card-b">
+      <div class="kbar"><div class="search"><span data-i="search"></span><input class="input" id="kq" placeholder="搜开关名字或说明"></div>
+        <div class="seg" id="kf"><button data-f="all" class="on">全部</button><button data-f="changed">只看已调<span class="n" id="kChangedN"></span></button></div></div>
+      <div class="kdir" id="kdir"></div>
+      <div id="knobs"></div>
+    </div>
   </div>
-  <div class="card" style="margin-top:14px">
-    <div class="card-h"><h2><span data-i="trend"></span>每周评测</h2><span class="sp"></span>
+  <div class="card mt">
+    <div class="card-h"><h3><span data-i="trend"></span>每周评测</h3><span class="sp"></span>
       <span class="hint">每周一挑她说过的 10 句找毛病打分（满分 100）；人设改过会和上一版盲比</span>
       <button class="btn sm" id="evRun">现在评一次</button><button class="btn sm" id="evCmp">和上一版人设比一比</button><button class="btn sm" id="evProbe">定向测试人格</button></div>
-    <div class="card-b"><div id="evHist"></div><div id="evCmpBox" style="margin-top:14px"></div></div>
+    <div class="card-b"><div id="evHist"></div><div class="mt" id="evCmpBox"></div></div>
   </div>
 </section>
 
@@ -775,16 +590,16 @@ body:not(.on-home) .homeonly{display:none!important}
 <section class="page" id="p-llm">
   <div class="grid">
     <div class="card c12">
-      <div class="card-h"><h2><span data-i="cpu"></span>今天的调用</h2><span class="sp"></span><button class="btn sm" id="restart"><span data-i="refresh"></span>重启生效</button></div>
-      <div class="card-b"><div class="minis" id="llmKpi"></div>
+      <div class="card-h"><h3><span data-i="cpu"></span>今天的调用</h3><span class="sp"></span><button class="btn sm" id="restart"><span data-i="refresh"></span>重启生效</button></div>
+      <div class="card-b"><div class="minis mb" id="llmKpi"></div>
         <div class="tblwrap"><table class="dt" id="llmTable"></table></div></div>
     </div>
     <div class="card c6">
-      <div class="card-h"><h2><span data-i="route"></span>每种活用哪个模型</h2><span class="sp"></span><span class="hint">按顺序试，前一个出错就换下一个</span></div>
+      <div class="card-h"><h3><span data-i="route"></span>每种活用哪个模型</h3><span class="sp"></span><span class="hint">按顺序试，前一个出错就换下一个</span></div>
       <div class="card-b" id="routes"></div>
     </div>
     <div class="card c6">
-      <div class="card-h"><h2><span data-i="plus"></span>添加大模型接口</h2></div>
+      <div class="card-h"><h3><span data-i="plus"></span>添加大模型接口</h3></div>
       <div class="card-b steps">
         <div class="field"><label for="lu">接口地址（OpenAI 兼容）</label><input class="input" id="lu" placeholder="https://你的接口地址/v1"></div>
         <div class="field"><label for="lk">Key</label><input class="input" id="lk" type="password" placeholder="sk-..." autocomplete="off"></div>
@@ -792,7 +607,7 @@ body:not(.on-home) .homeonly{display:none!important}
         <div class="field" id="lmWrap" hidden><label for="lm">选一个模型</label><select class="input" id="lm"></select></div>
         <div class="tools" id="lActs" hidden>
           <button class="btn" id="ltest">试聊一句</button>
-          <select class="input" id="lhow" style="flex:1"><option value="first">放到最前面（主力）</option><option value="last">放到最后（兜底）</option><option value="chat">只用来聊天</option></select>
+          <select class="input" id="lhow"><option value="first">放到最前面（主力）</option><option value="last">放到最后（兜底）</option><option value="chat">只用来聊天</option></select>
           <button class="btn pri" id="ladd">加进去</button>
         </div>
         <div class="small" id="lmsg"></div>
@@ -803,21 +618,30 @@ body:not(.on-home) .homeonly{display:none!important}
 
 <!-- ================= 日志 ================= -->
 <section class="page" id="p-log">
-  <div class="tools" style="margin-bottom:12px">
+  <div class="tools mb">
     <div class="seg" id="lfilter"><button data-f="all" class="on">全部</button><button data-f="say">她说的</button><button data-f="warn">警告 / 出错</button></div>
     <div class="search"><span data-i="search"></span><input class="input" id="lq" placeholder="过滤"></div>
-    <label class="tools small" style="gap:8px"><span class="switch"><input type="checkbox" id="lauto" checked><span></span></span>自动刷新</label>
+    <label class="chk"><span class="switch"><input type="checkbox" id="lauto" checked><span></span></span>自动刷新</label>
   </div>
   <div class="logbox" id="logbox"></div>
 </section>
+  </div>
+</div>
 </main>
+
+<nav class="tabbar" id="tabbar" aria-label="主导航（手机）">
+  <button data-p="home" class="on"><span data-i="home"></span>首页</button>
+  <button data-p="life"><span data-i="cal"></span>她的日子</button>
+  <button data-p="her"><span data-i="heart"></span>她</button>
+  <button data-p="chat" data-wb="1"><span data-i="list"></span>工作台</button>
+</nav>
 
 <div class="drawer-bg" id="dbg"></div>
 <aside class="drawer" id="drawer" aria-hidden="true">
-  <div class="dh"><div class="pa" id="dAva"></div><div style="flex:1;min-width:0"><div style="font-weight:650;font-size:16px" id="dName"></div><div class="small muted" id="dSub"></div></div>
+  <div class="dh"><div class="pa" id="dAva"></div><div class="grow-x"><div class="nm" id="dName"></div><div class="meta" id="dSub"></div></div>
     <button class="iconbtn" id="dClose" aria-label="关闭"><span data-i="x"></span></button></div>
   <div class="db" id="dBody"></div>
-  <div class="df"><button class="btn pri" id="dSave">保存画像</button><button class="btn" id="dRefresh">让她重新整理</button><span style="flex:1"></span><button class="btn ghost danger" id="dForget">清空画像</button></div>
+  <div class="df"><button class="btn pri" id="dSave">保存画像</button><button class="btn" id="dRefresh">让她重新整理</button><span class="sp"></span><button class="btn ghost danger" id="dForget">清空画像</button></div>
 </aside>
 <div class="tip" id="tip"></div>
 <div class="toast" id="toast"></div>
@@ -864,27 +688,34 @@ const famTag=f=>`<span class="tag ${f==="老朋友"||f==="很熟"?"hot":f==="挺
 
 /* ============ 主题 ============ */
 function applyTheme(t){if(t)document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;
-  const dark=t?t==="dark":matchMedia("(prefers-color-scheme:dark)").matches;$("theme").innerHTML=icon(dark?"sun":"moon")}
+  const dark=t?t==="dark":matchMedia("(prefers-color-scheme:dark)").matches;$("themeIco").innerHTML=icon(dark?"sun":"moon");$("themeTxt").textContent=dark?"切到浅色":"切到深色"}
 let theme=null;try{theme=localStorage.getItem("gtheme")}catch(e){}
 applyTheme(theme);
 $("theme").onclick=()=>{const dark=document.documentElement.dataset.theme?document.documentElement.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
   theme=dark?"light":"dark";try{localStorage.setItem("gtheme",theme)}catch(e){}applyTheme(theme)};
-$("refresh").innerHTML=icon("refresh");
 
 /* ============ 标签页 ============ */
 let cur="home";
-function go(p,to){cur=p;if(!S&&p!=="home")loadState();document.querySelectorAll("#tabs button").forEach(b=>{b.classList.toggle("on",b.dataset.p===p);if(b.dataset.p===p)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
+/* 18.0 顶栏：首页 / 她的日子 / 她 是“角色视图”；群聊、群友、学到的、管理三页在“工作台”里，左边有侧栏 */
+const WB=["chat","ppl","learn","knobs","llm","log"];let WBLAST="chat";
+function go(p,to){if(!$("p-"+p))p="home";cur=p;if(!S&&p!=="home")loadState();const wb=WB.includes(p);if(wb)WBLAST=p;
+  document.querySelectorAll("#tabs button[data-p],#tabbar button[data-p],#wbSide button[data-p]").forEach(b=>{const on=b.dataset.wb?wb:b.dataset.p===p;
+    b.classList.toggle("on",on);if(on)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
   document.querySelectorAll(".page").forEach(e=>e.classList.toggle("on",e.id==="p-"+p));
   document.body.classList.toggle("on-home",p==="home");$("band").classList.toggle("home",p==="home");
-  $("tabs").classList.remove("open");$("menuBtn").setAttribute("aria-expanded","false");
+  document.body.classList.toggle("wbmode",wb);document.body.classList.toggle("wb",wb);
+  menu(false);
   const tgt=to&&$(to);if(tgt)setTimeout(()=>tgt.scrollIntoView({behavior:"smooth",block:"start"}),300);else window.scrollTo({top:0});
   try{history.replaceState(null,"","#"+p)}catch(e){}
   ({home:loadState,life:loadLife,chat:loadChat,ppl:loadPeople,her:loadHer,learn:loadLearn,knobs:loadKnobs,llm:loadLLM,log:loadLog}[p]||(()=>{}))();}
-document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>go(b.dataset.p));
-$("refresh").onclick=()=>go(cur);
+document.querySelectorAll("#tabs button[data-p],#tabbar button[data-p],#wbSide button[data-p]").forEach(b=>b.onclick=()=>go(b.dataset.wb&&!WB.includes(cur)?WBLAST:b.dataset.p));
+$("refresh").onclick=()=>{menu(false);go(cur)};
 document.addEventListener("click",e=>{const t=e.target.closest("[data-go]");if(t){e.preventDefault();go(t.dataset.go,t.dataset.to)}});
 $("brand").onclick=e=>{e.preventDefault();go("home")};
-$("menuBtn").onclick=()=>{const o=$("tabs").classList.toggle("open");$("menuBtn").setAttribute("aria-expanded",o?"true":"false")};
+function menu(open){$("menu").hidden=!open;$("menuBtn").setAttribute("aria-expanded",open?"true":"false")}
+$("menuBtn").onclick=e=>{e.stopPropagation();menu($("menu").hidden)};
+document.addEventListener("click",e=>{if(!$("menu").hidden&&!e.target.closest("#menu"))menu(false)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")menu(false)});
 $("portrait").addEventListener("error",()=>{$("portrait").hidden=true;$("portraitPh").hidden=false});
 $("saidAva").addEventListener("error",()=>{$("saidAva").hidden=true;$("saidIni").hidden=false});
 applyTod();setInterval(applyTod,60000);
@@ -930,7 +761,7 @@ function planLines(text){const out=[];for(const raw of String(text||"").split(/\
   if(m)out.push({a:m[1].replace("：",":"),b:m[2].replace("：",":"),t:m[3]});else out.push({a:"",b:"",t:l})}return out}
 const noTime=s=>String(s||"").replace(/^\s*\d{1,2}[:：]\d{2}\s*[-~–—到至]+\s*\d{1,2}[:：]\d{2}\s*[，,：:]?\s*/,"");
 const mins=s=>{const [h,m]=s.split(":").map(Number);return h*60+m};
-function renderPlan(el,text,live=true){const L=planLines(text);if(!L.length){el.innerHTML='<li class="empty" style="display:block">今天干嘛我还没想好，过几分钟就排好～</li>';return}
+function renderPlan(el,text,live=true){const L=planLines(text);if(!L.length){el.innerHTML='<li class="empty">今天干嘛我还没想好，过几分钟就排好～</li>';return}
   const n=new Date(),nm=n.getHours()*60+n.getMinutes();
   el.innerHTML=L.map(x=>{let cls="";if(live&&x.a){const a=mins(x.a),b=mins(x.b);if(nm>=a&&nm<b)cls="now";else if(nm>=b&&b>a)cls="past"}
     return `<li class="${cls}"><span class="t">${x.a?esc(x.a+"–"+x.b):"·"}</span><span>${esc(x.t)}</span></li>`}).join("")}
@@ -943,7 +774,8 @@ async function loadState(){
   $("sub").textContent=(S.qq.ready?"在线":CHN+"没接上")+" · "+(S.quiet?"睡着了":noTime(S.activity)||S.mood);
   const h=new Date().getHours();
   const hh=applyTod(),dn=new Date(),act=noTime(S.activity);
-  $("hello").textContent=S.quiet?`${p.name}睡着了`:!S.qq.ready?`${p.name}掉线了，正在连回来`:act?(/^[在去和跟给把想要准正]/.test(act)?act:`在${act}`):S.busy?"在忙":"在群里待着";
+  const HL=S.quiet?`${p.name}睡着了`:!S.qq.ready?`${p.name}掉线了，正在连回来`:act?(/^[在去和跟给把想要准正]/.test(act)?act:`在${act}`):S.busy?"在忙":"在群里待着";
+  const hs=splitHead(HL);$("hello").textContent=hs[0];$("hello").classList.toggle("long",hs[0].length>12);$("helloMore").hidden=!hs[1];$("helloMore").textContent=hs[1];
   $("doing").textContent=S.mood?String(S.mood).replace(/[。.]?$/,"。"):"";
   $("hWhen").textContent=`${partOf(hh)} · ${pad(dn.getHours())}:${pad(dn.getMinutes())} · ${S.quiet?"睡着了":S.qq.ready?"在线":CHN+"没接上"}`;
   $("hDot").className="dot"+(S.quiet?" sleep":S.qq.ready?"":" off");
@@ -953,36 +785,41 @@ async function loadState(){
     :"QQ 没接上（NapCat 断了？）";
   const downTip=W.error||(CH==="wechat"?"打开微信并登录她的小号，会自动接上；还不行就跑 scripts\\wxdiag.bat"
     :"程序会自己重连；NapCat 没了的话掉线 2 分钟后会自动重开。要扫码时二维码会弹出来，用她的小号扫；5 分钟还没好就看 data/logs/napcat.log，或托盘图标右键 → 重启");
-  pills.push(S.qq.ready?`<span class="pill ok" title="${CHN}">${icon(CH)}<b>${esc(S.qq.nick||CHN)}</b>${esc(S.qq.self_id||"")}</span>`
-    :`<span class="pill bad" title="${esc(downTip)}">${icon(CH)}${downHint}${W.error?"："+esc(String(W.error).slice(0,40)):""}</span>`);
+  const okPills=[];
+  if(S.qq.ready)okPills.push([`${CHN} 账号`,`${S.qq.nick||CHN} ${S.qq.self_id||""}`]);else pills.push(`<span class="pill bad" title="${esc(downTip)}">${icon(CH)}${downHint}${W.error?"："+esc(String(W.error).slice(0,40)):""}</span>`);
   (W.groups||[]).filter(g=>g.problem).forEach(g=>pills.push(`<span class="pill bad" title="${esc(g.problem)}">「${esc(g.name)}」发不了：${esc(g.problem.slice(0,30))}…</span>`));
   (W.groups||[]).filter(g=>!g.window&&!g.problem).forEach(g=>pills.push(`<span class="pill ${W.search?"":"bad"}" title="在微信里双击这个群，让它单独开一个窗口（可以最小化，别关）">「${esc(g.name)}」没有单独窗口${W.search?"（用搜索发）":"，发不了消息"}</span>`));
-  if(W.stats)pills.push(`<span class="pill" title="${esc(W.last_error||"")}">这小时发了 <b>${W.hour_sends||0}/${W.max_per_hour||"?"}</b>${W.stats.send_fail?` · 没发出去 <b>${W.stats.send_fail}</b>`:""}</span>`);
+  if(W.stats){if(W.stats.send_fail)pills.push(`<span class="pill bad" title="${esc(W.last_error||"")}">这小时没发出去 <b>${W.stats.send_fail}</b> 条</span>`);okPills.push(["这小时发了",`${W.hour_sends||0} / ${W.max_per_hour||"?"}`])}
   if(W.missing_keys&&W.missing_keys.length)pills.push(`<span class="pill bad" title="python run.py wxkeys --deep">有 ${W.missing_keys.length} 个库没拿到密钥</span>`);
-  pills.push(`<span class="pill">${icon("heart")}${esc(S.mood)}</span>`);
-  if(S.quiet_hours)pills.push(`<span class="pill ${S.quiet?"night":""}">${icon("moonz")}免打扰 <b>${esc(S.quiet_hours)}</b></span>`);
-  if(S.active_hours)pills.push(`<span class="pill">${icon("spark")}冒泡时段 <b>${esc(S.active_hours)}</b></span>`);
-  pills.push(`<span class="pill">${icon("clock")}已运行 <b>${dur(S.uptime)}</b></span>`);
+  if(S.quiet)pills.push(`<span class="pill night">${icon("moonz")}免打扰中 <b>${esc(S.quiet_hours||"")}</b></span>`);   // 心情首屏讲过了，这里只放要你留意的
+  if(S.quiet_hours)okPills.push(["免打扰",S.quiet_hours]);
+  if(S.active_hours)okPills.push(["冒泡时段",S.active_hours]);
+  okPills.push(["已运行",dur(S.uptime)]);
   $("pills").innerHTML=pills.join("");
   const last=S.recent_her[0];
   if(last){$("said").hidden=false;$("saidWhen").textContent=`${ago(last.ts)} · 在「${gname(last.group_id)}」说`;$("saidText").textContent=last.content}else $("said").hidden=true;
-  const k=S.kpi;
-  $("kpis").innerHTML=[["今天群消息",k.today,""],["她说了",k.her_today,"句"],["有人找她",k.mentions_today,"次"],["她说完有人接",k.effect_rate==null?"—":Math.round(k.effect_rate*100),k.effect_rate==null?"<small>还没数据</small>":`% <small>近 7 天 ${k.effect_n} 次</small>`],
-    ["认识的人",k.people,`<small>${k.profiled} 有画像${multi()&&k.both_groups?` · ${k.both_groups} 个在不止一个群`:""}</small>`],["大模型调用",k.llm_calls,k.llm_limited?`<small>限流 ${k.llm_limited}</small>`:""]]
-    .map(([l,v,u],i)=>`<div class="kpi ${i===1?"acc":""}"><div class="l">${l}</div><div class="v">${v}${u&&!u.startsWith("<")?`<small>${u}</small>`:u}</div></div>`).join("");
+  const k=S.kpi,DY=S.days||[],yd=DY.length>1?DY[DY.length-2]:null;
+  const vs=(now,old)=>old==null?"":now>old?`<span class="up">↑ ${now-old}</span> 比昨天`:now<old?`<span class="down">↓ ${old-now}</span> 比昨天`:"和昨天一样";
+  $("kpis").innerHTML=[["今天群消息",k.today,"",yd?vs(k.today,yd.msgs):""],["她说了",k.her_today,"句",yd?vs(k.her_today,yd.her):""],["有人找她",k.mentions_today,"次",""],
+    ["她说完有人接",k.effect_rate==null?"—":Math.round(k.effect_rate*100),k.effect_rate==null?"":"%",k.effect_rate==null?"还没数据":`近 7 天 ${k.effect_n} 次`]]
+    .map(([l,v,u,d],i)=>`<div class="stat ${i===1?"acc":""}"><div class="l">${l}</div><div class="v">${v}${u?`<small>${u}</small>`:""}</div><div class="d">${d||"&nbsp;"}</div></div>`).join("");
+  $("kpiMore").innerHTML=[["认识的人",`${k.people}`],["有画像",`${k.profiled}`+(multi()&&k.both_groups?` · ${k.both_groups} 个在不止一个群`:"")],["大模型调用",`${k.llm_calls}`+(k.llm_limited?` · 限流 ${k.llm_limited}`:"")],...okPills]
+    .map(([a,b])=>`<div><b>${esc(b)}</b><span>${esc(a)}</span></div>`).join("");
   if(HSEL!=="all"&&!S.groups.some(g=>String(g.id)===HSEL))HSEL="all";
   paintCharts();paintCompare();
   renderPlan($("plan"),S.plan);
   $("recentHer").innerHTML=S.recent_her.length?S.recent_her.map(r=>`<li><div class="grow"><div>${esc(r.content)}</div><div class="meta">${ago(r.ts)} · ${esc(gname(r.group_id))}</div></div></li>`).join("")
-    :'<li class="empty" style="display:block">我还没在群里说过话呢，等大家聊起来再说。</li>';
+    :'<li class="empty">我还没在群里说过话呢，等大家聊起来再说。</li>';
   $("groups").innerHTML=S.groups.map(g=>{const c=hue(g.id);const lm=g.last_msg;
     return `<div class="gcard"><div class="h"><div class="gava" style="background:${c}">${esc(initial(g.name))}</div>
-      <div style="flex:1;min-width:0"><div class="nm">${esc(g.name)}</div><div class="id">${g.id}</div></div>
+      <div class="grow-x"><div class="nm ell">${esc(g.name)}</div><div class="id">${g.id}</div></div>
       ${g.muted?'<span class="tag wait">闭麦中</span>':g.night?'<span class="tag">早上要补回</span>':'<span class="tag ok">正常</span>'}</div>
       <div class="gstats"><div><b>${g.today}</b><span>今天消息</span></div><div><b>${g.her_today}</b><span>她说的</span></div><div><b>${g.mentions_today}</b><span>有人找她</span></div><div><b>${g.effect_rate==null?"—":Math.round(g.effect_rate*100)+"%"}</b><span>说完有人接</span></div></div>
-      ${g.mood?`<div class="small muted" style="margin:-2px 0 8px">在这个群：${esc(g.mood)}${g.own_knobs.length?` · 单独调过 ${g.own_knobs.length} 个开关`:""}</div>`:""}
+      ${multi()&&g.mood?`<div class="meta">在这个群：${esc(g.mood)}${g.own_knobs.length?` · 单独调过 ${g.own_knobs.length} 个开关`:""}</div>`:""}
       ${lm?`<div class="glast" title="${esc(lm.content)}"><b>${lm.role==="assistant"?esc(p.name):esc(lm.name)}</b>：${esc(lm.content)} <span class="muted">· ${ago(lm.ts)}</span></div>`:'<div class="glast muted">还没有消息</div>'}
-      <div class="f"><button class="btn sm pri" data-open="${g.id}">${icon("chat")}看聊天</button><span class="small muted">累计 ${g.total} 条 · 她 ${g.her} 条</span></div></div>`}).join("")||'<div class="empty">还没配置群（双击 setup.bat）</div>';
+      <div class="f"><button class="btn sm pri" data-open="${g.id}">${icon("chat")}看聊天</button><span class="meta">累计 ${g.total} 条 · 她 ${g.her} 条</span></div></div>`}).join("")||'<div class="empty">还没配置群（双击 setup.bat）</div>';
+  {const m=S.groups.length>1;$("groups").classList.toggle("multi",m);   // 好几个群：群卡片并排占一整行
+    for(const [id,a,b] of [["recentCard","c8","c12"],["groupsCard","c4","c12"]]){$(id).classList.toggle(a,!m);$(id).classList.toggle(b,m)}}
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>{GSEL=+b.dataset.open;go("chat")});
   paintIcons();
 }
@@ -999,7 +836,14 @@ function mkSeg(el,opts,sel,cb){
   el.querySelectorAll("button").forEach(b=>b.onclick=()=>cb(b.dataset.v))}
 const multi=()=>S&&S.groups.length>1;
 const gdots=ids=>multi()&&ids&&ids.length?`<span class="gdots" title="${esc(ids.map(gname).join("、"))}">${ids.map(g=>`<i style="background:${hue(g)}"></i>`).join("")}</span>`:"";
-let HSEL="all";
+let HSEL="all",CHART="hour";
+document.querySelectorAll("#chartSeg button").forEach(b=>b.onclick=()=>{CHART=b.dataset.c;document.querySelectorAll("#chartSeg button").forEach(x=>x.classList.toggle("on",x===b));
+  $("hourBox").hidden=CHART!=="hour";$("dayBox").hidden=CHART!=="day";$("chartT").textContent=CHART==="hour"?"今天每小时的消息":"最近两周每天的消息";if(S)paintCharts()});
+/* 首屏标题最多 16 个字：长了就在第一个逗号处断开 */
+function splitHead(t){t=String(t||"").trim();if(t.length<=16)return[t,""];
+  const i=t.search(/[，,；;。！？!?]/);if(i>3&&i<=20)return[t.slice(0,i),t.slice(i+1).replace(/^[\s，,]+/,"")];return[t,""]}
+/* 群友名字里常有装饰符号（࿐、ꦿ、✧ 这些），卡片上去掉，悬停还能看到原名 */
+const nameText=s=>String(s||"").replace(/[\u0F00-\u0FFF\uA980-\uA9DF\u2700-\u27BF\u2600-\u26FF\u2E80-\u2E99\u3000-\u303F\uFE00-\uFE0F\u200B-\u200F\u0300-\u036F\u1AB0-\u1AFF\u20D0-\u20FF]|[\u{1F300}-\u{1FAFF}]/gu,"").replace(/\s{2,}/g," ").trim()||String(s||"");
 function paintCharts(){const hb=HSEL!=="all"&&S.hours.by?S.hours.by[HSEL]:null,H=hb||S.hours;
   /* 17.0 工作台顶上一个群切换：图表、去聊天都跟着它 */
   $("wbseg").hidden=!multi();if(multi())mkSeg($("wbseg"),[["all","全部群"],...S.groups.map(g=>[String(g.id),g.name,g.today])],HSEL,v=>{HSEL=v;if(v!=="all")GSEL=+v;paintCharts()});
@@ -1100,12 +944,13 @@ async function loadRel(){if(!S||!S.groups.length){$("relCard").hidden=true;retur
   $("relseg").hidden=!multi();if(multi())mkSeg($("relseg"),S.groups.map(g=>[String(g.id),g.name]),RELG,v=>{RELG=v;loadRel()});
   let d;try{d=await api("/api/insight?gid="+RELG)}catch(e){$("relPairs").innerHTML='<div class="small muted">没加载出来</div>';return}
   const mx=Math.max(1,...d.pairs.map(x=>x.score));
-  $("relPairs").innerHTML=d.pairs.length?d.pairs.map(x=>`<div class="relpair"><div class="w"><b>${esc(x.a)}</b> 和 <b>${esc(x.b)}</b>
+  $("relPairs").innerHTML=d.pairs.length?d.pairs.map(x=>`<div class="relpair"><div class="w"><b title="${esc(x.a)}">${esc(nameText(x.a))}</b> 和 <b title="${esc(x.b)}">${esc(nameText(x.b))}</b>
       <div class="small muted">${[x.reply?`互相回复 ${x.reply} 次`:"",x.at?`@ 对方 ${x.at} 次`:"",x.next?`紧接着说话 ${x.next} 次`:""].filter(Boolean).join(" · ")}</div></div>
       <div class="bar" title="分数 ${x.score}"><span style="width:${Math.max(6,x.score/mx*100)}%"></span></div></div>`).join("")+(d.pairs_ts?`<div class="small muted" style="margin-top:6px">${ago(d.pairs_ts)}整理</div>`:"")
     :'<div class="small muted">还看不出来谁和谁常聊（群里聊满两周、每晚整理后才有）</div>';
-  $("relExp").innerHTML=d.experience.length?d.experience.map(x=>`<div class="exp"><b>${esc(x.name)}</b> <span class="small muted">· 接了 ${x.good} 次、冷场 ${x.bad} 次 · ${ago(x.ts)}</span><ul>${x.lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul></div>`).join("")
+  $("relExp").innerHTML=d.experience.length?d.experience.map(x=>`<div class="exp ${x.lines.length>2?"fold":""}"><b title="${esc(x.name)}">${esc(nameText(x.name))}</b> <span class="small muted">· 接了 ${x.good} 次、冷场 ${x.bad} 次 · ${ago(x.ts)}</span><ul>${x.lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>${x.lines.length>2?`<button class="lk" data-unfold>还有 ${x.lines.length-2} 条</button>`:""}</div>`).join("")
     :'<div class="small muted">还没攒够（她对一个人说过 5 次以上、有接有冷场，才会总结一份）</div>';
+  $("relExp").querySelectorAll("[data-unfold]").forEach(b=>b.onclick=()=>{const e=b.closest(".exp");e.classList.toggle("fold");b.textContent=e.classList.contains("fold")?`还有 ${e.querySelectorAll("li").length-2} 条`:"收起"});
 }
 const score=x=>3*x.mentions+Math.min(x.msgs,300)/10;
 function renderPeople(){
@@ -1125,13 +970,13 @@ function renderPeople(){
     +(CK.n?` 你抽查过 ${CK.n} 项，对了 ${Math.round((CK.acc||0)*100)}%`+((CK.fields||[]).filter(f=>f.acc<.7).length?`（最常写错：${CK.fields.filter(f=>f.acc<.7).slice(0,3).map(f=>f.field).join("、")}）`:"")+"。":"");
   $("ppl").innerHTML=L.map(x=>{const v=view(x),pr=v?(v.brief||{}):(x.profile||{}),imp=v?v.note:(pr["印象"]||x.note),mx=Math.max(1,...x.hours);
     const rows=[["称呼",pr["称呼"]],["性格",pr["性格"]],["兴趣",pr["兴趣"]],["近况",pr["近况"]]].filter(r=>r[1]);
-    return `<button class="pcard" data-u="${x.user_id}"><div class="h"><div class="pa" style="background:${hue(x.user_id)}">${esc(initial(x.name))}</div>
-      <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)}${(x.aliases||[]).length?` <span class="muted small">· ${esc(x.aliases.join("、"))}</span>`:""}${gdots(x.groups)} ${x.owner?'<span class="tag" style="height:18px">你</span>':""}</div><div class="uid">${x.user_id}</div></div>${famTag(x.familiarity)}</div>
+    return `<button class="pcard" data-u="${x.user_id}"><div class="h"><div class="pa" style="background:${hue(x.user_id)}">${esc(initial(nameText(x.name)))}</div>
+      <div class="nmw"><div class="nm" title="${esc(x.name)}">${esc(nameText(x.name))}${(x.aliases||[]).length?` <span class="muted small">· ${esc(x.aliases.map(nameText).join("、"))}</span>`:""}${gdots(x.groups)} ${x.owner?'<span class="tag ok">你</span>':""}</div><div class="uid">${x.user_id}</div></div>${famTag(x.familiarity)}</div>
       <div class="imp ${imp?"":"none"}">${esc(imp||"她还不太了解这个人")}</div>
       ${rows.length?`<dl class="kv2">${rows.slice(0,3).map(([a,b])=>`<dt>${a}</dt><dd title="${esc(b)}">${esc(b)}</dd>`).join("")}</dl>`:""}
-      <div class="ft"><div><b class="num" style="color:var(--ink);font-size:13px">${v?v.msgs||0:x.msgs}</b> 句 · 找她 <b class="num" style="color:var(--ink);font-size:13px">${x.mentions}</b> 次<br>${ago(x.last_seen)}${x.when?" · "+esc(x.when):""}</div>
+      <div class="ft"><div><b class="num">${v?v.msgs||0:x.msgs}</b> 句 · 找她 <b class="num">${x.mentions}</b> 次<br>${ago(x.last_seen)}${x.when?" · "+esc(x.when):""}</div>
         <div class="spark" title="24 小时里什么时候说话">${x.hours.map(v=>`<i class="${v?"":"z"}" style="height:${v?Math.max(12,v/mx*100):8}%"></i>`).join("")}</div></div></button>`}).join("")
-    ||`<div class="empty" style="grid-column:1/-1">${P.list.length?"没有符合的人":"她还不认识群里的人（群里聊一阵子就有了）"}</div>`;
+    ||`<div class="empty">${P.list.length?"没有符合的人":"她还不认识群里的人（群里聊一阵子就有了）"}</div>`;
   document.querySelectorAll(".pcard").forEach(c=>c.onclick=()=>openPerson(+c.dataset.u,pg));
 }
 $("pq").oninput=()=>{P.q=$("pq").value.trim();renderPeople()};
@@ -1146,7 +991,7 @@ async function openPerson(uid,gsel){
   else if(!same||!has(DG))DG=per.length?String([...per].sort((a,b)=>(b.last_seen||0)-(a.last_seen||0))[0].gid):null;
   const G=per.find(g=>String(g.gid)===DG)||null,pr=G?G.profile:(x.profile||{});
   $("dAva").style.background=hue(x.user_id);$("dAva").textContent=initial(x.name);
-  $("dName").innerHTML=`${esc(x.name)} ${famTag(x.familiarity)}`;
+  $("dName").innerHTML=`<span title="${esc(x.name)}">${esc(nameText(x.name))}</span> ${famTag(x.familiarity)}`;
   const upd=G?G.updated:x.updated,since=G?G.since_update:x.since_update;
   $("dSub").textContent=`编号 ${x.user_id}${x.owner?" · 就是你":""} · ${G&&per.length>1?`在「${G.name}」的`:""}画像${upd?"更新于 "+ago(upd):"还没整理"}${since?` · 之后又说了 ${since} 句`:""}`;
   const hrs=G?G.hours:x.hours,when=G?G.when:x.when;
@@ -1218,10 +1063,11 @@ $("saveSelf").onclick=async()=>{try{const r=await api("/api/her/self_notes",{tex
 /* ============ 学到的 ============ */
 let LSEL=null;
 const LST={ok:"用",no:"不用",new:"自动"};
-function lBtns(kind,x){return ["ok","no","new"].map(st=>`<button class="btn sm ${x.status===st?"pri":"ghost"}" data-lk="${kind}" data-id="${x.id}" data-st="${st}">${LST[st]}</button>`).join("")
+const tri=(attr,x)=>`<span class="tri" role="group" aria-label="用不用">${["ok","new","no"].map(st=>`<button type="button" class="${x.status===st?"on "+st:""}" aria-pressed="${x.status===st}" ${attr} data-st="${st}">${LST[st]}</button>`).join("")}</span>`;
+function lBtns(kind,x){return tri(`data-lk="${kind}" data-id="${x.id}"`,x)
   +`<button class="btn sm ghost danger" data-lk="${kind}" data-id="${x.id}" data-del="1" title="删掉" aria-label="删掉">${icon("x")}</button>`}
 async function loadLearn(){
-  if(!S)await loadState();if(!S||!S.groups.length){$("exList").innerHTML='<li class="empty" style="display:block">还没配置群</li>';return}
+  if(!S)await loadState();if(!S||!S.groups.length){$("exList").innerHTML='<li class="empty">还没配置群</li>';return}
   if(!LSEL||!S.groups.some(g=>g.id===LSEL))LSEL=S.groups[0].id;
   mkSeg($("lseg"),S.groups.map(g=>[String(g.id),g.name]),LSEL,v=>{LSEL=+v;loadLearn()});
   $("lseg").hidden=S.groups.length<2;
@@ -1241,42 +1087,45 @@ async function loadLearn(){
     ["评审均分",gt.judge&&gt.judge.n?gt.judge.avg+" / 100":"没跑"],
     ["自我调整",gt.refit&&gt.refit.day?(gt.refit.used?"已换新权重":"新权重没更好"):"未到 500"]]
     .map(([a,b])=>`<div><b>${esc(b)}</b><span>${a}</span></div>`).join("");
+  $("gateMore").textContent=`门控细节 ${$("gateKpi").children.length} 项`;
+  $("gate3").innerHTML=[["想开口的门槛",gt.threshold>1?"今天不说了":gt.threshold.toFixed(2),`话痨度 ${pct(gt.talkativeness)}`],["1 小时里主动说",gt.spoke+" 次",gt.backoff?`退避 ${gt.backoff} 秒`:"没在退避"],["精力",pct(gt.energy),gt.ignored?`没人接 ${gt.ignored} 次`:"说了都有人接"]]
+    .map(([a,b,c])=>`<div class="stat"><div class="l">${a}</div><div class="v">${esc(b)}</div><div class="d">${esc(c)}</div></div>`).join("");
   $("gateAtt").innerHTML=gt.attention.length?'<span class="small muted" style="margin-right:4px">正在注意：</span>'+gt.attention.map(a=>`<span class="tag ok">${esc(a.name)} · ${Math.round(a.v*100)}%</span>`).join("")
     :'<span class="small muted">现在没在跟谁聊</span>';
   $("exList").innerHTML=r.expressions.length?r.expressions.map(x=>`<li><div class="grow"><div>当<b>${esc(x.situation)}</b>时，${esc(x.style)}</div>
       <div class="meta">出现 ${x.count} 次 · ${x.used?'<span style="color:var(--accent-ink)">会用</span>':"暂不用"} · ${ago(x.updated)}</div></div>
-      <div class="chips" style="flex-wrap:nowrap">${lBtns("expression",x)}</div></li>`).join("")
-    :'<li class="empty" style="display:block">还没学到（每个群攒够一批消息后整理一次）</li>';
+      <div class="lrow-acts">${lBtns("expression",x)}</div></li>`).join("")
+    :'<li class="empty">还没学到（每个群攒够一批消息后整理一次）</li>';
   $("jgList").innerHTML=r.jargon.length?r.jargon.map(x=>`<li><div class="grow"><div><b>${esc(x.term)}</b>${x.meaning?"："+esc(x.meaning):'<span class="muted">（出现 4 次后猜意思）</span>'}</div>
       <div class="meta">出现 ${x.count} 次 · ${x.is_jargon===1?"真黑话":x.is_jargon===0?"普通词":"待判断"}${x.guess?" · 字面猜："+esc(x.guess):""} · ${x.used?'<span style="color:var(--accent-ink)">会用</span>':"暂不用"}</div></div>
-      <div class="chips" style="flex-wrap:nowrap">${lBtns("jargon",x)}</div></li>`).join("")
-    :'<li class="empty" style="display:block">还没发现黑话</li>';
+      <div class="lrow-acts">${lBtns("jargon",x)}</div></li>`).join("")
+    :'<li class="empty">还没发现黑话</li>';
   $("factList").innerHTML=r.facts.length?r.facts.map(f=>{const dead=f.t_invalid&&f.t_invalid*1000<Date.now(),till=f.t_invalid&&!dead;const src={self:"他自己说的",other:"听别人说的",guess:"猜的"}[f.source]||"";return `<li><div class="grow"><div>${dead?'<s class="muted">':''}<b>${esc(f.about)}</b>：${esc(f.text)}${dead?'</s>':''}</div>
       <div class="meta">${src?`<span class="tag ${f.source==="self"?"ok":f.source==="guess"?"wait":""} fsrc">${src}</span> `:""}${fmtDay(f.t_valid)} 起 · ${dead?"已过时":till?"有效到 "+fmtDay(f.t_invalid):"一直有效"} · 想起 ${f.hits} 次</div></div>
-      <div class="chips" style="flex-wrap:nowrap"><button class="btn sm ghost" data-fact="${f.id}" data-act="${dead?"restore":"expire"}">${dead?"恢复":"过时"}</button>
+      <div class="lrow-acts"><button class="btn sm ghost" data-fact="${f.id}" data-act="${dead?"restore":"expire"}">${dead?"恢复":"过时"}</button>
       <button class="btn sm ghost danger" data-fact="${f.id}" data-act="delete" aria-label="删掉">${icon("x")}</button></div></li>`}).join("")
-    :'<li class="empty" style="display:block">还没记什么事（整理群聊时会记）</li>';
+    :'<li class="empty">还没记什么事（整理群聊时会记）</li>';
   $("normText").value=r.norms||"";
-  $("stkList").innerHTML=r.stickers.length?r.stickers.map(x=>`<div class="card" style="padding:8px;text-align:center"><img src="api/sticker?id=${x.id}" alt="${esc(x.descr||x.emotion||"表情包")}" style="max-width:100%;height:90px;object-fit:contain">
+  $("stkList").innerHTML=r.stickers.length?r.stickers.map(x=>`<div class="stk"><img src="api/sticker?id=${x.id}" alt="${esc(x.descr||x.emotion||"表情包")}">
       <div class="small"><b>${esc(x.emotion||"还没懂")}</b>${x.usage?" · "+esc(x.usage):""}</div><div class="meta small muted">见过 ${x.seen} 次 · ${x.users} 人 · 她用了 ${x.used} 次</div>
-      <div class="chips" style="justify-content:center">${["ok","no","new"].map(st=>`<button class="btn sm ${x.status===st?"pri":"ghost"}" data-stk="${x.id}" data-st="${st}">${LST[st]}</button>`).join("")}</div></div>`).join("")
-    :'<div class="small muted">还没存表情包</div>';
+      ${tri(`data-stk="${x.id}"`,x)}</div>`).join("")
+    :'<div class="empty">还没存表情包</div>';
   $("dailyList").innerHTML=r.daily.length?r.daily.map(d=>`<li><div class="grow"><div><b>${esc(d.day)}</b> · ${d.msgs} 条 · ${d.people} 人说话 · 她说了 ${d.her} 条${d.effect.n?` · 她说完有人接 ${d.effect.engaged}/${d.effect.n}`:""}</div>
       <div class="meta">${d.top.map(t=>esc(t[0])+" "+t[1]).join("、")}</div>${(d.highlights||[]).map(h=>`<div class="small">· ${esc(h)}</div>`).join("")}</div></li>`).join("")
-    :'<li class="empty" style="display:block">还没有日报（每天早上整理前一天）</li>';
+    :'<li class="empty">还没有日报（每天早上整理前一天）</li>';
   $("knowList").innerHTML=(r.knowledge||[]).length?r.knowledge.map(k=>`<li><div class="grow"><div><b>${esc(k.topic)}</b>：${esc(k.summary)}</div>
     <div class="small muted">${k.source==="link"?"群友发的链接":"搜的：「"+esc(k.query)+"」"} · 想起来 ${k.hits} 次 · ${esc((k.keys||[]).join(" / "))}</div></div>
-    <button class="btn sm ghost danger" data-know="${k.id}" aria-label="删掉">${icon("x")}</button></li>`).join(""):'<li class="empty" style="display:block">还没有：群友发链接、问她不知道的事时会慢慢攒起来</li>';
+    <button class="btn sm ghost danger" data-know="${k.id}" aria-label="删掉">${icon("x")}</button></li>`).join(""):'<li class="empty">还没有：群友发链接、问她不知道的事时会慢慢攒起来</li>';
   document.querySelectorAll("[data-know]").forEach(b=>b.onclick=async()=>{if(!confirm("删掉这条？她就不记得了"))return;
     try{const x=await api("/api/knowledge",{id:+b.dataset.know});toast(x.message||x.error);loadLearn()}catch(e){toast("出错了："+e.message)}});
   $("loreList").innerHTML=(r.lore||[]).length?r.lore.map(e=>`<li><div class="grow"><div><b>${esc(e.keys.join(" / "))}</b>：${esc(e.content)}</div>
       <div class="meta">${e.source==="auto"?"自动":"手写"} · 触发 ${e.fires} 次 · 冷却 ${e.cooldown} 条</div></div>
-      <div class="chips" style="flex-wrap:nowrap">${["ok","no","new"].map(st=>`<button class="btn sm ${e.status===st?"pri":"ghost"}" data-lore="${e.id}" data-st="${st}">${LST[st]}</button>`).join("")}
+      <div class="lrow-acts">${tri(`data-lore="${e.id}"`,e)}
       <button class="btn sm ghost danger" data-lore="${e.id}" data-del="1" aria-label="删掉">${icon("x")}</button></div></li>`).join("")
-    :'<li class="empty" style="display:block">还没有词条（整理群聊时会把群梗、黑话自动加进来，也可以自己写）</li>';
+    :'<li class="empty">还没有词条（整理群聊时会把群梗、黑话自动加进来，也可以自己写）</li>';
   document.querySelectorAll("[data-lore]").forEach(b=>b.onclick=async()=>{const body={id:+b.dataset.lore};if(b.dataset.del){if(!confirm("删掉这条？"))return;body.delete=true}else body.status=b.dataset.st;
     try{const x=await api("/api/lore",body);toast(x.message||x.error);loadLearn()}catch(e){toast("出错了："+e.message)}});
-  loadPair();loadLabel();
+  loadPair();loadLabel();markEmpty();
   document.querySelectorAll("[data-fact]").forEach(b=>b.onclick=async()=>{const a=b.dataset.act;if(a==="delete"&&!confirm("删掉这条？"))return;
     try{const x=await api("/api/learned/fact",{id:+b.dataset.fact,delete:a==="delete",expire:a==="expire"});toast(x.message);loadLearn()}catch(e){toast("出错了："+e.message)}});
   document.querySelectorAll("[data-stk]").forEach(b=>b.onclick=async()=>{try{const x=await api("/api/learned/sticker",{id:+b.dataset.stk,status:b.dataset.st});toast(x.message);loadLearn()}catch(e){toast("出错了："+e.message)}});
@@ -1293,7 +1142,7 @@ $("loreAdd").onclick=async()=>{try{const x=await api("/api/lore",{gid:LSEL,keys:
 let PAIR=null;
 async function loadPair(){try{const r=await api(`/api/pairs/next?gid=${LSEL}`);PAIR=r.pair;const s=r.stats;
   $("pairStat").textContent=s.n?`挑了 ${s.n} 组 · 和质检一致 ${s.agree_rate==null?"—":Math.round(s.agree_rate*100)+"%"} · 都不好 ${s.bad}`:"两种说法里哪个更像她？你挑的会用来教她（AI 腔检测器）";
-  if(!PAIR){$("pairBox").innerHTML='<div class="small muted">暂时没有可以挑的（她给出两种说法时才有）</div>';return}
+  if(!PAIR){$("pairBox").innerHTML='<div class="empty">暂时没有可以挑的（她给出两种说法时才有）</div>';markEmpty();return}
   const opt=(k,t)=>`<button class="btn" data-pick="${k}" style="flex:1;text-align:left;white-space:normal;height:auto;padding:10px 12px">${t.map(esc).join("<br>")}</button>`;
   $("pairBox").innerHTML=`<div class="small muted" style="margin-bottom:8px">${PAIR.context.map(esc).join("<br>")}</div>
     <div class="tools" style="gap:10px;align-items:stretch">${opt(0,PAIR.a)}${opt(1,PAIR.b)}</div>
@@ -1375,14 +1224,19 @@ async function loadKnobs(){
     $("kNote").textContent=gm?`这里调的只对「${gname(+KG)}」生效，盖在全局上面；没单独调过的跟着全局走。灰掉的只能在全局里调。`:"几个群热闹程度不一样？切到某一个群，单独调它的话痨度、冒泡时段这些。"}
   $("resetAll").textContent=gm?"这个群全部跟回全局":"全部恢复";
   const listed=new Set(KGROUPS.flatMap(g=>g[1])),rest=Object.keys(K).filter(k=>!listed.has(k));
-  $("knobs").innerHTML=[...KGROUPS,...(rest.length?[["其他",rest]]:[])].map(([t,keys])=>`<div class="sec-t" style="margin-top:6px">${t}</div><div class="knobs">${keys.filter(k=>K[k]).map(k=>{const it=K[k];
+  const GR=[...KGROUPS,...(rest.length?[["其他",rest]]:[])].map(([t,keys])=>[t,keys.filter(k=>K[k])]).filter(g=>g[1].length);
+  $("kdir").innerHTML=GR.map(([t,keys],i)=>{const n=keys.filter(k=>K[k].changed).length;return `<button type="button" data-kg="${i}">${esc(t)}${n?`<span class="n">${n}</span>`:""}</button>`}).join("");
+  $("kdir").querySelectorAll("[data-kg]").forEach(b=>b.onclick=()=>{const el=$("kg_"+b.dataset.kg);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})});
+  $("kChangedN").textContent=Object.values(K).filter(x=>x.changed).length||"";
+  $("knobs").innerHTML=GR.map(([t,keys],gi)=>`<div class="kgroup" id="kg_${gi}"><div class="sec-t">${esc(t)}</div><div class="knobs">${keys.map(k=>{const it=K[k];
     const dis=gm&&it.global_only?"disabled":"";
     const ctl=it.kind==="bool"?`<label class="switch" aria-label="${esc(it.label)}"><input type="checkbox" data-k="${k}" ${it.value?"checked":""} ${dis}><span></span></label>`
-      :it.kind==="str"?`<input class="input" data-k="${k}" value="${esc(it.value||"")}" style="width:${k==="group_note"?"min(100%,420px)":"130px"};height:30px" ${dis}>`
+      :it.kind==="str"?`<input class="input ${k==="group_note"?"wide":"short"}" data-k="${k}" value="${esc(it.value||"")}" ${dis}>`
       :`<span class="val" id="v_${k}">${esc(kfmt(it,it.value))}</span>`;
     return `<div class="knob ${it.changed?"changed":""}${gm&&it.global_only?" off":""}" id="k_${k}"><div class="top-l"><span class="lb">${esc(it.label)}</span>${ctl}</div>
       ${it.kind==="float"||it.kind==="int"?`<input type="range" data-k="${k}" min="${it.min}" max="${it.max}" step="${it.step}" value="${it.value}" aria-label="${esc(it.label)}" ${dis}>`:""}
-      <div class="hint">${esc(it.hint)}${it.hint?" · ":""}<span class="base">${gm?(it.global_only?"只能全局调 · ":"")+"全局 ":"原来 "}${esc(kfmt(it,it.base))}</span>${!gm&&(it.groups||[]).length?` · <span class="tag wait" style="height:18px">${esc(it.groups.map(gname).join("、"))}单独调过</span>`:""}${it.changed?` · <button class="btn ghost sm" style="height:20px;padding:0 4px" data-reset="${k}">恢复</button>`:""}</div></div>`}).join("")}</div>`).join("");
+      <div class="hint">${esc(it.hint)}${it.hint?" · ":""}<span class="base">${gm?(it.global_only?"只能全局调 · ":"")+"全局 ":"原来 "}${esc(kfmt(it,it.base))}</span>${!gm&&(it.groups||[]).length?` · <span class="tag wait">${esc(it.groups.map(gname).join("、"))}单独调过</span>`:""}${it.changed?` · <button class="lk" data-reset="${k}">恢复</button>`:""}</div></div>`}).join("")}</div></div>`).join("");
+  kFilter();
   let t={};
   $("knobs").querySelectorAll("[data-k]").forEach(inp=>{const k=inp.dataset.k,it=K[k];
     const send=v=>{clearTimeout(t[k]);t[k]=setTimeout(async()=>{try{await api("/api/settings",{values:{[k]:v},gid:gm?+KG:undefined});it.changed=true;$("k_"+k).classList.add("changed");toast(`${it.label}：${kfmt(it,v)}（已生效）`)}catch(e){toast("出错了："+e.message)}},400)};
@@ -1391,6 +1245,18 @@ async function loadKnobs(){
     else inp.onchange=()=>send(inp.value)});
   $("knobs").querySelectorAll("[data-reset]").forEach(b=>b.onclick=async()=>{await api("/api/settings",{reset:b.dataset.reset,gid:gm?+KG:undefined});toast(gm?"跟回全局了":"恢复了");loadKnobs()});
 }
+/* 18.0 空的卡片不占一整行：两张并排、内容区收紧（单数时最后一张占满） */
+function markEmpty(){document.querySelectorAll(".page .grid>.card").forEach(c=>{const b=c.querySelector(".card-b:last-child")||c.querySelector(".card-b"),e=b&&b.querySelector(".empty,.small.muted:only-child");
+  c.classList.toggle("is-empty",!!e&&!c.querySelector("input,textarea,select,#labCard *")&&c.id!=="labCard"&&b.textContent.trim()===e.textContent.trim())});
+  document.querySelectorAll(".page .grid").forEach(g=>{const es=[...g.querySelectorAll(":scope>.card.is-empty")];g.querySelectorAll(".card.wide").forEach(c=>c.classList.remove("wide"));if(es.length%2)es[es.length-1].classList.add("wide")})}
+/* 18.0 性格开关：搜一下、只看调过的 */
+let KF="all";
+function kFilter(){const q=($("kq").value||"").trim().toLowerCase();
+  document.querySelectorAll("#knobs .knob").forEach(el=>{const it=K[el.id.slice(2)]||{};
+    const hit=(!q||(String(it.label)+" "+String(it.hint)+" "+el.id).toLowerCase().includes(q))&&(KF==="all"||it.changed);el.hidden=!hit});
+  document.querySelectorAll("#knobs .kgroup").forEach(g=>g.hidden=!g.querySelector(".knob:not([hidden])"))}
+$("kq").addEventListener("input",kFilter);
+document.querySelectorAll("#kf button").forEach(b=>b.onclick=()=>{KF=b.dataset.f;document.querySelectorAll("#kf button").forEach(x=>x.classList.toggle("on",x===b));kFilter()});
 $("resetAll").onclick=async()=>{const gm=KG!=="all";if(!confirm(gm?`「${gname(+KG)}」单独调过的开关全部跟回全局？`:"所有开关恢复成 config.yaml 里的值？（每个群单独调过的不动）"))return;
   await api("/api/settings",{reset:true,gid:gm?+KG:undefined});toast(gm?"这个群跟回全局了":"全部恢复了");loadState();loadKnobs()};
 
@@ -1486,9 +1352,10 @@ for(const [id,photo] of [["lfShare",false],["lfPhoto",true]])$(id).onclick=async
 
 /* ============ 4.2 管理 / 回首页 ============ */
 function setAdmin(on){document.body.classList.toggle("admin",on);try{localStorage.setItem("gadmin",on?"1":"")}catch(e){}
+  $("admTxt").textContent=on?"关上管理":"打开管理（性格开关、大模型、日志）";
   document.querySelectorAll(".adm-only").forEach(e=>e.hidden=!on)}
 let ADM=false;try{ADM=!!localStorage.getItem("gadmin")}catch(e){}
-$("admbtn").onclick=()=>{ADM=!document.body.classList.contains("admin");setAdmin(ADM);if(!ADM&&["knobs","llm","log"].includes(cur))go("home")};
+$("admbtn").onclick=()=>{menu(false);ADM=!document.body.classList.contains("admin");setAdmin(ADM);if(!ADM&&["knobs","llm","log"].includes(cur))go("home");else if(ADM)go("knobs")};
 if(/^\/(yuki|qq|wx)\//.test(location.pathname)){$("hub").hidden=false;$("hub").innerHTML=icon("home")}
 
 /* ============ 定时刷新 ============ */

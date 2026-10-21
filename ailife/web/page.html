@@ -5,370 +5,243 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>小屋</title>
-<style>
-/* 17.0：颜色令牌、时段主题、深色模式都在 tokens.css（和群小屋共用），这里只剩这一页自己的样子 */
-/* ============ 基础 ============ */
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-html,body{margin:0;background:var(--bg);color:var(--ink)}
-body{font:14px/1.6 var(--font);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
-button,input,select,textarea{font:inherit;color:inherit}
-svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.num{font-variant-numeric:tabular-nums}
-.muted{color:var(--ink-3)} .report{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-.rep{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
-.rep .k{font-size:12px;color:var(--ink-3)} .rep .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
-.rep .t{font-size:11.5px;color:var(--ink-3)} .rep .t.bad{color:var(--bad)} .rep .t.good{color:var(--good)}
-.pwarn{font-size:13px;color:var(--warn);line-height:1.8;margin-top:8px}
-.mono{font-family:var(--mono,ui-monospace,Consolas,monospace)}
-.ink2{color:var(--ink-2)} .small{font-size:12.5px}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-
-/* ============ 顶栏 ============ */
-.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);
-  backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
-.top-in{max-width:1180px;margin:0 auto;padding:12px 20px 0;display:flex;flex-direction:column;gap:10px}
-.brand{display:flex;align-items:center;gap:12px;min-width:0}
-.ava{width:40px;height:40px;border-radius:50%;flex:none;background:#6a43c4 center/cover no-repeat;color:#fff;
-  display:grid;place-items:center;font-weight:650;font-size:17px;position:relative}
-.ava::after{content:"";position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;border-radius:50%;background:var(--good);border:2px solid var(--bg)}
-.brand h1{margin:0;font-size:16px;font-weight:650;letter-spacing:.2px}
-.brand .sub{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.brand .grow{flex:1;min-width:0}
-.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer;color:var(--ink-2)}
-.iconbtn:hover{color:var(--ink);border-color:var(--line-2)}
-nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -4px}
-nav.tabs::-webkit-scrollbar{display:none}
-nav.tabs button{border:0;background:none;padding:9px 12px 11px;cursor:pointer;color:var(--ink-3);font-weight:550;white-space:nowrap;
-  display:flex;align-items:center;gap:6px;border-bottom:2px solid transparent;margin-bottom:-1px}
-nav.tabs button:hover{color:var(--ink)}
-nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
-nav.tabs .badge{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--rose);color:#fff;font-size:11px;display:inline-grid;place-items:center}
-
-/* ============ 布局 ============ */
-main{max-width:1180px;margin:0 auto;padding:20px 20px 64px}
-.page{display:none} .page.on{display:block;animation:fade .18s ease}
-@keyframes fade{from{opacity:.4;transform:translateY(2px)}to{opacity:1;transform:none}}
-.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
-.c12{grid-column:span 12}.c8{grid-column:span 8}.c7{grid-column:span 7}.c6{grid-column:span 6}.c5{grid-column:span 5}.c4{grid-column:span 4}
-@media(max-width:920px){.c8,.c7,.c6,.c5,.c4{grid-column:span 12}}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);min-width:0}
-.card-h{display:flex;align-items:center;gap:10px;padding:16px 18px 0}
-.card-h h2{margin:0;font-size:14px;font-weight:650;display:flex;align-items:center;gap:8px}
-.card-h h2 svg{color:var(--ink-3)}
-.card-h .sp{flex:1}
-.card-h .hint{font-size:12px;color:var(--ink-3)}
-.card-b{padding:14px 18px 18px}
-.empty{color:var(--ink-3);font-size:13px;padding:22px 8px;text-align:center}
-
-/* ============ 概览：问候 ============ */
-.hello{display:flex;gap:18px;align-items:flex-start;padding:20px}
-.hello .big{width:64px;height:64px;font-size:26px}
-.hello .big::after{width:14px;height:14px}
-.hello h2{margin:0;font-size:20px;font-weight:650;letter-spacing:.2px}
-.hello .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:13px;background:var(--surface-2);color:var(--ink-2);font-size:12.5px;border:1px solid var(--line)}
-.pill b{color:var(--ink);font-weight:600}
-.pill.heart{background:var(--rose-soft);border-color:transparent;color:var(--rose)}
-.pill.heart b{color:var(--rose)}
-.said{margin-top:14px;position:relative;padding:10px 14px;border-radius:4px 14px 14px 14px;background:var(--surface-2);color:var(--ink);max-width:640px;font-size:14px}
-.said small{display:block;color:var(--ink-3);font-size:11.5px;margin-bottom:2px}
-
-/* ============ KPI ============ */
-.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line);border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden}
-.kpi{padding:16px 18px;background:var(--surface)}
-.kpi .l{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
-.kpi .v{font-size:24px;font-weight:650;line-height:1.3;margin-top:2px;letter-spacing:-.2px}
-.kpi .v small{font-size:12.5px;color:var(--ink-3);font-weight:500;margin-left:3px}
-.kpi.heart .v{color:var(--rose)}
-@media(max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi.heart{grid-column:span 2}.kpi{padding:12px 16px}.kpi .v{font-size:21px}}
-@media(max-width:560px){
-  .top-in{padding:10px 14px 0} main{padding:14px 12px 48px}
-  .hello{padding:16px;gap:14px} .hello .big{width:48px;height:48px;font-size:20px} .hello h2{font-size:17px}
-  .tl li{grid-template-columns:1fr;gap:2px}
-  .card-h{padding:14px 14px 0} .card-b{padding:12px 14px 14px}
-  .card-h .hint{display:none}
-}
-
-/* ============ 情绪 ============ */
-.meters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
-@media(max-width:640px){.meters{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.meter .top-l{display:flex;justify-content:space-between;align-items:baseline}
-.meter .name{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:7px}
-.meter .name i{width:10px;height:3px;border-radius:2px;background:var(--c)}
-.meter .val{font-size:20px;font-weight:650}
-.track{height:6px;border-radius:3px;background:var(--surface-3);margin-top:8px;overflow:hidden}
-.track span{display:block;height:100%;border-radius:3px;background:var(--c);transition:width .4s ease}
-.meter .note{font-size:11.5px;color:var(--ink-3);margin-top:6px}
-.chart{position:relative;margin-top:18px}
-.chart svg{display:block;width:100%;height:auto;overflow:visible}
-.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:10px;align-items:center}
-.legend span{display:inline-flex;align-items:center;gap:6px}
-.legend span i{width:14px;height:2px;border-radius:1px;background:var(--c)}
-.legend .sp{flex:1}
-.tip{position:absolute;pointer-events:none;z-index:5;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-lg);
-  border-radius:10px;padding:8px 10px;font-size:12px;min-width:120px;display:none}
-.tip .t{color:var(--ink-3);margin-bottom:4px}
-.tip .r{display:flex;align-items:center;gap:8px;justify-content:space-between}
-.tip .r span{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
-.tip .r span i{width:10px;height:2px;background:var(--c);border-radius:1px}
-.tip .r b{font-weight:650;color:var(--ink)}
-.linkbtn{border:0;background:none;padding:0;color:var(--ink-3);cursor:pointer;font-size:12px;text-decoration:underline;text-underline-offset:2px}
-table.dt{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
-table.dt th,table.dt td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
-table.dt th:first-child,table.dt td:first-child{text-align:left}
-table.dt th{color:var(--ink-3);font-weight:500}
-
-/* ============ 时间线 / 列表 ============ */
-.tl{list-style:none;margin:0;padding:0}
-.tl li{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:9px 0;border-top:1px dashed var(--line)}
-.tl li:first-child{border-top:0}
-.tl .t{font-size:12px;color:var(--accent-ink);font-weight:600;font-family:var(--mono);padding-top:1px}
-.tl li.now .t::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--rose);margin-right:6px;vertical-align:2px}
-.wx{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:10px 12px;border-radius:var(--r);background:var(--surface-2);font-size:12.5px;color:var(--ink-2)}
-.wx svg{margin-top:2px;color:var(--ink-3)}
-.rows{list-style:none;margin:0;padding:0}
-.rows li{display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
-.rows li:first-child{border-top:0}
-.rows .grow{flex:1;min-width:0;word-break:break-word}
-.rows .title{font-weight:550}
-.rows .meta{font-size:12px;color:var(--ink-3);margin-top:1px}
-.cd{flex:none;width:54px;height:48px;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;align-content:center;line-height:1.1}
-.cd b{font-size:17px;font-weight:650}
-.cd span{font-size:10.5px;color:var(--ink-3)}
-.cd.today{background:var(--rose);} .cd.today b,.cd.today span{color:#fff}
-.cd.soon b{color:var(--rose)}
-.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;background:var(--surface-2);color:var(--ink-2);font-size:11.5px;border:1px solid var(--line);white-space:nowrap}
-.tag.ok{background:color-mix(in srgb,var(--good) 12%,transparent);color:var(--good);border-color:transparent}
-.tag.no{background:var(--surface-2);color:var(--ink-3)}
-.tag.wait{background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn);border-color:transparent}
-
-/* ============ 按钮 / 表单 ============ */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 13px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;font-weight:550;font-size:13px;white-space:nowrap}
-.btn:hover{background:var(--surface-2)}
-.btn.pri{background:var(--solid);border-color:var(--solid);color:#fff}
-.btn.pri:hover{filter:brightness(1.1);background:var(--solid)}
-.btn:disabled{opacity:.55;cursor:default}
-.btn.sm{height:28px;padding:0 10px;font-size:12.5px;border-radius:8px}
-.btn.ghost{border-color:transparent;background:none;color:var(--ink-3)}
-.btn.ghost:hover{background:var(--surface-2);color:var(--ink)}
-.btn.ghost.danger:hover{color:var(--bad)}
-.input,select.input,textarea.input{height:36px;border:1px solid var(--line-2);background:var(--surface);border-radius:10px;padding:0 12px;min-width:0;outline:none;transition:border-color .15s,box-shadow .15s}
-textarea.input{height:auto;padding:9px 12px;width:100%;resize:vertical;line-height:1.6}
-.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-.form{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.form .input{flex:1 1 140px}
-.field{display:flex;flex-direction:column;gap:6px}
-.field label{font-size:12px;color:var(--ink-3);font-weight:550}
-.search{position:relative;flex:1;min-width:160px}
-.search svg{position:absolute;left:11px;top:10px;color:var(--ink-3)}
-.search .input{width:100%;padding-left:34px}
-.seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
-.seg button{border:0;background:none;height:28px;padding:0 12px;border-radius:7px;cursor:pointer;color:var(--ink-2);font-size:12.5px;font-weight:550;white-space:nowrap}
-.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.seg button .n{color:var(--ink-3);margin-left:4px;font-weight:500}
-
-/* ============ 记忆 ============ */
-.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.mems{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
-@media(max-width:760px){.mems{grid-template-columns:1fr}}
-.mem{display:flex;gap:10px;align-items:flex-start;padding:12px 12px 10px 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface)}
-.mem:hover{border-color:var(--line-2)}
-.mem .txt{flex:1;min-width:0;word-break:break-word}
-.mem .foot{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11.5px;color:var(--ink-3)}
-.stars{display:inline-flex;gap:1px}
-.stars button{border:0;background:none;padding:0 1px;cursor:pointer;color:var(--line-2);font-size:13px;line-height:1}
-.stars button.on{color:var(--warn)}
-.stars:hover button{color:var(--warn)} .stars button:hover~button{color:var(--line-2)}
-
-/* ============ 日记 / 信 ============ */
-.paper{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--surface);margin-bottom:12px}
-.paper .d{font-size:12px;color:var(--ink-3);display:flex;gap:8px;align-items:center;margin-bottom:6px}
-.paper .d b{color:var(--ink);font-weight:600}
-.paper p{margin:0;white-space:pre-wrap;line-height:1.85;color:var(--ink)}
-.letter{background:linear-gradient(var(--surface),var(--surface)) padding-box;border-left:3px solid var(--rose)}
-.scroll{max-height:560px;overflow:auto;padding-right:4px;scrollbar-width:thin}
-.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
-.photos a{display:block;aspect-ratio:3/4;border-radius:10px;background:var(--surface-2) center/cover no-repeat;border:1px solid var(--line);transition:transform .15s,box-shadow .15s}
-.links{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
-.link{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);min-width:0}
-.link i{width:10px;height:10px;border-radius:50%;flex:none;margin-top:5px;background:var(--c)}
-.link.green{--c:#1f9d55}.link.blue{--c:#2a78d6}.link.yellow{--c:#e0a100;border-color:color-mix(in srgb,#e0a100 45%,var(--line));background:color-mix(in srgb,#e0a100 7%,transparent)}.link.gray{--c:var(--line-2)}
-.link .n{font-weight:600;font-size:13px}.link .t{font-size:12px;color:var(--ink-3);word-break:break-word}
-.photos a:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
-
-/* ============ 留言板 ============ */
-.chat{display:flex;flex-direction:column;gap:10px;max-height:58vh;min-height:220px;overflow:auto;padding:4px 2px}
-.msg{max-width:78%;display:flex;flex-direction:column;gap:3px}
-.msg .b{padding:9px 13px;border-radius:14px;background:var(--surface-2);white-space:pre-wrap;word-break:break-word}
-.msg .w{font-size:11px;color:var(--ink-3);padding:0 4px}
-.msg.me{align-self:flex-end;align-items:flex-end}
-.msg.me .b{background:var(--solid);color:#fff;border-bottom-right-radius:4px}
-.msg.her .b{border-bottom-left-radius:4px}
-.composer{display:flex;gap:8px;margin-top:14px;align-items:flex-end}
-.composer textarea{flex:1}
-
-/* ============ 设置 ============ */
-.kv{display:grid;grid-template-columns:120px 1fr;gap:10px 16px;font-size:13px}
-.kv dt{color:var(--ink-3)} .kv dd{margin:0;word-break:break-all}
-code.k{font-family:var(--mono);font-size:12px;padding:3px 7px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);word-break:break-all}
-.copy{margin-left:6px}
-
-/* 故事线 / 想法 / 音乐 */
-.arc{padding:12px 0;border-top:1px solid var(--line)} .arc:first-child{border-top:0;padding-top:2px}
-.arc .h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.arc .h b{font-weight:650}
-.prog{display:flex;gap:4px;margin-left:auto}
-.prog i{width:14px;height:4px;border-radius:2px;background:var(--surface-3)} .prog i.on{background:var(--accent)}
-.beats{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line)}
-.beats li{position:relative;padding:3px 0 6px 10px;font-size:13px;color:var(--ink-2)}
-.beats li::before{content:"";position:absolute;left:-19px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--surface);border:2px solid var(--line-2)}
-.beats li.today{color:var(--ink)} .beats li.today::before{border-color:var(--accent);background:var(--accent)}
-.beats .d{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-right:8px}
-.thought{padding:12px 14px;border-radius:var(--r);background:var(--surface-2);font-size:14px;line-height:1.75;position:relative}
-.thought .meta{font-size:11.5px;color:var(--ink-3);margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.thoughts-old{list-style:none;margin:10px 0 0;padding:0}
-.thoughts-old li{font-size:12.5px;color:var(--ink-2);padding:6px 0;border-top:1px dashed var(--line)}
-.thoughts-old .t{font-family:var(--mono);color:var(--ink-3);margin-right:8px;font-size:11.5px}
-.profile{white-space:pre-wrap;line-height:1.85;font-size:14px}
-.song{display:flex;gap:10px;align-items:center}
-.song .art{width:34px;height:34px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;color:var(--ink-3);flex:none}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-.habit{display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
-.habit:first-child{border-top:0}
-.week{display:flex;gap:4px;margin-top:5px}
-.week i{width:16px;height:16px;border-radius:5px;background:var(--surface-3);display:block}
-.week i.on{background:var(--good)}
-.streak{font-size:12px;color:var(--ink-3)} .streak b{color:var(--ink);font-size:15px}
-.recap{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:12px}
-.recap h3{margin:0 0 6px;font-size:15px}
-.recap p{margin:8px 0 0;white-space:pre-wrap;line-height:1.85}
-.ink2{color:var(--ink-2)} .ink3{color:var(--ink-3)} .ok{color:var(--good)}
-.wish .grow,.cap .grow{flex:1;min-width:0}
-.wish{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
-.wish:first-child{border-top:0}
-.wish.done .title{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--line-2,var(--line))}
-.wish .by{font-size:11.5px;color:var(--ink-3)}
-.cap{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
-.cap:first-child{border-top:0}
-.cap .seal{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--surface-2);color:var(--ink-3);flex:none}
-.cap.open .seal{background:var(--accent-soft,var(--surface-2));color:var(--accent)}
-.cap .meta,.goal .meta{font-size:12px;color:var(--ink-3)}
-.cap p{margin:6px 0 0;white-space:pre-wrap;line-height:1.75;font-size:13.5px}
-.cap .reply{color:var(--ink-2)}
-.goal{padding:12px 0;border-top:1px solid var(--line)}
-.goal:first-child{border-top:0}
-.goal .bar{height:8px;border-radius:5px;background:var(--surface-3);overflow:hidden;margin:8px 0 6px}
-.goal .bar span{display:block;height:100%;background:var(--accent);border-radius:5px}
-.goal.done .bar span{background:var(--good)}
-.goal .steps{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px;color:var(--ink-2)}
-.goal .steps li{padding:3px 0}
-.goal .steps .d{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-right:8px}
-.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
-.person{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
-.person .n{font-weight:600}
-.person .r{font-size:11.5px;color:var(--ink-3);margin-left:6px}
-.person .d{font-size:12.5px;color:var(--ink-2);margin-top:4px;line-height:1.6}
-.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,8px);opacity:0;background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:10px;font-size:13px;z-index:50;transition:all .2s;pointer-events:none}
-.toast.on{opacity:1;transform:translate(-50%,0)}
-.foot{margin-top:28px;text-align:center;color:var(--ink-3);font-size:12px}
-.skel{opacity:.55}
-
-/* ============ 11.2 她的日子 / 管理 ============ */
-nav.tabs button.adm{display:none}
-body.admin nav.tabs button.adm{display:flex}
-nav.tabs .tsep{flex:1}
-nav.tabs button.admbtn{color:var(--ink-3)}
-body.admin nav.tabs button.admbtn{color:var(--accent-ink)}
-.pref{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:13px}
-.pref b{font-weight:600} .pref button{border:0;background:none;color:var(--ink-3);cursor:pointer;padding:0 4px;font-size:15px;line-height:1}
-.pref button:hover{color:var(--bad)}
-.frow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px} .frow .input{flex:1;min-width:120px}
-.kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
-.kcard{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--surface);display:flex;gap:8px;align-items:flex-start}
-.kcard p{margin:0;color:var(--ink-2);font-size:13px;flex:1} .kcard b{display:block;color:var(--ink);font-size:13.5px;margin-bottom:2px}
-@media (max-width:640px){.frow .input{min-width:100%}}
-
-/* ============ 11.4 回忆录 ============ */
-.mbooks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-.mbook{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface);cursor:pointer;text-align:left;padding:0;font:inherit;color:inherit;display:flex;flex-direction:column}
-.mbook:hover{border-color:var(--line-2)}
-.mbook .cv{height:120px;background:linear-gradient(140deg,var(--accent-soft),var(--surface-2));background-size:cover;background-position:center}
-.mbook .bd{padding:11px 13px} .mbook b{font-size:15px;display:block} .mbook .q{font-size:12px;color:var(--ink-3)}
-.mbook .ch{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.6}
-.mreader{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--bg) 55%,transparent);backdrop-filter:blur(6px);overflow:auto;padding:28px 16px}
-.mreader .pg{max-width:720px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:34px 36px 40px;box-shadow:0 14px 36px rgba(0,0,0,.14)}
-.mreader h1{font-size:26px;margin:0 0 4px;letter-spacing:1px} .mreader .q{color:var(--ink-3);font-size:13px}
-.mreader .pre{margin:22px 0 6px;color:var(--ink-2);font-style:italic;line-height:1.9;white-space:pre-wrap}
-.mreader h2{font-size:17px;margin:30px 0 4px} .mreader .mo{font-size:12px;color:var(--accent-ink);font-family:var(--mono)}
-.mreader p{white-space:pre-wrap;line-height:2;margin:10px 0 0;font-size:15px}
-.mreader .ph{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:12px}
-.mreader .ph figure{margin:0} .mreader .ph img{width:100%;border-radius:10px;display:block;aspect-ratio:3/4;object-fit:cover}
-.mreader figcaption{font-size:11.5px;color:var(--ink-3);margin-top:3px}
-.mreader .end{margin-top:30px;padding-top:18px;border-top:1px dashed var(--line);line-height:1.9;white-space:pre-wrap}
-.mreader .x{position:sticky;top:0;float:right;margin:-18px -20px 0 0}
-@media (max-width:640px){.mreader .pg{padding:24px 18px 30px}.mreader h1{font-size:22px}}
-</style>
 <link rel="stylesheet" href="tokens.css">
 <style>
-/* ============ 17.0 B 版「窗边日常」：这一页在 tokens.css 之上的部分 ============ */
-main{max-width:1180px;margin:0 auto;padding:32px 32px 72px}
-main.on-home{padding-top:0}
-@media(max-width:860px){main{padding:20px 16px 56px}}
-@media(max-width:560px){main{padding:16px 16px 48px}}
-.card{border:0;border-radius:var(--r-lg);box-shadow:var(--shadow)}
-.card-h{padding:22px 24px 0}
-.card-h h2{font-size:16px;font-weight:700}
-.card-h h2 svg{color:var(--accent-ink)}
-.card-b{padding:16px 24px 24px}
-.grid{gap:20px}
-@media(max-width:560px){.card-h{padding:18px 18px 0}.card-b{padding:12px 18px 18px}.grid{gap:14px}}
-.btn{border-radius:999px;border-color:var(--line-2);min-height:36px}
-.btn.sm{min-height:30px}
-.btn.pri{background:var(--solid);border-color:var(--solid);color:var(--on-solid)}
-.btn.ghost{color:var(--ink-3)}
-.tag{border:0;border-radius:999px;padding:0 9px}
-.pill{border:0;border-radius:999px}
-.pill.heart{background:var(--rose-soft);color:var(--rose)} .pill.heart b{color:var(--rose)}
-.cd{border-radius:12px;background:var(--tint-1)} .cd.today{background:var(--solid)} .cd.soon b{color:var(--rose)}
-.letter{border-left-color:var(--mood-pink)}
-.input,select.input,textarea.input{border-radius:12px}
-.seg{border-radius:999px}.seg button{border-radius:999px}
-.kpi.heart .v{color:var(--rose)}
-.kpis{border-radius:var(--r-lg)}
-.toast{background:var(--ink);color:var(--bg)}
-.tl .t{color:var(--accent-ink)}
-.tl li.now .t::before{background:var(--mood-pink)}
-.foot{color:var(--ink-3)}
+/* 18.0「小屋」：颜色、字号、圆角、按钮、卡片都在 tokens.css（和群小屋共用）。
+   这里只有这一页独有的几块排法，也只用 tokens 里的变量。 */
+
+/* ---------- 首页 ---------- */
 body:not(.on-home) .homeonly{display:none!important}
-.mind-row .card{height:100%}
-.hero-meta{display:flex;flex-wrap:wrap;gap:8px}
-.wxline{display:flex;gap:10px;align-items:center;margin-top:14px;font-size:14px;color:var(--ink-3)}
-.wxline svg{flex:none}
-.admin-note{font-size:13px;color:var(--ink-3);margin:-6px 0 16px}
+body:not(.admin) .adm-sep{display:none}
+.said-b{min-width:0}
+.sense-l li{min-height:0;padding:0;border:0;font-size:var(--fs-meta);gap:6px}
+.sense-l .meta{display:none}
+.home-grid{margin-top:var(--sp-7)}
+.wxline{display:flex;gap:10px;align-items:center;margin-top:var(--sp-4);font-size:var(--fs-sm);color:var(--ink-3)}
+.wxline svg{flex:none;color:var(--honey)}
+.memgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);grid-template-rows:auto auto;gap:var(--sp-4)}
+.memgrid .mcard.big{grid-row:span 2}
+.memgrid .mcard:not(.big){flex-direction:row;align-items:stretch}
+.memgrid .mcard:not(.big) .cv{width:112px;height:auto;min-height:112px;flex:none}
+.memgrid .mcard:not(.big) .cv.two{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+.memgrid .mcard:not(.big) .bd{padding:14px 18px;min-width:0}
+.memgrid .mcard:not(.big) p{-webkit-line-clamp:2}
+.mcard.big .bd{padding:24px 26px 26px;display:flex;flex-direction:column;height:100%}
+.mcard.big .tt{font-size:var(--fs-t2);line-height:1.4}
+.mcard.big .sig{margin-top:auto;padding-top:var(--sp-4);font-size:var(--fs-meta);color:var(--honey);font-weight:600}
+@media (max-width:1100px){.memgrid{grid-template-columns:1fr}.memgrid .mcard.big{grid-row:auto}}
+@media (max-width:640px){.memgrid .mcard:not(.big){padding:12px}.memgrid .mcard:not(.big) .cv{width:68px;min-height:68px;height:68px;border-radius:var(--r)}
+  .memgrid .mcard:not(.big) .cv.two{grid-template-rows:1fr;grid-template-columns:1fr}.memgrid .mcard:not(.big) .cv.two i+i{display:none}
+  .memgrid .mcard:not(.big) .bd{padding:0 0 0 14px;align-self:center}}
+.homefoot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--sp-4);align-items:center;padding-top:var(--sp-6)}
+.homefoot .quick{padding-top:0}
+.sense{display:flex;gap:10px;align-items:center;font-size:var(--fs-meta);color:var(--ink-3);flex-wrap:wrap;justify-content:flex-end}
+.sense .tag{font-size:var(--fs-micro)}
+@media (max-width:860px){.homefoot{grid-template-columns:1fr}.sense{justify-content:flex-start}}
+
+/* 倒数小方块（重要的日子、追番集数） */
+.cd{flex:none;width:56px;min-height:50px;border-radius:var(--r);background:var(--tint-1);display:grid;place-items:center;align-content:center;line-height:1.15}
+.cd b{font-size:var(--fs-t3);font-weight:700}
+.cd span{font-size:var(--fs-micro);color:var(--ink-3)}
+.cd.today{background:var(--solid)} .cd.today b,.cd.today span{color:var(--on-solid)}
+.cd.soon{background:var(--tint-2)}
+
+/* 她在想 */
+.thought{padding:16px 18px;border-radius:var(--r) var(--r) var(--r) 4px;background:var(--tint-1);line-height:1.8}
+.thought .meta{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.thoughts-old{list-style:none;margin:var(--sp-3) 0 0;padding:0}
+.thoughts-old li{font-size:var(--fs-sm);color:var(--ink-2);padding:8px 0;border-top:1px dashed var(--line-2)}
+.thoughts-old .t{font-family:var(--mono);color:var(--ink-3);margin-right:8px;font-size:var(--fs-micro)}
+
+/* 故事线 */
+.arcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--sp-5)}
+.arc .h{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.arc .h b{font-weight:700}
+.prog{display:flex;gap:4px;margin-left:auto}
+.prog i{width:14px;height:4px;border-radius:2px;background:var(--surface-3)} .prog i.on{background:var(--solid)}
+.beats{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line-2)}
+.beats li{position:relative;padding:3px 0 8px 10px;font-size:var(--fs-sm);color:var(--ink-2)}
+.beats li::before{content:"";position:absolute;left:-19px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--surface);border:2px solid var(--line-2)}
+.beats li.today{color:var(--ink);font-weight:600} .beats li.today::before{border-color:var(--mood-pink);background:var(--mood-pink)}
+.beats .d{font-family:var(--mono);font-size:var(--fs-micro);color:var(--ink-3);margin-right:8px}
+
+/* ---------- 记忆 ---------- */
+.letterpaper{background:var(--tint-3);border-radius:var(--r-xl);padding:var(--sp-6) var(--sp-7);position:relative}
+.letterpaper .to{font-size:var(--fs-meta);color:var(--honey);font-weight:600;letter-spacing:.06em}
+.letterpaper h2{margin:6px 0 var(--sp-4);font-size:var(--fs-t2)}
+.letterpaper .profile{white-space:pre-wrap;line-height:2;font-size:var(--fs-body);max-width:760px}
+.letterpaper .sig{margin-top:var(--sp-4);font-size:var(--fs-meta);color:var(--ink-3)}
+@media (max-width:640px){.letterpaper{padding:var(--sp-5)}}
+.mems{columns:2 320px;column-gap:var(--sp-4);margin-top:var(--sp-4)}
+.mem{break-inside:avoid;display:flex;gap:10px;align-items:flex-start;padding:14px 14px 12px 18px;border-radius:var(--r);background:var(--surface-2);margin-bottom:var(--sp-3)}
+.mem .txt{flex:1;min-width:0;word-break:break-word}
+.mem .foot{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:var(--fs-micro);color:var(--ink-3)}
+.mems .empty{column-span:all}
+.stars{display:inline-flex;gap:1px}
+.stars button{border:0;background:none;padding:0 1px;cursor:pointer;color:var(--line-2);font-size:var(--fs-sm);line-height:1}
+.stars button.on{color:var(--honey)}
+.stars:hover button{color:var(--honey)} .stars button:hover~button{color:var(--line-2)}
+
+/* ---------- 她的日子 ---------- */
+.zone{padding-top:var(--sp-7)} .zone:first-child{padding-top:0}
+.reader{display:grid;grid-template-columns:180px minmax(0,1fr);gap:var(--sp-4);align-items:start}
+.reader .dl{display:flex;flex-direction:column;gap:2px;max-height:520px;overflow:auto;scrollbar-width:thin;padding-right:4px}
+.reader .dl button{border:0;background:none;text-align:left;padding:8px 12px;border-radius:var(--r-sm);cursor:pointer;color:var(--ink-2);font-size:var(--fs-sm);display:flex;justify-content:space-between;gap:8px}
+.reader .dl button:hover{background:var(--surface-2)}
+.reader .dl button.on{background:var(--tint-3);color:var(--ink);font-weight:600}
+.reader .dl button span{color:var(--ink-3);font-weight:400;font-size:var(--fs-micro)}
+.reader article{background:var(--tint-3);border-radius:var(--r-lg);padding:var(--sp-5) var(--sp-6);min-width:0}
+.reader article .d{font-size:var(--fs-meta);color:var(--honey);font-weight:600;margin-bottom:var(--sp-3)}
+.reader article p{margin:0;white-space:pre-wrap;line-height:2;font-size:var(--fs-body)}
+@media (max-width:760px){.reader{grid-template-columns:1fr}.reader .dl{flex-direction:row;overflow-x:auto;max-height:none}.reader .dl button{flex:none}
+  .reader article{padding:var(--sp-5)}}
+.scroll{max-height:560px;overflow:auto;scrollbar-width:thin}
+/* 空的卡片不占一整行：两张并排、内容区收紧 */
+.grid>.card.is-empty{grid-column:span 6} .grid>.card.is-empty.wide{grid-column:span 12}
+.grid>.card.is-empty .card-b{padding-top:var(--sp-2);padding-bottom:var(--sp-4)}
+@media (max-width:860px){.grid>.card.is-empty{grid-column:span 12}}
+.paper.letter{background:var(--tint-2)}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:var(--sp-3)}
+.photos a{display:block;aspect-ratio:3/4;border-radius:var(--r);background:var(--surface-2) center/cover no-repeat;transition:transform .15s,box-shadow .15s}
+.photos a:hover{transform:translateY(-2px) rotate(-.6deg);box-shadow:var(--shadow-lg)}
+.photos .empty{grid-column:1/-1}
+.goal{padding:14px 0;border-top:1px solid var(--line)} .goal:first-child{border-top:0;padding-top:0}
+.goal .title{font-weight:600}
+.goal .bar{margin:8px 0 6px}
+.goal.done .bar>span{background:var(--good-dot)}
+.goal .steps{list-style:none;margin:6px 0 0;padding:0;font-size:var(--fs-sm);color:var(--ink-2)}
+.goal .steps li{padding:3px 0}
+.goal .steps .d{font-family:var(--mono);font-size:var(--fs-micro);color:var(--ink-3);margin-right:8px}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--sp-3)}
+.person{border-radius:var(--r);padding:12px 14px;background:var(--surface-2)}
+.person .n{font-weight:600}
+.person .r{font-size:var(--fs-micro);color:var(--ink-3);margin-left:6px}
+.person .d{font-size:var(--fs-sm);color:var(--ink-2);margin-top:4px;line-height:1.6}
+.recap{border-radius:var(--r);padding:16px 18px;margin-bottom:var(--sp-3);background:var(--surface-2)}
+.recap h3{margin:0 0 6px;font-size:var(--fs-t3)}
+.recap p{margin:8px 0 0;white-space:pre-wrap;line-height:1.9}
+.pref{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:var(--r-pill);background:var(--tint-2);font-size:var(--fs-sm)}
+.pref b{font-weight:600} .pref button{border:0;background:none;color:var(--ink-3);cursor:pointer;padding:0 6px;font-size:var(--fs-body);line-height:1}
+.pref button:hover{color:var(--bad)}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--sp-3)}
+.kcard{border-radius:var(--r);padding:12px 14px;background:var(--surface-2);display:flex;gap:8px;align-items:flex-start}
+.kcard p{margin:0;color:var(--ink-2);font-size:var(--fs-sm);flex:1} .kcard b{display:block;color:var(--ink);margin-bottom:2px}
+.kgrid .empty{grid-column:1/-1}
+.mbooks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--sp-4)}
+.mbook{border-radius:var(--r-lg);overflow:hidden;background:var(--surface-2);cursor:pointer;text-align:left;padding:0;border:0;font:inherit;color:inherit;display:flex;flex-direction:column;transition:transform .12s,box-shadow .12s}
+.mbook:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.mbook .cv{height:120px;background:linear-gradient(140deg,var(--tint-1),var(--tint-3)) center/cover}
+.mbook .bd{padding:12px 14px} .mbook b{font-size:var(--fs-t3);display:block} .mbook .q{font-size:var(--fs-micro);color:var(--ink-3)}
+.mbook .ch{font-size:var(--fs-meta);color:var(--ink-2);margin-top:6px;line-height:1.6}
+.mbooks .empty{grid-column:1/-1}
+.mreader{position:fixed;inset:0;z-index:70;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow:auto;padding:28px 16px}
+.mreader .pg{max-width:720px;margin:0 auto;background:var(--surface);border-radius:var(--r-xl);padding:40px 44px 44px;box-shadow:var(--shadow-lg)}
+.mreader h1{font-size:var(--fs-t1);margin:0 0 4px;letter-spacing:.04em} .mreader .q{color:var(--ink-3);font-size:var(--fs-meta)}
+.mreader .pre{margin:22px 0 6px;color:var(--ink-2);font-style:italic;line-height:1.9;white-space:pre-wrap}
+.mreader h2{font-size:var(--fs-t3);margin:30px 0 4px} .mreader .mo{font-size:var(--fs-micro);color:var(--accent-ink);font-family:var(--mono)}
+.mreader p{white-space:pre-wrap;line-height:2;margin:10px 0 0}
+.mreader .ph{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:12px}
+.mreader .ph figure{margin:0} .mreader .ph img{width:100%;border-radius:var(--r-sm);display:block;aspect-ratio:3/4;object-fit:cover}
+.mreader figcaption{font-size:var(--fs-micro);color:var(--ink-3);margin-top:3px}
+.mreader .end{margin-top:30px;padding-top:18px;border-top:1px dashed var(--line-2);line-height:1.9;white-space:pre-wrap}
+.mreader .x{position:sticky;top:0;float:right;margin:-22px -26px 0 0;background:var(--surface-2)}
+@media (max-width:640px){.mreader .pg{padding:26px 20px 30px}}
+
+/* ---------- 留言板 ---------- */
+.notes-wrap{max-width:720px;margin:0 auto}
+.notes-wrap .card-b{padding-bottom:0}
+.chat{display:flex;flex-direction:column;gap:var(--sp-3);min-height:280px;padding:4px 2px var(--sp-4)}
+.msg{max-width:80%;display:flex;flex-direction:column;gap:3px}
+.msg .w{font-size:var(--fs-micro);color:var(--ink-3);padding:0 6px}
+.msg.me{align-self:flex-end;align-items:flex-end}
+.composer{position:sticky;bottom:0;display:flex;gap:var(--sp-2);align-items:flex-end;padding:var(--sp-3) 0 var(--pad);background:var(--surface);border-top:1px solid var(--line);border-radius:0 0 var(--r-lg) var(--r-lg)}
+.composer textarea{flex:1}
+@media (max-width:860px){.composer{bottom:72px}}
+
+/* ---------- 一起做的事 ---------- */
+.habit{display:flex;gap:var(--sp-3);align-items:center;padding:12px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.habit:first-child{border-top:0}
+.habit .grow{flex:1;min-width:160px}
+.week{display:flex;gap:4px;margin-top:6px}
+.week i{width:16px;height:16px;border-radius:5px;background:var(--surface-3);display:block}
+.week i.on{background:var(--good-dot)}
+.streak{font-size:var(--fs-micro);color:var(--ink-3);line-height:1.4} .streak b{color:var(--ink);font-size:var(--fs-sm)}
+.wish,.cap{display:flex;gap:var(--sp-3);align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.wish:first-child,.cap:first-child{border-top:0}
+.wish .grow,.cap .grow{flex:1;min-width:0}
+.wish .title{font-weight:600}
+.wish.done .title{color:var(--ink-3);font-weight:400;text-decoration:line-through;text-decoration-color:var(--line-2)}
+.wish .by{font-size:var(--fs-micro);color:var(--ink-3)}
+.wish>.ink2 svg{color:var(--honey)}
+.cap{align-items:flex-start}
+.cap .seal{width:36px;height:36px;border-radius:var(--r-sm);display:grid;place-items:center;background:var(--tint-3);color:var(--honey);flex:none}
+.cap.open .seal{background:var(--accent-soft);color:var(--accent-ink)}
+.cap .title{font-weight:600}
+.cap .meta{font-size:var(--fs-meta);color:var(--ink-3)}
+.cap p{margin:6px 0 0;white-space:pre-wrap;line-height:1.75;font-size:var(--fs-sm)}
+.cap .reply{color:var(--ink-2)}
+.song .art{width:36px;height:36px;border-radius:var(--r-sm);background:var(--tint-1);display:grid;place-items:center;color:var(--accent-ink);flex:none}
+.form.capform{flex-direction:column;align-items:stretch}
+.form.capform textarea.input{flex:none}
+#p-life .grid{align-items:stretch}
+
+/* ---------- 设置 ---------- */
+.emo-ms{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-5)}
+@media (max-width:640px){.emo-ms{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.emo-m .top-l{display:flex;justify-content:space-between;align-items:baseline}
+.emo-m .name{font-size:var(--fs-meta);color:var(--ink-2);display:flex;align-items:center;gap:7px}
+.emo-m .name i{width:10px;height:10px;border-radius:3px;background:var(--c)}
+.emo-m .val{font-size:var(--fs-t2);font-weight:700}
+.emo-m .track{height:6px;border-radius:3px;background:var(--surface-3);margin-top:8px;overflow:hidden}
+.emo-m .track span{display:block;height:100%;border-radius:3px;background:var(--c);transition:width .4s ease}
+.emo-m .note{font-size:var(--fs-micro);color:var(--ink-3);margin-top:6px}
+.chart{margin-top:var(--sp-5)}
+.report{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--sp-3)}
+.rep{border-radius:var(--r);padding:12px 14px;background:var(--surface-2)}
+.rep .k{font-size:var(--fs-micro);color:var(--ink-3)} .rep .v{font-size:var(--fs-t2);font-weight:700;font-variant-numeric:tabular-nums}
+.rep .t{font-size:var(--fs-micro);color:var(--ink-3)} .rep .t.bad{color:var(--bad)} .rep .t.good{color:var(--good)}
+.report .empty{grid-column:1/-1}
+.pwarn{font-size:var(--fs-meta);color:var(--warn);line-height:1.8;margin-top:8px}
+.links{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--sp-2)}
+.link{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:var(--r);background:var(--surface-2);min-width:0}
+.link i{width:10px;height:10px;border-radius:50%;flex:none;margin-top:6px;background:var(--c)}
+.link.green{--c:var(--good-dot)} .link.blue{--c:var(--s1)} .link.yellow{--c:var(--s4);background:var(--warn-soft)} .link.gray{--c:var(--line-2)}
+.link .n{font-weight:600;font-size:var(--fs-meta)} .link .t{font-size:var(--fs-micro);color:var(--ink-3);word-break:break-word}
+.set-sec{scroll-margin-top:16px}
+.set-stack .stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+#llmRoutes{grid-template-columns:minmax(120px,200px) 1fr}
+.set-stack{display:flex;flex-direction:column;gap:var(--gap)}
+.stack{display:flex;flex-direction:column;gap:var(--sp-4)}
+.pedit{width:100%;font-family:var(--mono);font-size:var(--fs-meta)}
+.chk{display:inline-flex;gap:6px;align-items:center;font-size:var(--fs-meta);color:var(--ink-2)}
+.rolechip{cursor:pointer;min-height:30px}
 </style>
 </head>
 <body>
 
-<div class="band" id="band">
+<div class="band home" id="band">
   <div class="band-in">
     <header class="bw-head">
-      <a class="bw-brand" href="#home" data-p="home"><span id="name">小屋</span><span class="sub" id="sub">正在连接…</span></a>
+      <a class="bw-brand" href="#home" data-p="home"><span class="ava on" id="brandAva"><img src="avatar/avatar" alt="" id="brandImg"></span><span id="name">小屋</span><span class="sub" id="sub">正在连接…</span></a>
       <nav class="bw-nav" id="tabs" aria-label="主导航">
         <button data-p="home" class="on">首页</button>
         <button data-p="mem">记忆</button>
         <button data-p="days">她的日子</button>
         <button data-p="notes">留言板 <span class="badge" id="nbadge" hidden></span></button>
         <button data-p="life">一起做的事</button>
-        <button class="admbtn" id="admbtn" type="button"><span data-i="gear"></span>管理</button>
+        <span class="vsep adm-sep" aria-hidden="true"></span>
         <button class="adm" data-p="set">设置</button>
       </nav>
       <div class="bw-tools">
         <a class="bw-ib" id="hub" href="../" title="回小屋首页" aria-label="回小屋首页" hidden></a>
-        <button class="bw-ib" id="theme" title="切换深浅色" aria-label="切换深浅色"></button>
-        <button class="bw-ib" id="refresh" title="刷新" aria-label="刷新"></button>
-        <a class="bw-ib" id="helpdoc" href="https://github.com/star031104/ai-life/blob/main/docs/%E5%B0%8F%E5%B1%8B.md" target="_blank" rel="noopener" title="小屋使用说明：每一页、每个开关是干什么的" aria-label="使用说明">?</a>
-        <button class="bw-ib bw-menu" id="menuBtn" aria-label="菜单" aria-expanded="false" aria-controls="tabs"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        <button class="bw-ib" id="menuBtn" aria-label="更多" aria-haspopup="menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+        <div class="menu" id="menu" role="menu" hidden>
+          <button id="theme" role="menuitem"><span id="themeIco"></span><span id="themeTxt">切到深色</span></button>
+          <button id="refresh" role="menuitem"><span data-i="refresh"></span>刷新</button>
+          <a id="helpdoc" role="menuitem" href="https://github.com/star031104/ai-life/blob/main/docs/%E5%B0%8F%E5%B1%8B.md" target="_blank" rel="noopener" title="小屋使用说明：每一页、每个开关是干什么的"><span data-i="book"></span>使用说明</a>
+          <hr>
+          <button class="admbtn" id="admbtn" type="button" role="menuitem"><span data-i="gear"></span><span id="admTxt">打开管理（设置）</span></button>
+        </div>
       </div>
     </header>
 
@@ -376,19 +249,15 @@ body:not(.on-home) .homeonly{display:none!important}
       <div class="hero-l">
         <div class="hero-when num"><span class="dot" id="hDot"></span><span id="hWhen">…</span></div>
         <h1 id="greet">…</h1>
+        <p class="detail" id="greetMore" hidden></p>
         <p class="mood" id="mood">…</p>
         <div class="hero-said" id="said" hidden>
           <img src="avatar/avatar" alt="" id="saidAva"><span class="ini" id="saidIni" hidden></span>
-          <div style="min-width:0"><div class="ht" id="saidTxt"></div><div class="hm" id="saidMeta">最近 · 在 QQ 说</div></div>
-        </div>
-        <div class="hero-meta">
-          <span class="hpill">认识第 <b id="days" class="num">–</b> 天</span>
-          <span class="hpill" id="schoolPill" hidden><span id="school"></span></span>
-          <span class="hpill" id="wpill" hidden><span data-i="cloud"></span><span id="wshort"></span></span>
+          <div class="said-b"><div class="ht" id="saidTxt"></div><div class="hm" id="saidMeta">最近 · 在 QQ 说</div></div>
         </div>
         <div class="hero-acts">
           <button class="bbtn pri" data-go="notes">给她留言</button>
-          <button class="bbtn line" data-go="days">看看她的日记</button>
+          <button class="bbtn line" data-go="days" data-to="diaries">看看她的日记</button>
         </div>
       </div>
       <div class="hero-r" id="heroPic">
@@ -404,129 +273,155 @@ body:not(.on-home) .homeonly{display:none!important}
   <!-- ================= 首页 ================= -->
   <section class="page on" id="p-home">
     <section class="sec" aria-labelledby="hToday">
-      <div class="sec-h"><h2 id="hToday">她的今天</h2><span class="aside num" id="todayCount"></span></div>
+      <div class="sec-h"><h2 id="hToday"><span class="emo"><span data-i="sun"></span></span>她的今天</h2><span class="aside num" id="todayCount"></span></div>
       <ul class="today" id="life"></ul>
       <div class="wxline" id="wx"></div>
     </section>
 
-    <section class="sec pgrid">
-      <div class="panel">
-        <div class="sec-h" style="margin-bottom:6px"><h3 style="margin:0">还没聊完的</h3><span class="aside small">她会找机会接上</span></div>
-        <ul class="lrows" id="threads"></ul>
+    <div class="grid home-grid">
+      <section class="c8" aria-labelledby="hMem">
+        <div class="sec-h"><h2 id="hMem"><span class="emo"><span data-i="book"></span></span>一起的记忆</h2><span class="sp"></span><button class="lk" data-go="days">看全部</button></div>
+        <div class="memgrid" id="memRow"></div>
+      </section>
+      <section class="c4" aria-labelledby="hSoon">
+        <div class="sec-h"><h2 id="hSoon"><span class="emo"><span data-i="gift"></span></span>快到的日子</h2><span class="sp"></span><button class="lk" data-go="life" data-to="dates">全部</button></div>
+        <div class="dlist" id="soon"></div>
+      </section>
+
+      <div class="card c6 stretch">
+        <div class="card-h"><h3><span data-i="thread"></span>还没聊完的</h3><span class="sp"></span><span class="hint">她会找机会接上</span></div>
+        <div class="card-b"><ul class="lrows" id="threads"></ul></div>
       </div>
-      <div class="panel">
-        <div class="sec-h" style="margin-bottom:14px"><h3 style="margin:0">快到的日子</h3><button class="lk" data-go="life">全部</button></div>
-        <div class="days2" id="soon"></div>
+      <div class="card c6 stretch">
+        <div class="card-h"><h3><span data-i="spark"></span>她在想</h3></div>
+        <div class="card-b" id="mind"></div>
       </div>
-    </section>
 
-    <section class="sec">
-      <div class="sec-h"><h2>一起的记忆</h2><button class="lk" data-go="days">看全部</button></div>
-      <div class="mems3" id="memRow"></div>
-    </section>
+      <div class="card c12" id="arcsCard">
+        <div class="card-h"><h3><span data-i="route"></span>她最近在经历的事</h3><span class="sp"></span><button class="lk" data-go="days" data-to="arcs">全部</button></div>
+        <div class="card-b"><div class="arcs" id="arcsMini"></div></div>
+      </div>
+    </div>
 
-    <section class="sec pgrid mind-row">
-      <div class="panel"><h3>她在想</h3><div id="mind"></div></div>
-      <div class="panel"><div class="sec-h" style="margin-bottom:10px"><h3 style="margin:0">她最近在经历的事</h3><button class="lk" data-go="days">全部</button></div><div id="arcsMini"></div></div>
-      <div class="panel"><h3>她感觉到的你</h3><ul class="rows" id="senseMini"></ul></div>
-    </section>
-
-    <nav class="quick" aria-label="快捷入口">
-      <button data-go="mem">记忆</button><button data-go="notes">留言板</button><button data-go="life" data-to="wishes">愿望清单</button>
-      <button data-go="life" data-to="habits">打卡</button><button data-go="life" data-to="capsules">时间胶囊</button><button data-go="days" data-to="arcs">故事线</button>
-    </nav>
+    <div class="homefoot">
+      <nav class="quick" aria-label="快捷入口">
+        <button data-go="mem"><span data-i="brain"></span>记忆</button><button data-go="notes"><span data-i="chat"></span>留言板</button><button data-go="life" data-to="wishes"><span data-i="star"></span>愿望清单</button>
+        <button data-go="life" data-to="habits"><span data-i="check"></span>打卡</button><button data-go="life" data-to="capsules"><span data-i="lock"></span>时间胶囊</button><button data-go="days" data-to="arcs"><span data-i="route"></span>故事线</button>
+      </nav>
+      <div class="sense" aria-label="她感觉到的你">
+        <span class="tag hot">认识第 <b id="days" class="num">–</b> 天</span>
+        <span class="tag" id="schoolPill" hidden><span id="school"></span></span>
+        <span class="tag" id="wpill" hidden><span id="wshort"></span></span>
+        <ul class="lrows sense-l" id="senseMini"></ul>
+      </div>
+    </div>
   </section>
 
   <!-- ================= 记忆 ================= -->
   <section class="page" id="p-mem">
-    <div class="grid">
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="heart"></span>她心里的你</h2><span class="sp"></span><span class="hint" id="profTs">每周整理一次</span></div>
-        <div class="card-b"><div class="profile" id="profile"></div></div>
-      </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="brain"></span>她的记忆</h2><span class="sp"></span><span class="hint">点星星调重要度，越重要越常想起</span></div>
-        <div class="card-b">
-          <div class="tools">
-            <div class="seg" id="memSeg">
-              <button data-o="user" class="on">关于你<span class="n" id="n-user"></span></button>
-              <button data-o="us">你们俩<span class="n" id="n-us"></span></button>
-              <button data-o="self">她自己的设定<span class="n" id="n-self"></span></button>
-            </div>
-            <label class="search"><span data-i="search"></span><input class="input" id="memq" placeholder="搜索记忆" aria-label="搜索记忆"></label>
-          </div>
-          <div class="mems" id="memlist"></div>
-        </div>
-      </div>
+    <div class="letterpaper">
+      <div class="to">写给你 · <span id="profTs">每周整理一次</span></div>
+      <h2>她心里的你</h2>
+      <div class="profile" id="profile"></div>
+    </div>
 
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="x"></span>她会避开的说法</h2><span class="sp"></span><span class="hint" id="hintDislike">觉得她哪句话不对味，给那句话一个 👎，她就记下不再这样说</span></div>
+    <section class="sec">
+      <div class="sec-h"><h2><span class="emo"><span data-i="brain"></span></span>她的记忆</h2><span class="aside">点星星调重要度，越重要越常想起</span></div>
+      <div class="tools">
+        <div class="seg" id="memSeg">
+          <button data-o="user" class="on">关于你<span class="n" id="n-user"></span></button>
+          <button data-o="us">你们俩<span class="n" id="n-us"></span></button>
+          <button data-o="self">她自己的设定<span class="n" id="n-self"></span></button>
+        </div>
+        <label class="search"><span data-i="search"></span><input class="input" id="memq" placeholder="搜索记忆" aria-label="搜索记忆"></label>
+      </div>
+      <div class="mems" id="memlist"></div>
+    </section>
+
+    <div class="grid sec">
+      <div class="card c6">
+        <div class="card-h"><h3><span data-i="x"></span>她会避开的说法</h3><span class="sp"></span><span class="hint" id="hintDislike">觉得她哪句话不对味，给那句话一个 👎</span></div>
         <div class="card-b"><ul class="rows" id="disliked"></ul></div>
       </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="quote"></span>你们的说法和梗</h2><span class="sp"></span><span class="hint">从聊天里学的，出现两次自动启用，你说了算</span></div>
+      <div class="card c6">
+        <div class="card-h"><h3><span data-i="quote"></span>你们的说法和梗</h3><span class="sp"></span><span class="hint">出现两次自动启用，你说了算</span></div>
         <div class="card-b"><ul class="rows" id="exprs"></ul></div>
       </div>
     </div>
   </section>
 
-  <!-- ================= 日记与来信 ================= -->
+  <!-- ================= 她的日子 ================= -->
   <section class="page" id="p-days">
-    <div class="grid">
-      <div class="card c7">
-        <div class="card-h"><h2><span data-i="heart"></span>她说过的喜好</h2><span class="sp"></span><span class="hint">亲口说过的就一直这样，不会改口</span></div>
-        <div class="card-b"><div class="chips" id="gPrefs"></div>
-          <div class="frow"><input class="input" id="gPT" placeholder="话题，比如：香菜" maxlength="12">
-            <input class="input" id="gPV" placeholder="她的态度，比如：讨厌" maxlength="24" style="flex:2">
-            <button class="btn sm" id="gPAdd">加一条</button></div></div>
+    <section class="zone">
+      <div class="sec-h"><h2><span class="emo"><span data-i="book"></span></span>她写的</h2><span class="aside">日记每晚写，来信周日晚上，纪念册每月 1 号</span></div>
+      <div class="grid">
+        <div class="card c8">
+          <div class="card-h"><h3><span data-i="book"></span>她的日记</h3><span class="sp"></span><span class="hint">每晚自动写</span></div>
+          <div class="card-b" id="diaries"></div>
+        </div>
+        <div class="card c4">
+          <div class="card-h"><h3><span data-i="mail"></span>每周来信</h3><span class="sp"></span><span class="hint">周日晚上</span></div>
+          <div class="card-b scroll" id="letters"></div>
+        </div>
+        <div class="card c12">
+          <div class="card-h"><h3><span data-i="book"></span>回忆录</h3><span class="sp"></span><span class="hint">每三个月她把你们写成一本小书（1、4、7、10 月初）</span>
+            <button class="btn sm" id="mWrite">先写一份</button></div>
+          <div class="card-b"><div class="mbooks" id="mBooks"></div></div>
+        </div>
+        <div class="card c12">
+          <div class="card-h"><h3><span data-i="calendar"></span>每月纪念册</h3><span class="sp"></span><span class="hint">每月 1 号，她把上个月写成一页</span></div>
+          <div class="card-b" id="recaps"></div>
+        </div>
       </div>
-      <div class="card c5">
-        <div class="card-h"><h2><span data-i="spark"></span>这周的她</h2><span class="sp"></span><span class="hint">随手拍、整理自己</span></div>
-        <div class="card-b"><dl class="kv" id="gStat"></dl></div>
+    </section>
+
+    <section class="zone">
+      <div class="sec-h"><h2><span class="emo"><span data-i="route"></span></span>她的生活</h2><span class="aside">只显示到今天</span></div>
+      <div class="grid">
+        <div class="card c8">
+          <div class="card-h"><h3><span data-i="image"></span>她的相册</h3><span class="sp"></span><span class="hint">她发给你的照片</span></div>
+          <div class="card-b"><div class="photos" id="photos"></div></div>
+        </div>
+        <div class="card c4">
+          <div class="card-h"><h3><span data-i="spark"></span>这周的她</h3><span class="sp"></span><span class="hint">随手拍、整理自己</span></div>
+          <div class="card-b"><dl class="kv" id="gStat"></dl></div>
+        </div>
+        <div class="card c12">
+          <div class="card-h"><h3><span data-i="route"></span>她的故事线</h3><span class="sp"></span><span class="hint">她自己生活里一段一段的事</span></div>
+          <div class="card-b"><div class="arcs" id="arcs"></div></div>
+        </div>
+        <div class="card c6">
+          <div class="card-h"><h3><span data-i="target"></span>她的长期目标</h3><span class="sp"></span><span class="hint">她自己在努力的事</span></div>
+          <div class="card-b" id="goals"></div>
+        </div>
+        <div class="card c6">
+          <div class="card-h"><h3><span data-i="users"></span>她身边的人</h3><span class="sp"></span><span class="hint">名字是固定的，聊天和日记里都一样</span></div>
+          <div class="card-b"><div class="people" id="people"></div></div>
+        </div>
       </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="book"></span>回忆录</h2><span class="sp"></span><span class="hint">每三个月她把你们写成一本小书（1、4、7、10 月初）</span>
-          <button class="btn sm" id="mWrite">先写一份</button></div>
-        <div class="card-b"><div class="mbooks" id="mBooks"></div></div>
+    </section>
+
+    <section class="zone">
+      <div class="sec-h"><h2><span class="emo"><span data-i="heart"></span></span>她知道的</h2><span class="aside">亲口说过的喜好不会改口；你纠正过的会改掉</span></div>
+      <div class="grid">
+        <div class="card c6">
+          <div class="card-h"><h3><span data-i="heart"></span>她说过的喜好</h3></div>
+          <div class="card-b"><div class="chips" id="gPrefs"></div>
+            <div class="frow"><input class="input" id="gPT" placeholder="话题，比如：香菜" maxlength="12">
+              <input class="input" id="gPV" placeholder="她的态度，比如：讨厌" maxlength="24">
+              <button class="btn sm" id="gPAdd">加一条</button></div></div>
+        </div>
+        <div class="card c6">
+          <div class="card-h"><h3><span data-i="search"></span>她最近查过、知道的事</h3></div>
+          <div class="card-b"><div class="kgrid" id="gLearned"></div></div>
+        </div>
       </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="search"></span>她最近查过、知道的事</h2><span class="sp"></span><span class="hint">你问到她不知道的事时她先搜一下；你纠正过的会改掉</span></div>
-        <div class="card-b"><div class="kgrid" id="gLearned"></div></div>
-      </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="route"></span>她的故事线</h2><span class="sp"></span><span class="hint">她自己生活里一段一段的事，只显示到今天</span></div>
-        <div class="card-b" id="arcs"></div>
-      </div>
-      <div class="card c6">
-        <div class="card-h"><h2><span data-i="target"></span>她的长期目标</h2><span class="sp"></span><span class="hint">她自己在努力的事，只显示到今天</span></div>
-        <div class="card-b" id="goals"></div>
-      </div>
-      <div class="card c6">
-        <div class="card-h"><h2><span data-i="users"></span>她身边的人</h2><span class="sp"></span><span class="hint">名字是固定的，聊天和日记里都一样</span></div>
-        <div class="card-b"><div class="people" id="people"></div></div>
-      </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="book"></span>每月纪念册</h2><span class="sp"></span><span class="hint">每月 1 号，她把上个月写成一页</span></div>
-        <div class="card-b" id="recaps"></div>
-      </div>
-      <div class="card c7">
-        <div class="card-h"><h2><span data-i="book"></span>她的日记</h2><span class="sp"></span><span class="hint">每晚自动写</span></div>
-        <div class="card-b scroll" id="diaries"></div>
-      </div>
-      <div class="card c5">
-        <div class="card-h"><h2><span data-i="mail"></span>每周来信</h2><span class="sp"></span><span class="hint">周日晚上</span></div>
-        <div class="card-b scroll" id="letters"></div>
-      </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="image"></span>她的相册</h2><span class="sp"></span><span class="hint">她发给你的照片</span></div>
-        <div class="card-b"><div class="photos" id="photos"></div></div>
-      </div>
-    </div>
+    </section>
   </section>
 
   <!-- ================= 留言板 ================= -->
   <section class="page" id="p-notes">
-    <div class="card" style="max-width:760px;margin:0 auto">
+    <div class="card notes-wrap">
       <div class="card-h"><h2><span data-i="chat"></span>留言板</h2><span class="sp"></span><span class="hint">写给她，她看到会回</span></div>
       <div class="card-b">
         <div class="chat" id="notes"></div>
@@ -538,22 +433,22 @@ body:not(.on-home) .homeonly{display:none!important}
     </div>
   </section>
 
-  <!-- ================= 日子与追番 ================= -->
+  <!-- ================= 一起做的事 ================= -->
   <section class="page" id="p-life">
     <div class="grid">
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="check"></span>一起打卡</h2><span class="sp"></span><span class="hint">到点没打卡她会来催，坚持了她会夸你</span></div>
+      <div class="card c6" id="habitsCard">
+        <div class="card-h"><h3><span data-i="check"></span>一起打卡</h3><span class="sp"></span><span class="hint">到点没打卡她会来催</span></div>
         <div class="card-b">
           <div id="habits"></div>
           <div class="form">
             <input class="input" id="hName" placeholder="目标，如：早睡 / 背单词 / 运动">
-            <input class="input" id="hTime" type="time" style="flex:0 1 130px" aria-label="提醒时间（可不填）">
+            <input class="input" id="hTime" type="time" aria-label="提醒时间（可不填）">
             <button class="btn pri" id="hAdd">添加</button>
           </div>
         </div>
       </div>
       <div class="card c6">
-        <div class="card-h"><h2><span data-i="star"></span>愿望清单</h2><span class="sp"></span><span class="hint">想一起做的事，做到了打个勾</span></div>
+        <div class="card-h"><h3><span data-i="star"></span>愿望清单</h3><span class="sp"></span><span class="hint">想一起做的事</span></div>
         <div class="card-b">
           <div id="wishes"></div>
           <div class="form">
@@ -563,151 +458,164 @@ body:not(.on-home) .homeonly{display:none!important}
         </div>
       </div>
       <div class="card c6">
-        <div class="card-h"><h2><span data-i="lock"></span>时间胶囊</h2><span class="sp"></span><span class="hint">写给未来的你们，到那天才打开</span></div>
+        <div class="card-h"><h3><span data-i="lock"></span>时间胶囊</h3><span class="sp"></span><span class="hint">到那天才打开</span></div>
         <div class="card-b">
           <div id="capsules"></div>
-          <div class="form" style="flex-direction:column;align-items:stretch">
-            <textarea class="input" id="cText" rows="3" style="flex:none;resize:vertical" placeholder="想对那时候的你们说什么…（她也会偷偷写一封，同一天一起拆）" maxlength="2000"></textarea>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <input class="input" id="cDay" type="date" style="flex:1 1 160px" aria-label="打开日期">
+          <div class="form capform">
+            <textarea class="input" id="cText" rows="3" placeholder="想对那时候的你们说什么…（她也会偷偷写一封，同一天一起拆）" maxlength="2000"></textarea>
+            <div class="form2">
+              <input class="input" id="cDay" type="date" aria-label="打开日期">
               <button class="btn pri" id="cAdd">埋下</button>
             </div>
           </div>
         </div>
       </div>
       <div class="card c6">
-        <div class="card-h"><h2><span data-i="gift"></span>重要的日子</h2><span class="sp"></span><span class="hint">提前惦记，当天找你</span></div>
+        <div class="card-h"><h3><span data-i="gift"></span>重要的日子</h3><span class="sp"></span><span class="hint">提前惦记，当天找你</span></div>
         <div class="card-b">
           <ul class="rows" id="dates"></ul>
           <div class="form">
-            <input class="input" id="dDate" placeholder="11-20 或 2026-12-20" style="flex:0 1 170px">
+            <input class="input" id="dDate" placeholder="11-20 或 2026-12-20">
             <input class="input" id="dName" placeholder="名称，如：在一起纪念日">
             <button class="btn pri" id="dAdd">添加</button>
           </div>
         </div>
       </div>
       <div class="card c6">
-        <div class="card-h"><h2><span data-i="tv"></span>一起追的番</h2><span class="sp"></span><span class="hint">更新后她会来找你</span></div>
+        <div class="card-h"><h3><span data-i="tv"></span>一起追的番</h3><span class="sp"></span><span class="hint">更新后她会来找你</span></div>
         <div class="card-b">
           <ul class="rows" id="shows"></ul>
           <div class="form">
             <input class="input" id="sName" placeholder="番名">
-            <select class="input" id="sWd" style="flex:0 1 90px"></select>
-            <input class="input" id="sTime" type="time" value="23:00" style="flex:0 1 120px">
+            <select class="input" id="sWd" aria-label="周几更新"></select>
+            <input class="input" id="sTime" type="time" value="23:00" aria-label="几点更新">
             <button class="btn pri" id="sAdd">添加</button>
           </div>
         </div>
       </div>
-      <div class="card c7">
-        <div class="card-h"><h2><span data-i="music"></span>一起听的歌</h2><span class="sp"></span><span class="hint">电脑上在放的歌、她推荐给你的歌</span></div>
+      <div class="card c6">
+        <div class="card-h"><h3><span data-i="music"></span>一起听的歌</h3><span class="sp"></span><span class="hint">电脑上在放的、她推荐的</span></div>
         <div class="card-b"><div class="chips" id="artists"></div><ul class="rows" id="music"></ul></div>
       </div>
-      <div class="card c5">
-        <div class="card-h"><h2><span data-i="bell"></span>待提醒</h2></div>
+      <div class="card c12 compact">
+        <div class="card-h"><h3><span data-i="bell"></span>待提醒</h3></div>
         <div class="card-b"><ul class="rows" id="rem"></ul></div>
       </div>
     </div>
   </section>
 
-  <!-- ================= 设置 ================= -->
+  <!-- ================= 设置（管理） ================= -->
   <section class="page" id="p-set">
-    <div class="grid">
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="pulse"></span>数字</h2><span class="sp"></span><span class="hint">首页只用一句话讲她的心情，具体数值都在这里</span></div>
-        <div class="kpis" style="margin-top:14px;border-top:1px solid var(--line)">
-          <div class="kpi heart"><div class="l">对你的好感</div><div class="v">100<small>/ 100</small></div></div>
-          <div class="kpi"><div class="l">今天的消息</div><div class="v num" id="kToday">–</div></div>
-          <div class="kpi"><div class="l">一共聊过</div><div class="v num" id="kTotal">–</div></div>
-          <div class="kpi"><div class="l">记得的事</div><div class="v num" id="kMem">–</div></div>
-          <div class="kpi"><div class="l">今天还能发照片</div><div class="v num" id="kPhoto">–</div></div>
+    <div class="wbwrap">
+      <nav class="side" id="setSide" aria-label="设置分组">
+        <div class="gt">看看</div>
+        <button data-sc="sNums" class="on"><span data-i="pulse"></span>数字和心情</button>
+        <button data-sc="sReport"><span data-i="pulse"></span>这周的表现</button>
+        <div class="gt">她</div>
+        <button data-sc="sPersona"><span data-i="heart"></span>人设</button>
+        <button data-sc="sBasic"><span data-i="gear"></span>基本和作息</button>
+        <button data-sc="sSense"><span data-i="phone"></span>手机信号</button>
+        <div class="gt">程序</div>
+        <button data-sc="llmCard"><span data-i="brain"></span>大模型</button>
+        <button data-sc="linksCard"><span data-i="link"></span>连接</button>
+        <button data-sc="updCard"><span data-i="refresh"></span>软件更新</button>
+      </nav>
+      <div class="set-stack">
+        <p class="meta">首页只用一句话讲她的心情，具体数值都在这里。大模型、连接、更新只在本机网页能看到。</p>
+        <div class="stats set-sec" id="sNums">
+          <div class="stat acc"><div class="l">对你的好感</div><div class="v">100<small>/ 100</small></div></div>
+          <div class="stat"><div class="l">今天的消息</div><div class="v num" id="kToday">–</div></div>
+          <div class="stat"><div class="l">一共聊过</div><div class="v num" id="kTotal">–</div></div>
+          <div class="stat"><div class="l">记得的事</div><div class="v num" id="kMem">–</div></div>
+          <div class="stat"><div class="l">今天还能发照片</div><div class="v num" id="kPhoto">–</div></div>
         </div>
-      </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="pulse"></span>她的心情（数值）</h2><span class="sp"></span><span class="hint">此刻 <b id="moodWord">…</b> · 会随事情起伏，过一阵慢慢回到平常</span></div>
-        <div class="card-b">
-          <div class="meters" id="meters"></div>
-          <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
-          <div class="legend" id="legend"></div>
-          <div id="emoTable" hidden></div>
-        </div>
-      </div>
-      <div class="card c12" id="linksCard" hidden>
-        <div class="card-h"><h2><span data-i="eye"></span>连接</h2><span class="hint">绿：好好的　蓝：装好了，等第一次　黄：要你看一下　灰：没开</span></div>
-        <div class="card-b"><div class="links" id="links"></div></div>
-      </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="pulse"></span>这一周她的表现</h2><span class="sp"></span><span class="hint">用你们真实的聊天算的，和上周比；每周一也会发给你一份</span></div>
-        <div class="card-b"><div class="report" id="report"></div></div>
-      </div>
-      <div class="card c12">
-        <div class="card-h"><h2><span data-i="heart"></span>人设</h2><span class="sp"></span><span class="hint">改完保存马上生效；换成别的角色会自动重启（每个角色有自己的记忆）</span></div>
-        <div class="card-b">
-          <div class="form" style="margin-top:0;flex-wrap:wrap">
-            <select class="input" id="pSel" style="flex:1 1 220px" aria-label="人设文件"></select>
-            <button class="btn" id="pEdit">编辑</button>
-            <button class="btn" id="pUse">换成这个</button>
-            <label class="ink2" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="pShare">沿用现在的记忆</label>
-            <button class="btn ghost" id="pNew">新建</button>
-          </div>
-          <div id="pWarn" class="pwarn"></div>
-          <div id="pEditor" hidden>
-            <div class="meta" id="pFile" style="margin:10px 0 6px"></div>
-            <textarea class="input mono" id="pText" rows="20" spellcheck="false" style="width:100%;resize:vertical;font-size:13px;line-height:1.7"></textarea>
-            <div class="form"><button class="btn" id="pCheck">检查</button><button class="btn pri" id="pSave">保存</button>
-              <span class="hint">写法见 persona/template.md 和 docs/PERSONA.md；保存前会自动备份旧版本</span></div>
+        <div class="card">
+          <div class="card-h"><h3><span data-i="pulse"></span>她的心情（数值）</h3><span class="sp"></span><span class="hint">此刻 <b id="moodWord">…</b> · 会随事情起伏，过一阵慢慢回到平常</span></div>
+          <div class="card-b">
+            <div class="emo-ms" id="meters"></div>
+            <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+            <div class="legend" id="legend"></div>
+            <div class="tblwrap" id="emoTable" hidden></div>
           </div>
         </div>
-      </div>
-      <div class="card c6">
-        <div class="card-h"><h2><span data-i="gear"></span>基本</h2></div>
-        <div class="card-b" style="display:flex;flex-direction:column;gap:16px">
-          <div class="field"><label for="city">你所在的城市（天气）</label>
-            <div class="form" style="margin:0"><input class="input" id="city" placeholder="广州"><button class="btn" data-save="city">保存</button></div></div>
-          <div class="field"><label for="schedule">你的作息 / 课表（她会避开你忙的时候）</label>
-            <textarea class="input" id="schedule" rows="3" placeholder="工作日 9-18 上班，周二周四晚上有课，一般 1 点睡、10 点起"></textarea>
-            <div><button class="btn" data-save="schedule">保存作息</button></div></div>
-          <div class="field"><label>她从聊天里记下的固定安排</label>
-            <ul class="rows" id="routines"></ul></div>
+        <div class="card set-sec" id="sReport">
+          <div class="card-h"><h3><span data-i="pulse"></span>这一周她的表现</h3><span class="sp"></span><span class="hint">用你们真实的聊天算的，和上周比；每周一也会发给你一份</span></div>
+          <div class="card-b"><div class="report" id="report"></div></div>
         </div>
-      </div>
-      <div class="card c12" id="llmCard" hidden>
-        <div class="card-h"><h2><span data-i="gear"></span>大模型</h2><span class="hint">全部是你自己加的：任何 OpenAI 兼容的接口（云上的、本机 Ollama / LM Studio……），填什么用什么</span></div>
-        <div class="card-b" style="display:flex;flex-direction:column;gap:14px">
-          <div class="pwarn" id="llmEmpty" hidden>还没有模型：她现在没法说话。在下面加一个，勾上“聊天”。</div>
-          <ul class="rows" id="llmList"></ul>
-          <div class="field"><label>每种用途按顺序用哪些（前一个限流 / 出错自动换下一个）</label><dl class="kv" id="llmRoutes" style="margin:0"></dl></div>
-          <div class="field"><label for="llmUrl">加一个：接口地址和 Key</label>
-            <div class="form" style="margin:0;flex-wrap:wrap">
-              <input class="input" id="llmUrl" placeholder="接口地址，一般以 /v1 结尾" style="flex:2;min-width:220px" autocomplete="off">
-              <input class="input" id="llmKey" type="password" autocomplete="off" placeholder="API Key（本机模型可以不填）" style="flex:2;min-width:180px">
-              <button class="btn" id="llmProbe">测连通、列模型</button></div></div>
-          <div class="field" id="llmStep2" hidden><label for="llmModel">选模型</label>
-            <div class="form" style="margin:0;flex-wrap:wrap">
-              <input class="input" id="llmModel" list="llmModels" placeholder="输入可以筛选" style="flex:2;min-width:220px"><datalist id="llmModels"></datalist>
-              <button class="btn" id="llmTest">试一下</button></div>
-            <div class="small" id="llmTestOut"></div></div>
-          <div class="field" id="llmStep3" hidden><label>它用来干什么（可以多选）</label>
-            <div class="chips" id="llmRoles"></div>
-            <div class="form" style="margin:0;flex-wrap:wrap">
-              <select class="input" id="llmFirst" style="flex:none"><option value="1">排在最前面（当主力）</option><option value="0">排在最后（当备用）</option></select>
-              <input class="input" id="llmName" placeholder="名字（可以不填）" style="max-width:200px">
-              <button class="btn pri" id="llmSave">加上</button>
-              <button class="btn" id="llmRestart" hidden>重启生效</button></div></div>
+        <div class="card set-sec" id="sPersona">
+          <div class="card-h"><h3><span data-i="heart"></span>人设</h3><span class="sp"></span><span class="hint">改完保存马上生效；换成别的角色会自动重启（每个角色有自己的记忆）</span></div>
+          <div class="card-b">
+            <div class="form">
+              <select class="input" id="pSel" aria-label="人设文件"></select>
+              <button class="btn" id="pEdit">编辑</button>
+              <button class="btn" id="pUse">换成这个</button>
+              <label class="chk"><input type="checkbox" id="pShare">沿用现在的记忆</label>
+              <button class="btn ghost" id="pNew">新建</button>
+            </div>
+            <div id="pWarn" class="pwarn"></div>
+            <div id="pEditor" hidden>
+              <div class="meta" id="pFile"></div>
+              <textarea class="input pedit" id="pText" rows="20" spellcheck="false"></textarea>
+              <div class="form"><button class="btn" id="pCheck">检查</button><button class="btn pri" id="pSave">保存</button>
+                <span class="meta">写法见 persona/template.md 和 docs/PERSONA.md；保存前会自动备份旧版本</span></div>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="card c12" id="updCard" hidden>
-        <div class="card-h"><h2><span data-i="gear"></span>软件更新</h2><span class="hint">每天自己看一次；更新前先备份，新版起不来会自动换回去</span></div>
-        <div class="card-b">
-          <dl class="kv"><dt>现在的版本</dt><dd id="updNow"></dd><dt>GitHub 上最新</dt><dd><span id="updLatest"></span> <span class="small muted" id="updWhen"></span></dd></dl>
-          <div class="small muted" id="updLast" style="margin-top:8px"></div>
-          <div class="form"><button class="btn" id="updCheck">现在检查</button><button class="btn pri" id="updApply" hidden>更新</button><button class="btn ghost" id="updBack" hidden>换回上一个版本</button></div>
-          <p class="small muted" style="margin:10px 0 0">国内连 GitHub 慢的话，可以在 Gitee 上导入这个仓库，然后在 config.yaml 里写 <code class="k">update: {gitee: 你的用户名/ai-life}</code>，会先从 Gitee 下载。</p>
+        <div class="card set-sec" id="sBasic">
+          <div class="card-h"><h3><span data-i="gear"></span>基本</h3></div>
+          <div class="card-b stack">
+            <div class="field"><label for="city">你所在的城市（天气）</label>
+              <div class="form2"><input class="input" id="city" placeholder="广州"><button class="btn" data-save="city">保存</button></div></div>
+            <div class="field"><label for="schedule">你的作息 / 课表（她会避开你忙的时候）</label>
+              <textarea class="input" id="schedule" rows="3" placeholder="工作日 9-18 上班，周二周四晚上有课，一般 1 点睡、10 点起"></textarea>
+              <div><button class="btn" data-save="schedule">保存作息</button></div></div>
+            <div class="field"><label>她从聊天里记下的固定安排</label>
+              <ul class="rows" id="routines"></ul></div>
+          </div>
         </div>
-      </div>
-      <div class="card c6">
-        <div class="card-h"><h2><span data-i="eye"></span>手机信号</h2></div>
-        <div class="card-b"><dl class="kv" id="senseKv"></dl>
-          <p class="small muted" style="margin:14px 0 0">手机快捷指令（iPhone）或 MacroDroid（安卓）在闹钟关掉、到家、开始充电时，向上面的频道 POST 一句“起床 / 到家 / 充电”，她就会知道。具体步骤见 README。</p>
+        <div class="card set-sec" id="sSense">
+          <div class="card-h"><h3><span data-i="eye"></span>手机信号</h3></div>
+          <div class="card-b"><dl class="kv" id="senseKv"></dl>
+            <p class="meta">手机快捷指令（iPhone）或 MacroDroid（安卓）在闹钟关掉、到家、开始充电时，向上面的频道 POST 一句“起床 / 到家 / 充电”，她就会知道。具体步骤见 README。</p>
+          </div>
+        </div>
+        <div class="card set-sec" id="llmCard" hidden>
+          <div class="card-h"><h3><span data-i="gear"></span>大模型</h3><span class="hint">全部是你自己加的：任何 OpenAI 兼容的接口（云上的、本机 Ollama / LM Studio……），填什么用什么</span></div>
+          <div class="card-b stack">
+            <div class="pwarn" id="llmEmpty" hidden>还没有模型：她现在没法说话。在下面加一个，勾上“聊天”。</div>
+            <ul class="rows" id="llmList"></ul>
+            <div class="field"><label>每种用途按顺序用哪些（前一个限流 / 出错自动换下一个）</label><dl class="kv" id="llmRoutes"></dl></div>
+            <div class="field"><label for="llmUrl">加一个：接口地址和 Key</label>
+              <div class="form2">
+                <input class="input" id="llmUrl" placeholder="接口地址，一般以 /v1 结尾" autocomplete="off">
+                <input class="input" id="llmKey" type="password" autocomplete="off" placeholder="API Key（本机模型可以不填）">
+                <button class="btn" id="llmProbe">测连通、列模型</button></div></div>
+            <div class="field" id="llmStep2" hidden><label for="llmModel">选模型</label>
+              <div class="form2">
+                <input class="input" id="llmModel" list="llmModels" placeholder="输入可以筛选"><datalist id="llmModels"></datalist>
+                <button class="btn" id="llmTest">试一下</button></div>
+              <div class="small" id="llmTestOut"></div></div>
+            <div class="field" id="llmStep3" hidden><label>它用来干什么（可以多选）</label>
+              <div class="chips" id="llmRoles"></div>
+              <div class="form2">
+                <select class="input" id="llmFirst"><option value="1">排在最前面（当主力）</option><option value="0">排在最后（当备用）</option></select>
+                <input class="input" id="llmName" placeholder="名字（可以不填）">
+                <button class="btn pri" id="llmSave">加上</button>
+                <button class="btn" id="llmRestart" hidden>重启生效</button></div></div>
+          </div>
+        </div>
+        <div class="card set-sec" id="linksCard" hidden>
+          <div class="card-h"><h3><span data-i="eye"></span>连接</h3><span class="hint">绿：好好的　蓝：装好了，等第一次　黄：要你看一下　灰：没开</span></div>
+          <div class="card-b"><div class="links" id="links"></div></div>
+        </div>
+        <div class="card set-sec" id="updCard" hidden>
+          <div class="card-h"><h3><span data-i="gear"></span>软件更新</h3><span class="hint">每天自己看一次；更新前先备份，新版起不来会自动换回去</span></div>
+          <div class="card-b">
+            <dl class="kv"><dt>现在的版本</dt><dd id="updNow"></dd><dt>GitHub 上最新</dt><dd><span id="updLatest"></span> <span class="small muted" id="updWhen"></span></dd></dl>
+            <div class="small muted" id="updLast"></div>
+            <div class="form"><button class="btn" id="updCheck">现在检查</button><button class="btn pri" id="updApply" hidden>更新</button><button class="btn ghost" id="updBack" hidden>换回上一个版本</button></div>
+            <p class="meta">国内连 GitHub 慢的话，可以在 Gitee 上导入这个仓库，然后在 config.yaml 里写 <code class="k">update: {gitee: 你的用户名/ai-life}</code>，会先从 Gitee 下载。</p>
+          </div>
         </div>
       </div>
     </div>
@@ -715,6 +623,14 @@ body:not(.on-home) .homeonly{display:none!important}
 
   <div class="foot" id="foot">只在你自己的设备上运行</div>
 </main>
+
+<nav class="tabbar" id="tabbar" aria-label="主导航（手机）">
+  <button data-p="home" class="on"><span data-i="home"></span>首页</button>
+  <button data-p="days"><span data-i="book"></span>她的日子</button>
+  <button data-p="notes"><span data-i="chat"></span>留言<span class="badge" id="nbadge2" hidden></span></button>
+  <button data-p="life"><span data-i="star"></span>一起</button>
+  <button data-p="mem"><span data-i="brain"></span>记忆</button>
+</nav>
 <div class="toast" id="toast" role="status"></div>
 
 <script>
@@ -781,13 +697,13 @@ async function loadLLM(){
     $("llmEmpty").hidden=!!d.models.length;
     $("llmList").innerHTML=d.models.map(m=>`<li><div class="grow"><div class="title">${esc(m.name)}${m.pending?' <span class="muted small">（重启后生效）</span>':''}</div>
       <div class="meta">${esc(m.model||"")} · ${esc(m.base_url||"")}</div>
-      <div class="chips" style="margin-top:4px">${m.roles.map(r=>`<span class="tag ok">${esc(d.roles[r])}</span>`).join("")||'<span class="muted small">没放进任何用途</span>'}</div></div>
+      <div class="chips">${m.roles.map(r=>`<span class="tag ok">${esc(d.roles[r])}</span>`).join("")||'<span class="muted small">没放进任何用途</span>'}</div></div>
       ${m.editable?`<button class="btn ghost sm" data-llmdel="${esc(m.name)}">删掉</button>`:'<span class="muted small">写在 config.yaml</span>'}</li>`).join("");
     $("llmRoutes").innerHTML=Object.entries(d.roles).map(([r,desc])=>{const own=d.routes[r]||[],eff=d.effective[r]||[];
       return `<dt>${esc(desc)}</dt><dd>${eff.length?eff.map(esc).join(" → "):'<span class="muted">没配（不做）</span>'}${!own.length&&eff.length?' <span class="muted small">（跟着上一级）</span>':''}</dd>`}).join("");
   }catch(e){}
 }
-function llmRoleChips(def){$("llmRoles").innerHTML=Object.entries(LLMROLES).map(([r,desc])=>`<label class="tag" style="cursor:pointer;height:28px"><input type="checkbox" value="${r}" ${def.includes(r)?"checked":""}> ${esc(desc)}</label>`).join("")}
+function llmRoleChips(def){$("llmRoles").innerHTML=Object.entries(LLMROLES).map(([r,desc])=>`<label class="tag rolechip"><input type="checkbox" value="${r}" ${def.includes(r)?"checked":""}> ${esc(desc)}</label>`).join("")}
 $("llmProbe")&&$("llmProbe").addEventListener("click",async()=>{
   const b=$("llmProbe"); b.disabled=true; b.textContent="连接中…";
   try{const r=await post("api/llm/models",{url:$("llmUrl").value,key:$("llmKey").value});
@@ -821,7 +737,7 @@ document.addEventListener("click",async e=>{const t=e.target.closest("[data-llmd
 /* ============ 连接状态（只在本机网页） ============ */
 async function loadLinks(){
   try{const r=await fetch("api/links",{headers:H()}); if(!r.ok)return; const d=await r.json(); $("linksCard").hidden=false;
-    $("links").innerHTML=d.links.map(l=>`<div class="link ${l.state}" title="${esc(l.text)}"><i aria-label="${{green:"正常",blue:"等待",yellow:"要处理",gray:"没开"}[l.state]}"></i><div style="min-width:0"><div class="n">${esc(l.name)}</div><div class="t">${esc(l.text)}</div></div></div>`).join("");
+    $("links").innerHTML=d.links.map(l=>`<div class="link ${l.state}" title="${esc(l.text)}"><i aria-label="${{green:"正常",blue:"等待",yellow:"要处理",gray:"没开"}[l.state]}"></i><div class="grow"><div class="n">${esc(l.name)}</div><div class="t">${esc(l.text)}</div></div></div>`).join("");
   }catch(e){}
 }
 
@@ -885,6 +801,10 @@ function headline(){
   if(next&&next.t)return `${name}等会儿要${next.t.replace(/^在/,"")}`;
   return S.mood?`${name}此刻${S.mood}`:`${name}在等你来聊天`;
 }
+/* 首屏标题最多 16 个字：长了就在第一个逗号处断开，后半句放到下面一行小字 */
+function splitHead(t){t=String(t||"").trim(); if(t.length<=16)return[t,""];
+  const i=t.search(/[，,；;。！？!?]/); if(i>3&&i<=20)return[t.slice(0,i),t.slice(i+1).replace(/^[\s，,]+/,"")];
+  return[t,""]}
 function render(){
   const name=S.name||"她";
   document.title=`${name}的小屋`; $("name").textContent=name;
@@ -895,7 +815,8 @@ function render(){
   $("hWhen").textContent=`${partOf(h)} · ${pad(d.getHours())}:${pad(d.getMinutes())} · ${conn}`;
   $("hDot").className="dot"+(online?"":" off");
   $("foot").textContent="只有你能打开（只认本机，或者通过你电脑上的“打开小屋”）"; $("hintDislike").textContent=dislikeHow();
-  $("greet").textContent=headline();
+  const hl=splitHead(headline()); $("greet").textContent=hl[0]; $("greet").classList.toggle("long",hl[0].length>12);
+  $("greetMore").hidden=!hl[1]; $("greetMore").textContent=hl[1];
   $("mood").textContent=moodLine(); $("moodWord").textContent=S.mood||"平静";
   $("days").textContent=S.stats.days||1;
   $("portrait").alt=`${name}坐在窗边`; $("portraitPh").textContent=name.slice(-1);
@@ -905,19 +826,23 @@ function render(){
   $("kToday").textContent=S.stats.today; $("kTotal").textContent=S.stats.total.toLocaleString();
   $("kMem").textContent=S.stats.memories; $("kPhoto").textContent=S.stats.photos_left;
   const unseen=S.notes.filter(n=>n.author==="her"&&n.ts>(lastNoteSeen())).length;
-  $("nbadge").hidden=!unseen; $("nbadge").textContent=unseen;
+  for(const b of["nbadge","nbadge2"]){$(b).hidden=!unseen;$(b).textContent=unseen}
+  $("brandAva").className="ava "+(online?"on":has?"busy":"plain");
   renderEmotion(); renderLife(); renderThreads(); renderSoon(); renderSenseMini(); renderMemRow();
   renderMems(); renderExprs(); renderDiaries(); renderLetters(); renderPhotos();
   renderNotes(); renderDates(); renderShows(); renderRem(); renderSettings();
   renderMind(); renderArcs(); renderProfile(); renderMusic(); renderHabits(); renderRecaps(); renderWishes(); renderCapsules(); renderHerWorld(); renderReport(); renderDisliked(); renderRoutines(); renderPersona(); adaptPronoun();
-  paintIcons();
+  paintIcons(); markEmpty();
 }
+function markEmpty(){document.querySelectorAll(".page .grid>.card").forEach(c=>{const b=c.querySelector(".card-b"),e=b&&b.querySelector(".empty");
+  c.classList.toggle("is-empty",!!e&&!c.querySelector("input,textarea,select")&&b.textContent.trim()===e.textContent.trim())});
+  document.querySelectorAll(".page .grid").forEach(g=>{const es=[...g.querySelectorAll(":scope>.card.is-empty")];g.querySelectorAll(".card.wide").forEach(c=>c.classList.remove("wide"));if(es.length%2)es[es.length-1].classList.add("wide")})}
 
 /* ---------- 心情 ---------- */
 const EMO=[["joy","开心","--s1","0 低落 · 100 很开心"],["longing","想你","--s2","你越久不来越高"],["sulk","小委屈","--s3","被冷落时升高"],["tired","疲惫","--s4","跟着她的作息"]];
 function renderEmotion(){
   const e=S.emotion||{};
-  $("meters").innerHTML=EMO.map(([k,n,c,note])=>`<div class="meter" style="--c:var(${c})">
+  $("meters").innerHTML=EMO.map(([k,n,c,note])=>`<div class="emo-m" style="--c:var(${c})">
     <div class="top-l"><span class="name"><i></i>${n}</span><span class="val num">${Math.round(e[k]??0)}</span></div>
     <div class="track" role="meter" aria-label="${n}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(e[k]??0)}"><span style="width:${Math.max(1,Math.min(100,e[k]??0))}%"></span></div>
     <div class="note">${note}</div></div>`).join("");
@@ -965,13 +890,13 @@ function renderLife(){
   $("todayCount").textContent=it.length?`${it.length} 件事 · 做完 ${done} 件`:"";
   const W={done:"做完了",now:"正在做",later:"等会儿"};
   $("life").innerHTML=it.length?it.map(x=>`<li class="${x.st}"><div class="w">${x.a?esc(x.a)+" · ":""}${W[x.st]}</div><div class="x">${esc(x.t)}</div></li>`).join("")
-    :`<li class="later" style="flex-basis:100%"><div class="x">今天要做什么我还没想好，等我排一排～</div></li>`;
+    :`<li class="later"><div class="w">还没排好</div><div class="x">今天要做什么我还没想好，等我排一排～</div></li>`;
   $("wx").innerHTML=icon("cloud")+`<span>${S.weather?esc(S.weather):"还没设置城市。在“设置”里填一下，她就会关心你那边的天气。"}</span>`;
 }
 function renderThreads(){
   $("threads").innerHTML=S.threads.length?S.threads.map(t=>`<li><div class="g"><div>${esc(t.topic)}</div><div class="meta">${ago(t.ts)}</div></div>
     <button class="btn ghost sm" data-act="closeThread" data-id="${t.id}" title="已经聊完了">${icon("check")}聊完了</button></li>`).join("")
-    :'<li><div class="g muted">现在没有挂着的话题啦，想到什么随时跟我说。</div></li>';
+    :'<li class="empty">现在没有挂着的话题啦，想到什么随时跟我说。</li>';
 }
 function dateRow(d,del){
   const k={birthday:"生日",anniversary:"每年",event:"一次"}[d.kind]||"";
@@ -981,9 +906,9 @@ function dateRow(d,del){
 }
 function renderSoon(){
   const ds=S.dates.filter(d=>d.days_left!==null).slice(0,4);
-  $("soon").innerHTML=ds.length?ds.map(d=>`<div class="dcard">${d.days_left===0?'<div class="n today">今天</div>':`<div class="n num">${d.days_left}<small> 天后</small></div>`}
-      <div class="t">${esc(d.name)}</div><div class="d">${esc(d.date)}</div></div>`).join("")
-    :'<div class="muted" style="grid-column:1/-1">最近没有要记着的日子。你的生日、纪念日告诉我，我帮你记着。</div>';
+  $("soon").innerHTML=ds.length?ds.map(d=>`<div class="dcard">${d.days_left===0?'<div class="n today">今天</div>':`<div class="n num">${d.days_left}<small>天后</small></div>`}
+      <div><div class="t">${esc(d.name)}</div><div class="d">${esc(d.date)}</div></div></div>`).join("")
+    :'<div class="empty">最近没有要记着的日子。你的生日、纪念日告诉我，我帮你记着。</div>';
 }
 /* ---------- 一起的记忆：最近的日记 / 来信 / 相册 ---------- */
 function renderMemRow(){
@@ -992,8 +917,8 @@ function renderMemRow(){
   const first=t=>String(t||"").replace(/\s+/g," ").trim();
   const dd=di?new Date(di.day+"T00:00:00"):null;
   const cards=[
-    `<button class="mcard" data-go="days" data-to="diaries"><div class="cv diary">${icon("book")}</div><div class="bd"><div class="k">日记${dd?` · ${dd.getMonth()+1} 月 ${dd.getDate()} 日`:""}</div>
-      <div class="tt">${di?esc(first(di.content).split(/[。！？!?]/)[0].slice(0,18)):"今晚写第一篇"}</div>${di?`<p>${esc(first(di.content))}</p>`:"<p>今晚写完第一篇日记，就放在这里。</p>"}</div></button>`,
+    `<button class="mcard big" data-go="days" data-to="diaries"><div class="cv diary">${icon("book")}</div><div class="bd"><div class="k">日记${dd?` · ${dd.getMonth()+1} 月 ${dd.getDate()} 日 · 星期${WD[(dd.getDay()+6)%7]}`:""}</div>
+      <div class="tt">${di?esc(first(di.content).split(/[。！？!?]/)[0].slice(0,18)):"今晚写第一篇"}</div>${di?`<p>${esc(first(di.content))}</p>`:"<p>今晚写完第一篇日记，就放在这里。</p>"}<div class="sig">${di?"翻开读完 →":"等我写好～"}</div></div></button>`,
     `<button class="mcard" data-go="days" data-to="letters"><div class="cv lt">${icon("mail")}</div><div class="bd"><div class="k">来信${le?" · "+md(le.ts):""}</div>
       <div class="tt">${le?esc(le.week)+"的信":"还没有来信"}</div>${le?`<p>${esc(first(le.content))}</p>`:"<p>周日晚上我会给你写信。</p>"}</div></button>`,
     `<button class="mcard" data-go="days" data-to="photos"><div class="cv two">${ph.length?ph.slice(0,2).map(p=>`<i style="background-image:url('${esc(p.url)}')"></i>`).join("")+(ph.length<2?"<i></i>":""):"<i></i><i></i>"}</div><div class="bd"><div class="k">相册${wk?` · 本周新增 ${wk} 张`:ph.length?` · 一共 ${ph.length} 张`:""}</div>
@@ -1006,7 +931,7 @@ function senseRows(){
     [icon("phone"),"手机",ph?`${esc(ph.event)} <span class="muted">· ${ago(ph.ts)}</span>`:'<span class="muted">还没收到过信号</span>'],
   ];
 }
-function renderSenseMini(){$("senseMini").innerHTML=senseRows().map(([i,n,v])=>`<li><span class="ink2">${i}</span><div class="grow"><div class="meta" style="margin:0">${n}</div><div>${v}</div></div></li>`).join("")}
+function renderSenseMini(){$("senseMini").innerHTML=senseRows().map(([i,n,v])=>`<li><span class="ink2">${i}</span><div class="grow"><div class="meta">${n}</div><div>${v}</div></div></li>`).join("")}
 
 /* ---------- 记忆 ---------- */
 function renderMems(){
@@ -1016,7 +941,7 @@ function renderMems(){
   $("memlist").innerHTML=list.length?list.map(m=>`<div class="mem"><div class="txt">${esc(m.content)}
       <div class="foot"><span class="stars" role="group" aria-label="重要度">${[1,2,3,4,5].map(i=>`<button class="${i<=m.importance?"on":""}" data-act="imp" data-id="${m.id}" data-v="${i}" aria-label="重要度 ${i}">★</button>`).join("")}</span><span>${md(m.ts)}</span></div></div>
       <button class="btn ghost sm danger" data-act="delMem" data-id="${m.id}" title="让她忘掉" aria-label="删除">${icon("x")}</button></div>`).join("")
-    :`<div class="empty" style="grid-column:1/-1">${q?"没有匹配的记忆":MEMO==="self"?"我说过的关于自己的事（室友、社团……）都记在这儿，免得前后说的不一样":"多跟我聊聊嘛，我会一点点记住的"}</div>`;
+    :`<div class="empty">${q?"没有匹配的记忆":MEMO==="self"?"我说过的关于自己的事（室友、社团……）都记在这儿，免得前后说的不一样":"多跟我聊聊嘛，我会一点点记住的"}</div>`;
 }
 function renderExprs(){
   const st={approved:["在用","ok"],pending:["待定","wait"],rejected:["不用","no"]};
@@ -1025,14 +950,19 @@ function renderExprs(){
       ${e.status!=="approved"?`<button class="btn sm" data-act="expr" data-id="${e.id}" data-v="approved">启用</button>`:""}
       ${e.status!=="rejected"?`<button class="btn sm" data-act="expr" data-id="${e.id}" data-v="rejected">别用</button>`:""}
       <button class="btn ghost sm danger" data-act="delExpr" data-id="${e.id}" aria-label="删除">${icon("x")}</button></li>`).join("")
-    :'<li class="empty" style="display:block">聊多了，我会学会你的口头禅，还有我们俩的梗</li>';
+    :'<li class="empty">聊多了，我会学会你的口头禅，还有我们俩的梗</li>';
 }
 
 /* ---------- 日记 / 信 / 照片 ---------- */
+let DIARY=0;
 function renderDiaries(){
-  $("diaries").innerHTML=S.diaries.length?S.diaries.map(d=>{const dt=new Date(d.day+"T00:00:00");
-    return`<article class="paper"><div class="d"><b>${dt.getMonth()+1}月${dt.getDate()}日</b><span>星期${WD[(dt.getDay()+6)%7]}</span></div><p>${esc(d.content)}</p></article>`}).join("")
-    :'<div class="empty">今晚过了 0 点，我就写第一篇日记</div>';
+  const ds=S.diaries||[]; if(!ds.length){$("diaries").innerHTML='<div class="empty">今晚过了 0 点，我就写第一篇日记</div>';return}
+  DIARY=Math.min(DIARY,ds.length-1);
+  const dt=x=>new Date(x.day+"T00:00:00"), d=ds[DIARY], t=dt(d);
+  $("diaries").innerHTML=`<div class="reader"><div class="dl" role="tablist" aria-label="日子">${ds.map((x,i)=>{const y=dt(x);
+      return`<button role="tab" aria-selected="${i===DIARY}" class="${i===DIARY?"on":""}" data-di="${i}">${y.getMonth()+1}月${y.getDate()}日<span>周${WD[(y.getDay()+6)%7]}</span></button>`}).join("")}</div>
+    <article class="paper-d"><div class="d">${t.getFullYear()} 年 ${t.getMonth()+1} 月 ${t.getDate()} 日 · 星期${WD[(t.getDay()+6)%7]}</div><p>${esc(d.content)}</p></article></div>`;
+  $("diaries").querySelectorAll("[data-di]").forEach(b=>b.onclick=()=>{DIARY=+b.dataset.di;renderDiaries()});
 }
 function renderLetters(){
   $("letters").innerHTML=S.letters.length?S.letters.map(l=>`<article class="paper letter"><div class="d"><b>${esc(l.week)}</b><span>${md(l.ts)}</span></div><p>${esc(l.content)}</p></article>`).join("")
@@ -1040,14 +970,14 @@ function renderLetters(){
 }
 function renderPhotos(){
   $("photos").innerHTML=S.photos.length?S.photos.map(p=>`<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${p.ts?md(p.ts)+" "+hm(p.ts):""}" style="background-image:url('${esc(p.url)}')"></a>`).join("")
-    :'<div class="empty" style="grid-column:1/-1">我发给你的照片都会收在这儿</div>';
+    :'<div class="empty">我发给你的照片都会收在这儿</div>';
 }
 
 /* ---------- 留言板 ---------- */
 const lastNoteSeen=()=>{try{return +localStorage.getItem("noteSeen")||0}catch(e){return 0}};
 function renderNotes(){
   const el=$("notes"), atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<40;
-  el.innerHTML=S.notes.length?S.notes.map(n=>`<div class="msg ${n.author==="user"?"me":"her"}"><div class="b">${esc(n.content)}</div><div class="w">${n.author==="user"?"你":esc(S.name)} · ${md(n.ts)} ${hm(n.ts)}</div></div>`).join("")
+  el.innerHTML=S.notes.length?S.notes.map(n=>`<div class="msg ${n.author==="user"?"me":"her"}"><div class="bubble${n.author==="user"?" me":""}">${esc(n.content)}</div><div class="w">${n.author==="user"?"你":esc(S.name)} · ${md(n.ts)} ${hm(n.ts)}</div></div>`).join("")
     :'<div class="empty">给我留句话吧，看到了就回你</div>';
   if(atBottom||!el._init){el.scrollTop=el.scrollHeight;el._init=1}
 }
@@ -1073,7 +1003,7 @@ function arcHTML(a,compact){
 }
 function renderArcs(){
   const arcs=S.arcs||[], act=arcs.filter(a=>a.status==="active");
-  $("arcsMini").innerHTML=act.length?act.map(a=>arcHTML(a,true)).join(""):'<div class="empty">最近没什么特别的事，日子平平的也挺好。</div>';
+  $("arcsMini").innerHTML=act.map(a=>arcHTML(a,true)).join(""); $("arcsCard").hidden=!act.length;   // 没有就整块收起来
   $("arcs").innerHTML=arcs.length?arcs.map(a=>arcHTML(a,false)).join(""):'<div class="empty">最近还没发生什么故事</div>';
 }
 function renderProfile(){
@@ -1086,7 +1016,7 @@ function renderMusic(){
   const ms=S.music||[];
   $("music").innerHTML=ms.length?ms.slice(0,12).map(m=>`<li class="song"><span class="art">${icon("music")}</span><div class="grow"><div class="title">${esc(m.title)}${m.source==="her"?' <span class="tag ok">她推荐的</span>':""}</div>
       <div class="meta">${esc(m.artist||"")}${m.album?" · "+esc(m.album):""} · ${ago(m.ts)}</div></div>${m.url?`<a class="btn ghost sm" href="${esc(m.url)}" target="_blank" rel="noopener">${icon("link")}网易云</a>`:""}</li>`).join("")
-    :'<li class="empty" style="display:block">在电脑上放歌（网易云、QQ 音乐、Spotify 都行），她就知道你在听什么；也可以发 /song 让她推荐一首</li>';
+    :'<li class="empty">在电脑上放歌（网易云、QQ 音乐、Spotify 都行），她就知道你在听什么；也可以发 /song 让她推荐一首</li>';
 }
 
 /* ---------- 打卡 / 纪念册 ---------- */
@@ -1134,7 +1064,7 @@ function renderHerWorld(){
   $("goals").innerHTML=hw.goals.length?hw.goals.map(g=>`<div class="goal ${g.status==="done"?"done":""}"><div class="title">${esc(g.title)} <span class="tag ${g.status==="done"?"ok":""}">${g.status==="done"?"结束了":g.progress+"%"}</span></div>
       <div class="meta">${esc(g.why||"")}${g.why?" · ":""}${esc(g.start.slice(5))} 开始，打算 ${esc(g.end.slice(5))} 前完成</div>
       <div class="bar" role="progressbar" aria-valuenow="${g.progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${Math.max(2,g.progress)}%"></span></div>
-      ${g.outcome?`<div class="ink2" style="font-size:13px">${esc(g.outcome)}</div>`:""}
+      ${g.outcome?`<div class="ink2 small">${esc(g.outcome)}</div>`:""}
       <ul class="steps">${g.steps.slice(-3).map(s=>`<li><span class="d">${esc(s.day.slice(5))}</span>${esc(s.text)}</li>`).join("")}</ul></div>`).join("")
     :'<div class="empty">我还没想好自己的目标，过几天就定下来</div>';
   $("people").innerHTML=hw.people.length?hw.people.map(p=>`<div class="person"><span class="n">${esc(p.name)}</span><span class="r">${esc(p.role)}${p.core?"":" · 后来出现"}</span>${p.desc?`<div class="d">${esc(p.desc)}</div>`:""}</div>`).join("")
@@ -1172,7 +1102,7 @@ $("pNew").addEventListener("click",async()=>{ const n=prompt("新人设的文件
 /* 角色是男生时，界面上的“她”换成“他”（只改按钮、标题、提示这些界面文字，不动聊天内容） */
 function adaptPronoun(){
   const ta=(S.persona&&S.persona.ta)||"她"; if(ta==="她")return;
-  const sel="h2,.hint,.empty,label,button,.meta,.by,.k,.pill,.foot,.tabs,.bw-nav,.hpill,.sec-h,.panel h3,.mcard,#greet,option,.note,[placeholder]";
+  const sel="h2,h3,.hint,.empty,label,button,.meta,.by,.k,.pill,.tag,.foot,.bw-nav,.tabbar,.side,.menu,.hpill,.sec-h,.mcard,.to,#greet,#greetMore,option,.note,[placeholder]";
   document.querySelectorAll(sel).forEach(el=>{
     if(el.closest("[data-uc]"))return;
     if(el.placeholder&&el.placeholder.includes("她"))el.placeholder=el.placeholder.replaceAll("她",ta);
@@ -1194,27 +1124,27 @@ function renderDisliked(){
   const ds=S.disliked||[];
   $("disliked").innerHTML=ds.length?ds.slice().reverse().map(d=>`<li><span class="ink3">${esc(d.emoji||"👎")}</span><div class="grow"><div>${esc(d.text)}</div><div class="meta">${md(d.ts)}</div></div>
       <button class="btn ghost sm" data-act="undislike" data-v="${esc(d.text)}">不用避开了</button></li>`).join("")
-    :`<li class="empty" style="display:block">还没有。${esc(dislikeHow())}</li>`;
+    :`<li class="empty">还没有。${esc(dislikeHow())}</li>`;
 }
 function renderRoutines(){
   const rs=S.routines||[], lt=S.learned_times||{};
   const learned=Object.entries(lt).map(([k,v])=>`<li><span class="ink3">${icon("phone")}</span><div class="grow">工作日一般 ${esc(v)} ${esc(k)}<div class="meta">从手机信号学到的</div></div></li>`).join("");
   $("routines").innerHTML=(rs.map((r,i)=>`<li><span class="ink3">${icon("clock")}</span><div class="grow">${esc(r.when)} ${esc(r.what)}</div>
       <button class="btn ghost sm danger" data-act="delRoutine" data-v="${esc(JSON.stringify([r.when,r.what]))}" aria-label="删除">${icon("x")}</button></li>`).join("")+learned)
-    ||'<li class="empty" style="display:block">还没有。聊天里说到“周三晚上有课”“工作日九点上班”，她会自己记下</li>';
+    ||'<li class="empty">还没有。聊天里说到“周三晚上有课”“工作日九点上班”，她会自己记下</li>';
 }
 
 /* ---------- 日子 / 追番 / 提醒 ---------- */
-function renderDates(){$("dates").innerHTML=S.dates.length?S.dates.map(d=>dateRow(d,true)).join(""):'<li class="empty" style="display:block">还没有。聊天里提到的生日、纪念日、考试，她会自己记下来</li>'}
+function renderDates(){$("dates").innerHTML=S.dates.length?S.dates.map(d=>dateRow(d,true)).join(""):'<li class="empty">还没有。聊天里提到的生日、纪念日、考试，她会自己记下来</li>'}
 function renderShows(){
   if(!$("sWd").options.length)$("sWd").innerHTML=[...WD].map((w,i)=>`<option value="${i}">周${w}</option>`).join("");
   $("shows").innerHTML=S.shows.length?S.shows.map(s=>{const lt=s.latest&&s.latest[0];
     return `<li><div class="cd"><b class="num">${s.episode}</b><span>${s.total?"/ "+s.total:"集"}</span></div><div class="grow"><div class="title">《${esc(s.name)}》${s.subject_id?` <a class="btn ghost sm" href="https://bgm.tv/subject/${s.subject_id}" target="_blank" rel="noopener" title="在 Bangumi 查看">${icon("link")}</a>`:""}</div>
       <div class="meta">每周${WD[s.weekday]} ${s.time} 更新${lt&&lt.title?` · 最新：第${lt.ep}集「${esc(lt.title)}」`:""}</div></div>
       <button class="btn ghost sm danger" data-act="delShow" data-id="${s.id}" aria-label="不追了">${icon("x")}</button></li>`}).join("")
-    :'<li class="empty" style="display:block">还没有。我们约好一起追的番会放在这里</li>';
+    :'<li class="empty">还没有。我们约好一起追的番会放在这里</li>';
 }
-function renderRem(){$("rem").innerHTML=S.reminders.length?S.reminders.map(r=>`<li><span class="ink2">${icon("bell")}</span><div class="grow"><div>${esc(r.content)}</div><div class="meta">${md(r.due)} ${hm(r.due)}</div></div></li>`).join(""):'<li class="empty" style="display:block">现在没有要提醒你的事</li>'}
+function renderRem(){$("rem").innerHTML=S.reminders.length?S.reminders.map(r=>`<li><span class="ink2">${icon("bell")}</span><div class="grow"><div>${esc(r.content)}</div><div class="meta">${md(r.due)} ${hm(r.due)}</div></div></li>`).join(""):'<li class="empty">现在没有要提醒你的事</li>'}
 
 /* ---------- 设置 ---------- */
 function renderSettings(){
@@ -1232,7 +1162,7 @@ async function save(k){const v=$(k).value;
 
 /* ============ 11.2 她的日子 ============ */
 function renderGrow(){const G=S.grow;if(!G)return;
-  $("gPrefs").innerHTML=(G.prefs||[]).map(p=>`<span class="pref"><b>${esc(p.topic)}</b>${esc(p.v)}<button data-pdel="${esc(p.topic)}" title="删掉">×</button></span>`).join("")||'<div class="empty" style="padding:6px 0">她还没说过自己喜欢什么、讨厌什么（每天会把昨天说过的整理一遍）</div>';
+  $("gPrefs").innerHTML=(G.prefs||[]).map(p=>`<span class="pref"><b>${esc(p.topic)}</b>${esc(p.v)}<button data-pdel="${esc(p.topic)}" title="删掉">×</button></span>`).join("")||'<div class="empty">她还没说过自己喜欢什么、讨厌什么（每天会把昨天说过的整理一遍）</div>';
   $("gPrefs").querySelectorAll("[data-pdel]").forEach(b=>b.onclick=async()=>{const r=await post("api/self/pref",{topic:b.dataset.pdel,delete:true});toast(r.message||r.error);load()});
   const t=G.tidy||{};
   $("gStat").innerHTML=`<dt>这周随手拍</dt><dd>${G.photos_week} 张${G.photo_ready?"":"（没配画图接口）"}</dd>
@@ -1241,15 +1171,19 @@ function renderGrow(){const G=S.grow;if(!G)return;
     return `<div class="kcard"><p><b>${esc(mm?mm[1]:"")}</b>${esc(mm?mm[2]:m.content)}</p><button class="btn ghost sm danger" data-act="delMem" data-id="${m.id}" aria-label="删除">${icon("x")}</button></div>`}).join("")||'<div class="empty">我最近还没查过什么</div>';
 }
 $("gPAdd").onclick=async()=>{const r=await post("api/self/pref",{topic:$("gPT").value,v:$("gPV").value});toast(r.message||r.error);if(r.ok){$("gPT").value=$("gPV").value="";load()}};
-function setAdmin(on){document.body.classList.toggle("admin",on);try{localStorage.setItem("admin",on?"1":"")}catch(e){}}
+function setAdmin(on){document.body.classList.toggle("admin",on);try{localStorage.setItem("admin",on?"1":"")}catch(e){}
+  $("admTxt").textContent=on?"关上管理":"打开管理（设置）"}
 let ADM=false;try{ADM=!!localStorage.getItem("admin")}catch(e){}
 if((location.hash||"")==="#set")ADM=true;
 setAdmin(ADM);
-$("admbtn").onclick=()=>{ADM=!document.body.classList.contains("admin");setAdmin(ADM);if(ADM)go("set");else if(location.hash==="#set")go("home")};
+$("admbtn").onclick=()=>{menu(false);ADM=!document.body.classList.contains("admin");setAdmin(ADM);if(ADM)go("set");else if(location.hash==="#set")go("home")};
 /* 17.0 手机上的菜单、深浅色、时段每分钟对一次 */
-$("menuBtn").onclick=()=>{const o=$("tabs").classList.toggle("open");$("menuBtn").setAttribute("aria-expanded",o?"true":"false")};
+function menu(open){$("menu").hidden=!open;$("menuBtn").setAttribute("aria-expanded",open?"true":"false")}
+$("menuBtn").onclick=e=>{e.stopPropagation();menu($("menu").hidden)};
+document.addEventListener("click",e=>{if(!$("menu").hidden&&!e.target.closest("#menu"))menu(false)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")menu(false)});
 function applyTheme(t){if(t)document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;
-  const dark=t?t==="dark":matchMedia("(prefers-color-scheme:dark)").matches;$("theme").innerHTML=icon(dark?"sun":"moon")}
+  const dark=t?t==="dark":matchMedia("(prefers-color-scheme:dark)").matches;$("themeIco").innerHTML=icon(dark?"sun":"moon");$("themeTxt").textContent=dark?"切到浅色":"切到深色"}
 let THEME=null;try{THEME=localStorage.getItem("theme")}catch(e){}
 applyTheme(THEME);
 $("theme").onclick=()=>{const cur=document.documentElement.dataset.theme,dark=cur?cur==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
@@ -1267,7 +1201,7 @@ async function loadMemoirs(){let M;try{M=await (await fetch("api/memoirs",{heade
     <div class="bd"><b>《${esc(b.title)}》</b><div class="q">${esc(b.quarter.replace("-Q"," 年第 "))} 季${b.draft?" · 草稿":""}</div>
     <div class="ch">${(b.chapters||[]).slice(0,4).map(esc).join(" · ")}</div></div></button>`).join("")
     :`<div class="empty">${M.writing?"正在写……":"还没有。每个季度初她会写一本；想先看看，点“先写一份”"}</div>`;
-  $("mWrite").disabled=!!M.writing;
+  $("mWrite").disabled=!!M.writing; markEmpty();
   document.querySelectorAll("[data-mq]").forEach(b=>b.onclick=()=>openMemoir(b.dataset.mq));
 }
 async function openMemoir(q){let m;try{m=await (await fetch("api/memoir?q="+encodeURIComponent(q),{headers:H()})).json()}catch(e){return toast("打不开")}
@@ -1285,16 +1219,18 @@ $("mWrite").onclick=async()=>{const r=await post("api/memoir/write",{});toast(r.
 
 /* ============ 事件 ============ */
 function go(p,to){if(!$("p-"+p))p="home";
-  document.querySelectorAll("#tabs button[data-p]").forEach(b=>{b.classList.toggle("on",b.dataset.p===p);if(b.dataset.p===p)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
+  document.querySelectorAll("#tabs button[data-p],#tabbar button[data-p]").forEach(b=>{b.classList.toggle("on",b.dataset.p===p);if(b.dataset.p===p)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
   document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+p));
   document.body.classList.toggle("on-home",p==="home"); $("main").classList.toggle("on-home",p==="home"); $("band").classList.toggle("home",p==="home");
-  $("tabs").classList.remove("open"); $("menuBtn").setAttribute("aria-expanded","false");
+  menu(false);
   if(location.hash!=="#"+p)history.replaceState(null,"","#"+p);
   if(p==="notes"&&S){try{localStorage.setItem("noteSeen",String(Date.now()/1000))}catch(e){} $("nbadge").hidden=true; const el=$("notes"); el.scrollTop=el.scrollHeight}
   if(p==="set"&&S)drawChart();
   const t=to&&$(to); if(t){setTimeout(()=>t.scrollIntoView({behavior:"smooth",block:"start"}),60)} else window.scrollTo({top:0});}
 document.addEventListener("click",async ev=>{
-  const t=ev.target.closest("[data-p],[data-go],[data-act],[data-save],[data-copy],#memSeg button"); if(!t)return;
+  const t=ev.target.closest("[data-p],[data-go],[data-act],[data-save],[data-copy],[data-sc],#memSeg button"); if(!t)return;
+  if(t.dataset.sc){const el=$(t.dataset.sc);document.querySelectorAll("#setSide button").forEach(b=>b.classList.toggle("on",b===t));
+    if(el&&!el.hidden)el.scrollIntoView({behavior:"smooth",block:"start"});else toast("这一块只在本机网页里有");return}
   if(t.dataset.p){ev.preventDefault();return go(t.dataset.p)}
   if(t.dataset.go)return go(t.dataset.go,t.dataset.to);
   if(t.dataset.save)return save(t.dataset.save);
@@ -1328,7 +1264,7 @@ $("sAdd").addEventListener("click",async()=>{const r=await post("api/shows/add",
 $("hAdd").addEventListener("click",async()=>{const r=await post("api/habits/add",{name:$("hName").value,time:$("hTime").value}); if(!r.ok)return toast(r.error); $("hName").value="";$("hTime").value=""; toast("加上了，她会监督你的"); load()});
 $("wAdd").addEventListener("click",async()=>{const r=await post("api/wishes/add",{text:$("wText").value}); if(!r.ok)return toast(r.error); $("wText").value=""; toast("写进去了"); load()});
 $("cAdd").addEventListener("click",async()=>{const b=$("cAdd"); if(b.disabled)return; b.disabled=true; try{const r=await post("api/capsules/add",{content:$("cText").value,day:$("cDay").value}); if(!r.ok)return toast(r.error); $("cText").value=""; $("cDay").value=""; toast(r.message||"埋好了"); load()}finally{b.disabled=false}});
-$("refresh").innerHTML=icon("refresh"); $("refresh").addEventListener("click",()=>{load();toast("已刷新")});
+$("refresh").addEventListener("click",()=>{menu(false);load();toast("已刷新")});
 let rz; window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(()=>S&&$("p-set").classList.contains("on")&&drawChart(),150)});
 paintIcons();
 go((location.hash||"#home").slice(1)||"home");
