@@ -208,6 +208,11 @@ MIGRATIONS = [
     ("mood_log", "sulk", "ALTER TABLE mood_log ADD COLUMN sulk REAL"),
     ("mood_log", "tired", "ALTER TABLE mood_log ADD COLUMN tired REAL"),
     ("messages", "channel", "ALTER TABLE messages ADD COLUMN channel TEXT"),   # qq（旧版本的记录可能是 tg 或空）
+    # 19.0 提醒发出去了才算完成：没发出去记一次、过 5 分钟再试；done 0=待发 1=发了 2=没发出去 3=错过（关机太久）4=取消
+    ("reminders", "tries", "ALTER TABLE reminders ADD COLUMN tries INTEGER NOT NULL DEFAULT 0"),
+    ("reminders", "next_try", "ALTER TABLE reminders ADD COLUMN next_try REAL NOT NULL DEFAULT 0"),
+    ("reminders", "sent_at", "ALTER TABLE reminders ADD COLUMN sent_at REAL"),
+    ("reminders", "created", "ALTER TABLE reminders ADD COLUMN created REAL"),
 ]
 
 
@@ -345,14 +350,14 @@ class DB(LifeDBMixin):
     # ---------- reminders ----------
     def add_reminder(self, due_ts: float, content: str) -> int:
         cur = self.conn.execute(
-            "INSERT INTO reminders(due_ts, content) VALUES (?,?)", (due_ts, content)
+            "INSERT INTO reminders(due_ts, content, created) VALUES (?,?,?)", (due_ts, content, time.time())
         )
         self.conn.commit()
         return cur.lastrowid
 
     def due_reminders(self, now: float) -> list[sqlite3.Row]:
         return self.conn.execute(
-            "SELECT * FROM reminders WHERE done=0 AND due_ts<=? ORDER BY due_ts", (now,)
+            "SELECT * FROM reminders WHERE done=0 AND due_ts<=? AND next_try<=? ORDER BY due_ts", (now, now)
         ).fetchall()
 
     def pending_reminders(self) -> list[sqlite3.Row]:
@@ -360,9 +365,23 @@ class DB(LifeDBMixin):
             "SELECT * FROM reminders WHERE done=0 ORDER BY due_ts"
         ).fetchall()
 
-    def finish_reminder(self, rid: int):
-        self.conn.execute("UPDATE reminders SET done=1 WHERE id=?", (rid,))
+    def finish_reminder(self, rid: int, status: int = 1):
+        """status：1 发了、2 试了几次都没发出去、3 错过（关机太久，回来时一起说）、4 取消。"""
+        self.conn.execute("UPDATE reminders SET done=?, sent_at=? WHERE id=?", (int(status), time.time(), rid))
         self.conn.commit()
+
+    def retry_reminder(self, rid: int, after: float = 300) -> int:
+        """19.0 这次没发出去：记一次，过一会儿再试。返回试过几次了。"""
+        self.conn.execute("UPDATE reminders SET tries=tries+1, next_try=? WHERE id=?", (time.time() + after, rid))
+        self.conn.commit()
+        r = self.conn.execute("SELECT tries FROM reminders WHERE id=?", (rid,)).fetchone()
+        return int(r["tries"]) if r else 0
+
+    def recent_reminders(self, limit: int = 30) -> list[sqlite3.Row]:
+        """发过的 / 没发出去的 / 错过的 / 取消的（小屋“提醒”的历史一栏）。"""
+        return self.conn.execute(
+            "SELECT * FROM reminders WHERE done!=0 ORDER BY COALESCE(sent_at, due_ts) DESC LIMIT ?", (limit,)
+        ).fetchall()
 
     # ---------- stickers ----------
     def add_sticker(self, file_id: str, unique_id: str, emoji: str | None,

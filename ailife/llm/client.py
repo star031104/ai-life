@@ -36,6 +36,8 @@ class Profile:
         # 每百万 token 的价格（命中缓存, 没命中, 输出），用来估算花费（小屋首页的每周体检用）；DeepSeek 官方接口有默认值
         self.price = list(c.get("price") or ([0.003, 0.15, 0.6] if "api.deepseek.com" in str(c["base_url"]).lower()
                                              else [0, 0, 0]))
+        self.is_deepseek = "api.deepseek.com" in str(c["base_url"]).lower()
+        self.tools = bool(c.get("tools", self.is_deepseek))              # 19.0 支持工具调用（查资料用）
         http_client = None
         if c.get("use_proxy") and proxy:
             http_client = httpx.AsyncClient(proxy=proxy, timeout=c.get("timeout", 90))
@@ -248,6 +250,63 @@ class LLM:
                     p.cool(e)
                     break
         raise RuntimeError(f"所有 {role} 接口都失败了：{last}")
+
+    # ---------------- 19.0 工具调用（查资料） ----------------
+    def tool_profiles(self, role: str = "helper") -> list[Profile]:
+        """这个用途里能做工具调用的模型：DeepSeek 官方接口，或 profile 里写了 tools: true 的。"""
+        try:
+            return [p for p in self.profiles_for(role) if p.tools]
+        except Exception:  # noqa: BLE001
+            return []
+
+    async def chat_tools(self, messages: list[dict], tools: list[dict] | None, role: str = "helper",
+                         thinking: bool = False, tool_choice: str | None = None, max_tokens: int = 4000,
+                         effort: str | None = None) -> dict:
+        """带工具问一次（和群聊那边 aigroup/llm/client.py 的一样）：返回整条 assistant 消息
+        （content / reasoning_content / tool_calls / _finish）。思考模式下这条要原样追加回 messages。"""
+        self.budget.check(float(self.stats().get("usd", 0) or 0), self._today(), False)
+        ps = self.tool_profiles(role)
+        if not ps:
+            raise RuntimeError("没有能做工具调用的模型")
+        last: Exception | None = None
+        for p in ps:
+            extra = {k: v for k, v in p.extra_body.items() if k != "thinking"}
+            if p.is_deepseek:
+                extra["thinking"] = {"type": "enabled" if thinking else "disabled"}
+                if thinking and effort:
+                    extra["reasoning_effort"] = effort
+            kw = dict(model=p.model, messages=messages, max_tokens=max_tokens)
+            if tools:
+                kw["tools"] = tools
+                if tool_choice:
+                    kw["tool_choice"] = tool_choice
+            if not thinking:
+                kw["temperature"] = 0.3
+            if extra:
+                kw["extra_body"] = extra
+            try:
+                t0 = time.time()
+                resp = await p.client.chat.completions.create(**kw)
+                ch = resp.choices[0]
+                m = ch.message
+                d = {"role": "assistant", "content": m.content or ""}
+                rc = getattr(m, "reasoning_content", None) or (getattr(m, "model_extra", None) or {}).get("reasoning_content")
+                if rc:
+                    d["reasoning_content"] = rc
+                if m.tool_calls:
+                    d["tool_calls"] = [{"id": tc.id, "type": "function",
+                                        "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"}}
+                                       for tc in m.tool_calls]
+                d["_finish"] = ch.finish_reason or ""
+                self._record(role, p.name, True, ms=(time.time() - t0) * 1000,
+                             usage=getattr(resp, "usage", None), price=p.price)
+                return d
+            except Exception as e:  # noqa: BLE001
+                last = e
+                self._record(role, p.name, False, limited=any(x in str(e) for x in ("429", "rate")))
+                if "400" not in str(e):
+                    p.cool(e)
+        raise RuntimeError(f"工具调用失败：{last}")
 
     async def json(self, messages: list[dict], default=None, role: str = "helper"):
         """让模型输出 JSON，并尽量容错地解析。"""

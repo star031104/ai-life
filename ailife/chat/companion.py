@@ -161,6 +161,18 @@ class Companion(CommandsMixin, LifeCommandsMixin, DeliveryMixin):
                     await self.deliver(p, kind="proactive")
         return cache
 
+    def _researcher(self):
+        rs = getattr(self, "_rs", None)
+        if rs is None:
+            from ailife.chat.research import Researcher
+
+            async def say(text):
+                m, ch = await self.owner_text(text)
+                if m is not None:
+                    self.db.add_message("assistant", text, "text", getattr(m, "message_id", None), channel=ch)
+            rs = self._rs = Researcher(self.cfg, self.brain, say)
+        return rs
+
     async def _maybe_search(self):
         """他刚问到她可能不知道的事：先在手机上搜一下（写成一条事件给她看），搜到的要点记成她自己知道的事。"""
         if not (self.cfg.get("net") or {}).get("search", True):
@@ -173,8 +185,21 @@ class Companion(CommandsMixin, LifeCommandsMixin, DeliveryMixin):
                 break
             texts.insert(0, r["content"])
         joined = "\n".join(texts)[-600:]
+        if not joined:
+            return
+        rs = self._researcher()
+        if rs.on():                                      # 19.0 先想一想：要不要查、怎么查（多轮搜、读网页、交简报）
+            try:
+                blk = await rs.think()
+            except Exception as e:  # noqa: BLE001
+                log.info("想一想出错，退回只搜一次：%s", e)
+                blk = None
+            if blk is not None:
+                if blk:
+                    self.db.add_message("event", blk)
+                return
         from ailife.media.search import ASK_RE, DECIDE_PROMPT, WebSearch
-        if not joined or not ASK_RE.search(joined):
+        if not ASK_RE.search(joined):
             return
         hour = int(time.time() // 3600)
         used = self.db.get("search_hour") or {}

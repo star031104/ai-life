@@ -143,6 +143,8 @@ wechat:
     read_links: true
     web_search: true
     search_per_hour: 12
+    agent: false                 # 19.0 回话前先想一想：要查的事多搜几次、打开网页看，交简报再回；有人让她到点提醒也当场记下（要 DeepSeek 官方接口）
+    agent_per_day: 60
     remember_web: true
     weekly_reflect: true
     memory_embed_model: ""       # 本机向量模型（要装 sentence-transformers）；配了 llm.routes.embed 就走接口（推荐，硅基流动 bge-m3 免费）

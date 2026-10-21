@@ -370,6 +370,23 @@ class GrowMixin:
         q += " ORDER BY due " + ("ASC" if status == "open" else "DESC") + " LIMIT ?"
         return [dict(r) for r in self.db.conn.execute(q, (*a, limit)).fetchall()]
 
+    def plan_reschedule(self, pid: int, when: str) -> str:
+        """19.0 小屋里改一条还没提醒的事的时间。成功返回空字符串，不然返回原因。"""
+        row = self.db.conn.execute("SELECT * FROM qq_plans WHERE id=? AND status='open'", (int(pid),)).fetchone()
+        if row is None:
+            return "这条已经不在待提醒里了"
+        due, all_day = parse_due(when, self.brain.now())
+        if due is None:
+            return "时间写成 2026-10-24 20:00 这样"
+        if all_day:
+            due = due.replace(hour=9 if row["kind"] == "remind" else 21)
+        if due.timestamp() < time.time() - 60:
+            return "这个时间已经过去了"
+        self.db.conn.execute("UPDATE qq_plans SET due=?, all_day=0, tries=0, next_try=0 WHERE id=?",
+                             (due.timestamp(), int(pid)))
+        self.db.conn.commit()
+        return ""
+
     def set_plan(self, pid: int, status: str):
         self.db.conn.execute("UPDATE qq_plans SET status=? WHERE id=?", (status, int(pid)))
         self.db.conn.commit()
@@ -541,13 +558,15 @@ class GrowMixin:
                 return False
 
     async def plans_tick(self, gid: int, st) -> bool:
-        """到点提醒 / 事后问结果。每个群每天最多 plans_per_day 次。说了返回 True。"""
+        """到点提醒 / 事后问结果。每个群每天最多 plans_per_day 次。说了返回 True。
+        19.0 整理时看出来的约定不再悄悄作废：提醒错过了窗口（不在活跃时段、今天次数用完）就顺延到下一个能说话的时候，
+        晚了 6 小时以上改成“事后问一句”；说出来了才算完成，没说出来 10 分钟后再试，三次都不行记成 failed（小屋看得到）。"""
         g = self._gk(gid)
         if not g.get("plans", True):
             return False
         now = time.time()
         self.db.conn.execute("UPDATE qq_plans SET status='expired' WHERE status='open' AND source!='tool' AND due<?",
-                             (now - 30 * 3600,))
+                             (now - 48 * 3600,))
         day_key = f"qq_plans_n_{gid}_{self.brain.now():%Y-%m-%d}"
         if int(self.db.get(day_key, 0) or 0) >= int(g.get("plans_per_day", 3)):
             return False
@@ -556,6 +575,8 @@ class GrowMixin:
         hour = self.brain.now().hour
         for p in self.plans(gid):
             if p.get("source") == "tool":                 # 19.0 当面要的提醒走 tool_reminders_tick（到点就发）
+                continue
+            if float(p.get("next_try") or 0) > now:       # 19.0 上次没说出来：等一会儿再试
                 continue
             due = float(p["due"])
             # 13.0 事前打个气：某个人自己的事（考试、面试、比赛）开始前 3~18 小时、白天，说一句（每件事一次）
@@ -575,36 +596,48 @@ class GrowMixin:
                     except Exception as e:  # noqa: BLE001
                         log.info("群 %s 打气失败：%s", gid, e)
                 return True
+            late_s = now - due
             if p["kind"] == "remind":
-                ready = due - 45 * 60 <= now <= due + 15 * 60
-                late = now > due + 15 * 60
+                if late_s > 6 * 3600:                    # 19.0 晚太多了：提醒没意义了，改成过后问一句
+                    self.db.conn.execute("UPDATE qq_plans SET kind='ask' WHERE id=?", (p["id"],))
+                    self.db.conn.commit()
+                    log.info("群 %s：约定「%s」错过了提醒的时候，改成过后问一句", gid, p["what"])
+                    p["kind"] = "ask"
+                    ready = True
+                else:
+                    ready = due - 45 * 60 <= now                    # 19.0 过了点还没提醒上：顺延到现在（说一句晚了）
             else:
                 ready = now >= due + (0 if p["all_day"] else 2 * 3600)
-                late = now > due + 28 * 3600
-            if late:
-                self.set_plan(p["id"], "expired")
-                continue
             if not ready:
                 continue
-            self.db.conn.execute("UPDATE qq_plans SET status='done', fired=? WHERE id=?", (now, p["id"]))
-            self.db.conn.commit()
-            self.db.set(day_key, int(self.db.get(day_key, 0) or 0) + 1)
-            self.db.set(f"qq_plans_last_{gid}", now)
             at = f"（想 @ 他就写 [@{p['who']}]）" if p["user_id"] else ""
             if p["kind"] == "remind":
                 when = datetime.fromtimestamp(due, self.cfg.tz)
-                why = (f"之前群里约好了「{p['what']}」（{when:%H:%M}），时间快到了。像朋友那样在群里喊一声提醒大家"
+                late = (f"已经过了 {int(late_s // 60)} 分钟，顺口说一句晚了，" if late_s > 15 * 60 else "")
+                why = (f"之前群里约好了「{p['what']}」（{when:%H:%M}），{'时间快到了' if late_s < 0 else '到点了'}。{late}"
+                       f"像朋友那样在群里喊一声提醒大家"
                        f"{'（主要是' + p['who'] + '）' if p['user_id'] else ''}，一句话，自然一点，比如“几点了，人呢”{at}")
             else:
                 why = (f"{p['who']}之前说过「{p['what']}」，现在应该已经有结果了。你记着这事，像朋友那样问一句怎么样了"
                        f"（关心，别查户口；他不想说就算了）{at}")
+            said = False
             async with st.lock:
                 try:
-                    await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who=p["who"], why=why,
-                                     must=True)
+                    said = bool(await self.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who=p["who"],
+                                                 why=why, must=True))
                 except Exception as e:  # noqa: BLE001
                     log.info("群 %s 提醒失败：%s", gid, e)
-            return True
+            if said:
+                self.db.conn.execute("UPDATE qq_plans SET status='done', fired=? WHERE id=?", (time.time(), p["id"]))
+                self.db.set(day_key, int(self.db.get(day_key, 0) or 0) + 1)
+                self.db.set(f"qq_plans_last_{gid}", time.time())
+            else:
+                tries = int(p.get("tries") or 0) + 1
+                self.db.conn.execute("UPDATE qq_plans SET tries=?, next_try=?, status=? WHERE id=?",
+                                     (tries, time.time() + 600, "failed" if tries >= 3 else "open", p["id"]))
+                log.info("群 %s：约定「%s」这次没说出来（第 %d 次）", gid, p["what"], tries)
+            self.db.conn.commit()
+            return said
         return False
 
     # ================= 被纠正了就改 =================
@@ -1042,7 +1075,8 @@ class GrowMixin:
             know += [dict(e, gid=x) for e in (kn.entries(x, 30) if kn else [])]
         know.sort(key=lambda e: -e["ts"])
         plans_open = [p for x in gids for p in self.plans(x)]
-        plans_done = sorted([p for x in gids for p in self.plans(x, "done", 10)], key=lambda p: -p["due"])[:10]
+        plans_done = sorted([p for x in gids for p in self.plans(x, None, 40) if p["status"] != "open"],
+                            key=lambda p: -p["due"])[:20]                 # 19.0 历史：说了 / 错过 / 没说出来 / 取消都在
         photo = getattr(self, "photos", None)
         return {
             "reflect": self.db.get(f"qq_reflect_{g0}") or "" if g0 else "",

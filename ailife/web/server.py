@@ -48,7 +48,47 @@ class Dashboard(RecordsMixin, LifeWebMixin, PersonaWebMixin, SystemMixin):
         a.router.add_get("/photos/{name}", self.photo)
         a.router.add_get("/tokens.css", self.tokens_css)
         a.router.add_get("/avatar/{kind}", self.avatar)
+        a.router.add_get("/api/reminders", self.reminders)                 # 19.0 待提醒 + 历史（发了 / 没发出去 / 错过 / 取消）
+        a.router.add_post("/api/reminders/cancel", self.reminder_cancel)
+        a.router.add_get("/api/agent", self.agent_view)                     # 19.0 她查过什么
         return a
+
+    async def agent_view(self, req):
+        db = self.brain.db
+        net = dict(self.cfg.get("net") or {})
+        logs = [x for x in (db.get("agent_log") or []) if isinstance(x, dict)][:30]
+        day = f"agent_n_{self.brain.now():%Y-%m-%d}"
+        llm = self.brain.llm
+        return web.json_response({"enabled": bool(net.get("agent", False)),
+                                  "on": bool(net.get("agent", False)) and hasattr(llm, "tool_profiles") and bool(llm.tool_profiles()),
+                                  "today": int(db.get(day, 0) or 0), "per_day": int(net.get("agent_per_day", 40) or 40),
+                                  "logs": logs})
+
+    REM_STATUS = {1: "发了", 2: "没发出去", 3: "错过了", 4: "取消了"}
+
+    async def reminders(self, req):
+        db = self.brain.db
+
+        def row(r):
+            k = r.keys()
+            return {"id": r["id"], "due": r["due_ts"], "content": r["content"],
+                    "tries": int(r["tries"] or 0) if "tries" in k else 0,
+                    "sent_at": r["sent_at"] if "sent_at" in k else None,
+                    "status": self.REM_STATUS.get(int(r["done"] or 0), "待提醒")}
+        return web.json_response({"open": [row(r) for r in db.pending_reminders()],
+                                  "history": [row(r) for r in db.recent_reminders(30)]})
+
+    async def reminder_cancel(self, req):
+        d = await self._json(req)
+        try:
+            rid = int(d.get("id"))
+        except (TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "没有这条提醒"})
+        r = self.brain.db.conn.execute("SELECT * FROM reminders WHERE id=? AND done=0", (rid,)).fetchone()
+        if r is None:
+            return web.json_response({"ok": False, "error": "这条已经不在待提醒里了"})
+        self.brain.db.finish_reminder(rid, 4)
+        return web.json_response({"ok": True, "message": f"取消了「{r['content']}」"})
 
     async def start(self):
         if not self.enabled:
@@ -175,7 +215,8 @@ class Dashboard(RecordsMixin, LifeWebMixin, PersonaWebMixin, SystemMixin):
             **self.life_state(),
             "recaps": [{"month": r["month"], "ts": r["ts"], "content": r["content"], "stats": r["stats"]}
                        for r in db.recaps(12)],
-            "reminders": [{"due": r["due_ts"], "content": r["content"]} for r in db.pending_reminders()],
+            "reminders": [{"id": r["id"], "due": r["due_ts"], "content": r["content"],
+                           "tries": int(r["tries"] or 0) if "tries" in r.keys() else 0} for r in db.pending_reminders()],
             "settings": {"city": b.weather.city, "schedule": db.get("schedule") or ""},
         })
 

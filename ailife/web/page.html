@@ -498,8 +498,12 @@ body:not(.admin) .adm-sep{display:none}
         <div class="card-b"><div class="chips" id="artists"></div><ul class="rows" id="music"></ul></div>
       </div>
       <div class="card c12 compact">
-        <div class="card-h"><h3><span data-i="bell"></span>待提醒</h3></div>
-        <div class="card-b"><ul class="rows" id="rem"></ul></div>
+        <div class="card-h"><h3><span data-i="bell"></span>待提醒</h3><span class="sp"></span><button class="btn ghost sm" id="remHistBtn">看历史</button></div>
+        <div class="card-b"><ul class="rows" id="rem"></ul><ul class="rows" id="remHist" hidden></ul></div>
+      </div>
+      <div class="card c12 compact" id="agentCard" hidden>
+        <div class="card-h"><h3><span data-i="search"></span>她查过什么</h3><span class="sp"></span><span class="hint" id="agentStat"></span></div>
+        <div class="card-b"><ul class="rows" id="agentList"></ul></div>
       </div>
     </div>
   </section>
@@ -1144,7 +1148,20 @@ function renderShows(){
       <button class="btn ghost sm danger" data-act="delShow" data-id="${s.id}" aria-label="不追了">${icon("x")}</button></li>`}).join("")
     :'<li class="empty">还没有。我们约好一起追的番会放在这里</li>';
 }
-function renderRem(){$("rem").innerHTML=S.reminders.length?S.reminders.map(r=>`<li><span class="ink2">${icon("bell")}</span><div class="grow"><div>${esc(r.content)}</div><div class="meta">${md(r.due)} ${hm(r.due)}</div></div></li>`).join(""):'<li class="empty">现在没有要提醒你的事</li>'}
+function renderRem(){$("rem").innerHTML=S.reminders.length?S.reminders.map(r=>`<li><span class="ink2">${icon("bell")}</span><div class="grow"><div>${esc(r.content)}</div><div class="meta">${md(r.due)} ${hm(r.due)}${r.tries?` · 没发出去 ${r.tries} 次，过会儿再试`:""}</div></div><button class="btn ghost sm" data-remx="${r.id}">取消</button></li>`).join(""):'<li class="empty">现在没有要提醒你的事</li>'}
+/* 19.0 提醒发出去了才算完成：历史里看得到发了 / 没发出去 / 错过了 / 取消了 */
+async function loadRemHist(){try{const d=await (await fetch("api/reminders",{headers:H()})).json();
+  $("remHist").innerHTML=d.history.length?d.history.map(r=>`<li><span class="ink2">${icon("bell")}</span><div class="grow"><div>${esc(r.content)}</div><div class="meta">${md(r.due)} ${hm(r.due)} · ${esc(r.status)}${r.tries?`（试了 ${r.tries} 次）`:""}</div></div></li>`).join(""):'<li class="empty">还没有提醒过的事</li>'}catch(e){}}
+/* 19.0 她查过什么（net.agent 打开后才显示） */
+async function loadAgent(){try{const a=await (await fetch("api/agent",{headers:H()})).json();if(!a.enabled&&!(a.logs||[]).length)return;
+  $("agentCard").hidden=false;$("agentStat").textContent=`${a.on?"":"现在的模型不支持工具调用，退回只搜一次 · "}今天查了 ${a.today} / ${a.per_day} 次`;
+  $("agentList").innerHTML=(a.logs||[]).slice(0,12).map(x=>{const b=x.brief||{};return `<li><span class="ink2">${icon("search")}</span><div class="grow"><div>${esc(x.goal||"")}</div>
+    <div class="meta">${md(x.ts)} ${hm(x.ts)} · ${x.depth==="deep"?"深查":"快查"} · ${x.rounds} 轮 · ${x.seconds} 秒${x.forced?" · 到点交卷":""}</div>
+    ${(b.answer_points||[]).slice(0,3).map(p=>`<div class="meta">· ${esc(p)}</div>`).join("")}</div></li>`}).join("")||'<li class="empty">还没查过</li>'}catch(e){}}
+loadAgent();
+$("remHistBtn")&&$("remHistBtn").addEventListener("click",()=>{const h=$("remHist");h.hidden=!h.hidden;$("remHistBtn").textContent=h.hidden?"看历史":"收起";if(!h.hidden)loadRemHist()});
+$("rem")&&$("rem").addEventListener("click",async e=>{const t=e.target.closest("[data-remx]");if(!t)return;if(!confirm("取消这条提醒？"))return;
+  const r=await post("api/reminders/cancel",{id:+t.dataset.remx});toast(r.message||r.error);load()});
 
 /* ---------- 设置 ---------- */
 function renderSettings(){

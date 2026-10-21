@@ -504,8 +504,8 @@ class Brain:
         self.apply_state(p)
         return p
 
-    async def proactive(self, reason: str) -> Parsed:
-        """主动找他。reason 描述为什么现在想找他（早安/想他/提醒…）。"""
+    async def proactive(self, reason: str, must: bool = False) -> Parsed:
+        """主动找他。reason 描述为什么现在想找他（早安/想他/提醒…）。must：一定要说（他让她到点提醒的），不给“跳过”。"""
         await self.refresh_world()
         hist = self.history()
         query = self._query(hist, "\n" + reason)
@@ -517,13 +517,16 @@ class Brain:
         instruction = (
             f"（系统：现在不是在回复他，而是你主动给他发消息。触发原因：{reason}。"
             f"结合时间、你今天在做的事、他最近的情况和你们上次聊到哪，自然地开个头。{length}。"
-            "不要重复你之前说过的话和用过的开头。如果觉得此刻不适合打扰他，只输出 [跳过]。）"
+            "不要重复你之前说过的话和用过的开头。"
+            + ("这条一定要发，不能跳过。）" if must else "如果觉得此刻不适合打扰他，只输出 [跳过]。）")
         )
         messages = [{"role": "system", "content": sys}] + hist
         append_user(messages, instruction)
         if messages[1]["role"] != "user":
             messages.insert(1, {"role": "user", "content": "（聊天开始）"})
         p = await self._generate(messages, proactive=True, max_bubbles=max_b, tag=reason)
+        if must and p.skip:
+            p.skip = False                       # 模型还是写了 [跳过]：交给调用方重试 / 发固定的话
         if not p.skip:
             self.apply_state(p)
         return p

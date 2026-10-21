@@ -63,7 +63,7 @@ def test_follow_up_without_at_is_answered(cfg, brain):
     _run(gc, _msg(FRIEND, "小王", "你小本本上都记啥了", 2))                    # 没 @，冷却 600 秒也照样接
     assert len(ob.sent) == 2
     user = brain.llm.group_calls[-1][1]["content"]
-    assert "多半是冲你说的" in user
+    assert "多半是冲你说的" in user or "在接你之前对他说的话" in user      # 19.1 先认成“在接她的话”
 
 
 def test_no_names_group_and_just_met(cfg, brain):

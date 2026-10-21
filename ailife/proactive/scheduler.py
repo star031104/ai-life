@@ -176,19 +176,39 @@ class Scheduler(EventsMixin):
         await self.brain.away.refresh_bye_lines(today)      # 提前写好今天的道别（关机时来不及等大模型）
 
     async def _reminders(self, now: datetime):
+        """他让她到点提醒的事：到点就发（安静时段也发，是他自己定的时间）。
+        19.0 发出去了才算完成（以前是先标完成再发：她那次要是选了“跳过”，这条提醒就丢了）；
+        没发出去 5 分钟后再试，第三次直接发一句固定的话，四次都不行记成“没发出去”，小屋里看得到。"""
         for r in self.db.due_reminders(time.time()):
-            self.db.finish_reminder(r["id"])
             late = time.time() - r["due_ts"]
             if late > 6 * 3600:          # 电脑关机错过太久：回来时和“这段时间在干嘛”一起说
                 when = datetime.fromtimestamp(r["due_ts"], self.cfg.tz)
                 self.brain.away.add_missed(f"本来 {when:%m-%d %H:%M} 要提醒他：{r['content']}")
+                self.db.finish_reminder(r["id"], 3)
                 continue
-            reason = f"到点提醒他：{r['content']}"
-            async with self.bot._lock:
-                p = await self.brain.proactive(reason)
-                if p.skip or not p.bubbles:
-                    continue
-                await self.bot.deliver(p, kind="proactive")
+            tries = int(r["tries"] or 0) if "tries" in r.keys() else 0
+            ok = False
+            try:
+                async with self.bot._lock:
+                    if tries >= 2:       # 试了两次她都没说出来：直接发一句固定的
+                        from ailife.mind.output import Bubble, Parsed
+                        p = Parsed(bubbles=[Bubble(text=f"到点啦，{r['content']}")])
+                    else:
+                        reason = (f"到点提醒他：{r['content']}（是他自己让你这个点提醒的，一定要说，不能跳过"
+                                  f"{'；已经晚了' + str(int(late // 60)) + '分钟，顺口说一句晚了' if late > 10 * 60 else ''}）")
+                        p = await self.brain.proactive(reason, must=True)
+                    if not p.skip and p.bubbles:
+                        ok = bool(await self.bot.deliver(p, kind="proactive"))
+            except Exception as e:  # noqa: BLE001
+                log.warning("提醒 #%s 没发出去：%s", r["id"], e)
+            if ok:
+                self.db.finish_reminder(r["id"], 1)
+                continue
+            n = self.db.retry_reminder(r["id"], 300)
+            log.info("提醒 #%s「%s」这次没发出去（第 %d 次）", r["id"], r["content"], n)
+            if n >= 4:
+                self.db.finish_reminder(r["id"], 2)
+                self.db.add_message("event", f"你本来要提醒他「{r['content']}」，但一直没发出去。等他下次说话时，先跟他说一声")
 
     async def _greetings(self, now: datetime):
         today = now.strftime("%Y-%m-%d")

@@ -192,6 +192,10 @@ net:
   search: true
   per_hour: 12                # 每小时最多搜几次
   tavily_key: ""              # 可选：Tavily 的 Key（写 ${TAVILY_KEY}），百度 / 360 / 搜狗都不行时兜底
+  agent: false                # 19.0 回话前先想一想要不要查：会多搜几次、打开网页看，交一份带日期的简报再回（要 DeepSeek 官方接口）
+  agent_per_day: 40           # 每天最多查几次（超了退回只搜一次）
+  agent_deep_thinking: true   # 深查打开思考模式（更准、慢一倍）
+  agent_filler: true          # 要深查时先说一句“等我看看”（10 分钟最多一次）
 
 
 # ---------------- 软件更新 ----------------

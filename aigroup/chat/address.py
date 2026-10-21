@@ -118,6 +118,52 @@ def her_phrases(her_recent: list[str], her_day: list[str], others: list[str], ca
     return out[:limit]
 
 
+FILLER = set("我你他她它的了是在有就也都还这那么吗呢啊吧呀哦嘛哈个一不")
+
+
+def _meaningful(b: str, names=()) -> bool:
+    """一个共同片段算不算“说过的东西”：不是一串虚词、不是群友名字（叫同一个人很正常）、不是常用词。"""
+    core = b.strip("".join(FILLER))
+    for w in sorted(COMMON2, key=len, reverse=True):          # “今天准备”去掉常用词只剩“准备”：不算
+        core = core.replace(w, "")
+    core = "".join(ch for ch in core if ch not in FILLER)
+    if len(core) < 3:
+        return False
+    for n in names or ():
+        if n and len(n) >= 2 and n in b and len(b) - len(n) <= 2:
+            return False
+    return True
+
+
+def echo_today(text: str, lines: list[str], names=(), min_len: int = 5) -> str:
+    """19.1 这句和她今天说过的某句意思撞了：有 ≥ min_len 个字的共同片段（“纪录片看哭”）→ 返回那个片段，没有返回 ""。
+    真实群聊（10-21）：早上 6:40 “别到时候又看纪录片看哭”，10:01 又 @ 他“AG 赢了别又看纪录片看哭”。"""
+    t = _plain(text)
+    if len(t) < min_len:
+        return ""
+    for ln in lines or []:
+        ln = _plain(ln)
+        if not ln or ln.startswith("["):
+            continue
+        for b in _blocks(t, ln, min_len):
+            if _meaningful(b, names):
+                return b
+    return ""
+
+
+def plan_terms(plan_text: str, her_lines: list[str], names=(), min_len: int = 3, limit: int = 8) -> list[str]:
+    """19.1 她今天安排里的东西，她今天已经主动说过的（“桑拿鸡”）：同一天别再主动提第二次。"""
+    plan = _plain(plan_text)
+    if not plan:
+        return []
+    out: list[str] = []
+    for ln in her_lines or []:
+        for b in _blocks(plan, _plain(ln), min_len):
+            if _meaningful(b, names) and b[0] not in "你我他她这那就也都还的了在" and not any(b in x for x in out):
+                out = [x for x in out if x not in b] + [b[:10]]
+    return out[:limit]
+
+
 def shape_bubbles(bubbles: list[str], recent_sizes: list[int], rand: float, long: bool = False) -> list[str]:
     """大多数时候一条：两条都短（合起来 ≤ 28 个字）时一半概率合成一条；最近 3 次都是分好几条发的，就一定合。
     长回复（len=long）、带 @ 的、第二条是“*改错字”的不动。"""

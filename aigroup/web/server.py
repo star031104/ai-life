@@ -65,6 +65,10 @@ class GroupHome:
         r.add_get("/tokens.css", self.tokens_css)
         r.add_get("/avatar/{kind}", self.avatar)
         r.add_get("/api/insight", self.insight)               # 17.0 只读：关系网、相处经验（每晚算好存着的）
+        r.add_get("/api/agent", self.agent_view)               # 19.0 她查过什么：每次查了几轮、多久、简报
+        r.add_get("/api/humane", self.humane)                 # 19.1 像人的几个指标
+        r.add_get("/api/blind", self.blind_new)               # 20.0 盲测
+        r.add_post("/api/blind", self.blind_answer)
         r.add_get("/api/messages", self.messages)
         r.add_get("/api/people", self.people)
         r.add_get("/api/person", self.person)
@@ -223,7 +227,56 @@ class GroupHome:
                 exp.append({"uid": uid, "name": d.get("name") or str(uid), "lines": list(d["lines"]), "ts": d.get("ts"),
                             "good": d.get("good", 0), "bad": d.get("bad", 0)})
         exp.sort(key=lambda x: -(x["ts"] or 0))
-        return web.json_response({"gid": gid, "pairs": g.get("pairs") or [], "pairs_ts": g.get("ts"), "experience": exp})
+        specs = []
+        for r in self._q("SELECT k FROM kv WHERE k LIKE ?", (f"qq_spec_{gid}_%",)):        # 19.1 相处说明书
+            d = self.db.get(r["k"]) or {}
+            try:
+                uid = int(str(r["k"]).rsplit("_", 1)[1])
+            except ValueError:
+                continue
+            if d.get("how"):
+                specs.append({"uid": uid, "name": d.get("name") or str(uid), "how": list(d["how"]),
+                              "tease_ok": list(d.get("tease_ok") or []), "tease_no": list(d.get("tease_no") or []),
+                              "care": d.get("care") or "", "ts": d.get("ts")})
+        specs.sort(key=lambda x: -(x["ts"] or 0))
+        return web.json_response({"gid": gid, "pairs": g.get("pairs") or [], "pairs_ts": g.get("ts"), "experience": exp,
+                                  "specs": specs})
+
+    async def humane(self, req):
+        """19.1 像人的几个指标（这一周）：该说没说、不该说却说、搭话接住、当天重复、没人理还追发。"""
+        gid = self._gid(req)
+        return web.json_response(self.gc.humane_metrics(gid))
+
+    async def agent_view(self, req):
+        """19.0 “查资料”：开没开、今天查了几次、Tavily 这个月用了多少，最近每次查了什么（轮数、秒数、步骤、简报）。"""
+        gid = self._gid(req)
+        gc = self.gc
+        g = gc.gk(gid) if gid else {}
+        logs = [x for x in (self.db.get("agent_log") or []) if isinstance(x, dict) and (not gid or x.get("gid") == gid)]
+        web_ = getattr(gc, "web", None)
+        n_today = int(self.db.get(gc._agent_day_key(gid), 0) or 0) if gid and hasattr(gc, "_agent_day_key") else 0
+        return web.json_response({
+            "on": bool(gid and hasattr(gc, "agent_on") and gc.agent_on(gid)),
+            "enabled": bool(g.get("agent", False)), "today": n_today, "per_day": int(g.get("agent_per_day", 60) or 60),
+            "tavily_used": web_.tavily_used() if web_ is not None and hasattr(web_, "tavily_used") else 0,
+            "tavily_out": bool(web_ is not None and hasattr(web_, "tavily_out") and web_.tavily_out()),
+            "logs": [{"ts": x.get("ts"), "goal": x.get("goal"), "depth": x.get("depth"), "thinking": x.get("thinking"),
+                      "rounds": x.get("rounds"), "seconds": x.get("seconds"), "forced": x.get("forced"),
+                      "steps": (x.get("steps") or [])[:12], "brief": x.get("brief") or {}} for x in logs[:30]]})
+
+    async def blind_new(self, req):
+        """20.0 盲测：她说的混在群友说的里，你猜哪几句是她。"""
+        gid = self._gid(req)
+        return web.json_response(self.gc.blind_set(gid))
+
+    async def blind_answer(self, req):
+        d = await self._json(req)
+        gid = self._gid(req, d)
+        try:
+            picks = [int(x) for x in d.get("picks") or []]
+        except (TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "参数不对"}, status=400)
+        return web.json_response(self.gc.blind_answer(gid, picks))
 
     def _wechat_status(self) -> dict:
         try:
@@ -644,7 +697,8 @@ class GroupHome:
                "你刷到群，想说点什么：可以接着最近的话题，或者分享你今天遇到的事。一两句话，自然一点")
         async with st.lock:
             try:
-                ok = await self.gc.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who="", why=why)
+                ok = await self.gc.speak(gid, mentioned=False, owner_spoke=False, trigger=None, who="", why=why,
+                                         must=True)        # 19.1 你在小屋里点的：不受“没人理不追发”“念头分”限制
             except Exception as e:  # noqa: BLE001
                 return web.json_response({"ok": False, "error": f"没说出来：{e}"})
         return web.json_response({"ok": bool(ok), "message": "她说了" if ok else "",
@@ -994,9 +1048,12 @@ class GroupHome:
 
     async def life_plan(self, req):
         d = await self._json(req)
+        if d.get("id") and d.get("when"):                   # 19.0 改时间（还没提醒的）
+            msg = self.gc.plan_reschedule(int(d["id"]), str(d["when"]))
+            return web.json_response({"ok": not msg, "message": "改好了" if not msg else "", "error": msg})
         if d.get("id"):
             st = str(d.get("status") or "skip")
-            if st not in ("open", "done", "skip"):
+            if st not in ("open", "done", "skip", "cancelled"):
                 return web.json_response({"ok": False, "error": "状态不对"})
             self.gc.set_plan(int(d["id"]), st)
             return web.json_response({"ok": True, "message": "改好了"})

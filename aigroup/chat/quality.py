@@ -58,10 +58,11 @@ LEAK = re.compile(r"我的(系统提示|提示词|人设设定)|作为(一个|�
 
 def check(text: str, recent: list[str] | None = None, sim: float = 0.75, avoid: list[str] | None = None,
           detector=None, ai_open: bool = False, stale: list[str] | None = None,
-          no_names: list[str] | None = None) -> tuple[float, list[str]]:
+          no_names: list[str] | None = None, echo=None) -> tuple[float, list[str]]:
     """avoid：这次在聊的人的“别碰”话题里的词；detector：AI 腔小分类器（3.0，攒够数据后每晚训练）；
     stale：她最近几小时已经用过的口头禅 / 招牌说法（5.0，chat/address.her_phrases）；
-    no_names：这个群不叫名字（call_names 关着）时，群友的名字、外号、称呼。"""
+    no_names：这个群不叫名字（call_names 关着）时，群友的名字、外号、称呼；
+    echo：19.1 一个函数，这句里有她今天已经说过的意思 / 主动提过的安排时返回命中的片段（chat/humane.echo_of）。"""
     t = (text or "").strip()
     score, hits = 0.0, []
     if not t:
@@ -81,6 +82,14 @@ def check(text: str, recent: list[str] | None = None, sim: float = 0.75, avoid: 
             score += 3.0
             hits.append(f"叫了名字「{w}」")
             break
+    if echo is not None:
+        try:
+            hit = echo(t)
+        except Exception:  # noqa: BLE001
+            hit = ""
+        if hit:
+            score += 6.0                                 # 到 speak 的 SOFT_BLOCK：没被叫到就不说，被叫到 / 自己要说的就重写
+            hits.append(f"今天说过「{hit}」")
     if not ai_open and BACKSTAGE.search(t):
         score += 6.0                                     # 到 speak 的 SOFT_BLOCK：没被叫到就不说，被叫到就重写
         hits.append("说了幕后的事")
@@ -121,10 +130,10 @@ def check(text: str, recent: list[str] | None = None, sim: float = 0.75, avoid: 
 
 
 def check_bubbles(bubbles: list[str], recent: list[str] | None = None, sim: float = 0.75, avoid=None,
-                  detector=None, ai_open: bool = False, stale=None, no_names=None) -> tuple[float, list[str]]:
+                  detector=None, ai_open: bool = False, stale=None, no_names=None, echo=None) -> tuple[float, list[str]]:
     total, hits = 0.0, []
     for b in bubbles:
-        s, h = check(b, recent, sim, avoid, detector, ai_open, stale, no_names)
+        s, h = check(b, recent, sim, avoid, detector, ai_open, stale, no_names, echo)
         total = max(total, s) if s >= HARD else total + s
         hits += [x for x in h if x not in hits]
     if len(bubbles) >= 3 and len(set(len(b) // 10 for b in bubbles)) == 1:
@@ -135,10 +144,10 @@ def check_bubbles(bubbles: list[str], recent: list[str] | None = None, sim: floa
 
 
 def pick(cands: list[list[str]], recent: list[str] | None = None, sim: float = 0.75, avoid=None,
-         detector=None, ai_open: bool = False, stale=None, no_names=None) -> tuple[int, float, list[str]]:
+         detector=None, ai_open: bool = False, stale=None, no_names=None, echo=None) -> tuple[int, float, list[str]]:
     """几个候选（每个是要发的几条）→ (挑中的下标, 罚分, 命中的规则)。都不能发返回 (-1, …)。
     罚分一样时选靠前的（第一个是模型自己最想说的）。"""
-    scored = [(check_bubbles(c, recent, sim, avoid, detector, ai_open, stale, no_names), i) for i, c in enumerate(cands) if c]
+    scored = [(check_bubbles(c, recent, sim, avoid, detector, ai_open, stale, no_names, echo), i) for i, c in enumerate(cands) if c]
     if not scored:
         return -1, HARD, ["没有候选"]
     ok = [(s, h, i) for (s, h), i in scored if s < HARD]

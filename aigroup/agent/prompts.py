@@ -70,7 +70,7 @@ RESEARCH_SYSTEM = """现在是 {now}（北京时间）。你是研究员，替�
 
 交卷只输出 JSON（不要别的字）：
 {{"answer_points": ["要点：带具体数字、日期、主语，最重要的放前面", "..."],
- "premise": "问题的前提有问题就写在这，没问题写空字符串",
+ "premise": "问题的前提有问题（人已经退役、东西还没出、那天没有比赛……）就一定写在这，没问题写空字符串",
  "as_of": "信息截至哪天 YYYY-MM-DD",
  "sources": [{{"title": "", "site": "", "date": ""}}],
  "confidence": "high 或 medium 或 low",

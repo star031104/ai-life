@@ -190,6 +190,11 @@ class FeedbackMixin:
                 await asyncio.to_thread(self.train_label_nb)
         except Exception as e:  # noqa: BLE001
             log.info("关系网 / 相处经验 / 小判断器出错：%s", e)
+        if self.g.get("person_spec", True) and hasattr(self, "build_specs"):
+            try:                                                  # 19.1 相处说明书（每人一周写一次）
+                await self.build_specs()
+            except Exception as e:  # noqa: BLE001
+                log.info("相处说明书出错：%s", e)
         for name in ("train_detector", "refresh_latency", "auto_lore", "deep_profiles"):   # 3.0 / 2.2 / 3.1：AI 腔检测器、回复延迟、群梗词条、仔细回想画像
             fn = getattr(self, name, None)
             if fn:

@@ -89,7 +89,17 @@ class SpeakMixin:
         names = [p.name, getattr(p, "formal_name", "") or "", *self.aliases]
         for g in self.groups:                                   # 所有群的群友名字都不算“梗”（她在别的群叫过的称呼也是）
             names += self.member_names(g)
-        return her_phrases(recent, day, others, list(p.catchphrases or []), names=names)
+        out = her_phrases(recent, day, others, list(p.catchphrases or []), names=names)
+        gd = float(self.gk(gid).get("gag_days", 3) or 0)
+        if gd > 0:                                              # 20.0 她自己的梗连着几天都在用：也先歇一歇
+            rows3 = [r["content"] for r in self.db.conn.execute(
+                "SELECT content FROM qq_group_messages WHERE role='assistant' AND ts>? ORDER BY id DESC LIMIT 200",
+                (now - gd * 86400,)).fetchall()]
+            last24 = [r["content"] for r in rows if now - r["ts"] < 86400]
+            for w in her_phrases(last24, rows3, others, [], limit=4, names=names):
+                if w not in out and not any(w in x or x in w for x in out):
+                    out.append(w)
+        return out[:10]
 
     def recent_sizes(self, gid: int, n: int = 3) -> list[int]:
         """她最近几次开口各发了几条（看 qq_reply_effect 里记的消息 id 数）。"""
@@ -313,7 +323,11 @@ class SpeakMixin:
                          + "。对方没正面回答就算了，别再问一遍同样的问题。")
         if guess:
             how, _, gname = guess.partition(":")
-            if how == "about":
+            if how == "bid":
+                gname, _, her_line = gname.partition(":")
+                note += (f"{gname}刚才那句在接你之前对他说的话（你说的是「{her_line}」）。接住他：回一句，哪怕很短、哪怕只是笑一下、"
+                         "认个怂、怼回去；别装没看见，也别把你那句再说一遍。真的是在跟别人说，才 skip。")
+            elif how == "about":
                 note += (f"{gname}刚才在说你（“它”“机器人”说的是你）。想回就回一句（被说不聪明可以不服气地怼回去、被夸就得意一下），"
                          "当成群里的梗，别解释自己是怎么做的；没什么好说的就 skip。")
             else:
@@ -324,10 +338,12 @@ class SpeakMixin:
         try:
             async with st.lock:
                 try:
-                    await self.speak(gid, mentioned=mentioned, owner_spoke=owner, trigger=trigger, who=who,
+                    said = await self.speak(gid, mentioned=mentioned, owner_spoke=owner, trigger=trigger, who=who,
                                      note=note, interest=interest, gate_id=gate_id, focus=list(dict.fromkeys([t[1] for t in texts] + self.alias_hits(joined))),
                                      query=joined, last_is_sticker=bool(texts and texts[-1][3].get("sticker")),
                                      may_ignore=may_ignore)
+                    if guess.startswith("bid:") and hasattr(self, "note_bid"):
+                        self.note_bid(gid, "", "", answered=bool(said))
                 except Exception as e:  # noqa: BLE001
                     log.warning("群 %s 回复失败：%s", gid, e)
         finally:
@@ -351,6 +367,12 @@ class SpeakMixin:
             log.info("群 %s：今天主动说的够多了（%d 次），这次不说", gid, cap)
             self.gate.mark(gate_id, spoke=False)
             return False
+        if why is not None and not mentioned and not must and hasattr(self, "lonely_reason"):
+            lonely = self.lonely_reason(gid)                 # 19.1 说完没人接不追发、深夜没人不主动
+            if lonely:
+                log.info("群 %s：%s，这次不主动说", gid, lonely)
+                self.gate.mark(gate_id, spoke=False)
+                return False
         last_id = int(self.db.conn.execute("SELECT IFNULL(MAX(id), 0) m FROM qq_group_messages WHERE group_id=?",
                                            (gid,)).fetchone()["m"])
         if why is None and not web:                                   # 接群友话时：有她得先查一下的事就搜一搜
@@ -462,6 +484,15 @@ class SpeakMixin:
             if replying and plan["act"] == "say" and kind in ("S1", "S2"):     # 只管接群友话；冒泡、欢迎、nudge 不管
                 log.info("群 %s：她判断这和她无关（%s），不说", gid, kind)
                 plan["act"] = "skip"
+            sc = plan.get("score") or {}
+            if (sc and plan["act"] == "say" and not mentioned and not must and self.gk(gid).get("self_score", True)
+                    and (replying or why is not None)):
+                avg = sum(sc.values()) / len(sc)
+                low_new = sc.get("新意", 5) <= 2
+                if avg < float(self.gk(gid).get("self_score_min", 3.0)) or low_new:
+                    # 19.1 Inner Thoughts：念头分不够（尤其新意 ≤ 2：说过的、复述别人的）就不说
+                    log.info("群 %s：念头分不够（平均 %.1f%s），不说", gid, avg, "，新意低" if low_new else "")
+                    plan["act"] = "skip"
             if plan["act"] == "react" and not getattr(self.ob, "can_react", True):
                 plan["act"] = "say" if plan["cands"] else "skip"          # 微信点不了表情：有话就说，没话就算了
             if plan["act"] == "react":
@@ -518,8 +549,13 @@ class SpeakMixin:
         if self.gk(gid).get("quality_check", True):
             stale = self.stale_phrases(gid)
             no_names = self.member_names(gid) if self.names_off(gid) else []
-            qargs = dict(avoid=self.avoid_words(gid, focus, target_uid), detector=self.detector,
-                         ai_open=bool(getattr(b.persona, "ai_open", False)), stale=stale, no_names=no_names)
+            others_txt = " ".join(str(r["content"] or "") for r in self._rows(gid, 8) if r["role"] == "user")
+            echo = ((lambda t: self.echo_of(gid, t, others_txt)) if hasattr(self, "echo_of") else None)
+            avoid = self.avoid_words(gid, focus, target_uid)
+            if hasattr(self, "spec_avoid"):               # 19.1 相处说明书里“别拿来开玩笑的”
+                avoid += self.spec_avoid(gid, list(dict.fromkeys([*(focus or []), *([target_uid] if target_uid else [])])))
+            qargs = dict(avoid=avoid, detector=self.detector,
+                         ai_open=bool(getattr(b.persona, "ai_open", False)), stale=stale, no_names=no_names, echo=echo)
             sim = float(self.gk(gid).get("similar_threshold", 0.75))
             i, score, hits = pick(cands, recent, sim, **qargs)
             if cands and (i < 0 or score >= SOFT_BLOCK) and (mentioned or why is not None) and use_plan:
@@ -664,7 +700,8 @@ class SpeakMixin:
         """质检毛病很大时重写一次：把她刚写的和毛病告诉她。返回新的候选。"""
         why = "、".join(hits[:4]) or "不太对"
         tip = {"推回去": "直接给一个具体答案", "假装在场": "你人不在那，别说得像真在现场", "说了幕后的事": "别提测试、代码、服务器这些",
-               "叫了名字": "这个群不叫名字，直接说"}
+               "叫了名字": "这个群不叫名字，直接说",
+               "今天说过": "这个意思你今天已经说过了，换个角度、换个梗，或者只回一句很短的", "碰了雷区": "别提这个"}
         extra = "；".join(v for k, v in tip.items() if any(h.startswith(k) for h in hits))
         m2 = messages + [{"role": "assistant", "content": raw or ""},
                          {"role": "user", "content": f"（系统：这句有问题：{why}。{extra}。换个说法重写，还是只输出同样格式的 JSON。）"}]

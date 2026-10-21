@@ -155,6 +155,17 @@ class EvalMixin:
                 await self.run_probes()
         except Exception as e:  # noqa: BLE001
             log.info("签名建议 / 定向测试出错：%s", e)
+        try:                                                     # 19.1 / 20.0 像人的几个数、长对话六项
+            hm = {str(g): self.humane_metrics(g) for g in sorted(self.groups)} if hasattr(self, "humane_metrics") else {}
+            lj = await self.long_judge() if hasattr(self, "long_judge") else {}
+            hist = list(self.db.get("eval_hist") or [])
+            if hist and hist[-1].get("week") == week:
+                hist[-1]["humane"] = hm
+                if lj:
+                    hist[-1]["long"] = {"scores": lj["scores"], "avg": lj["avg"], "worst": lj["worst"]}
+                self.db.set("eval_hist", hist[-26:])
+        except Exception as e:  # noqa: BLE001
+            log.info("像人指标 / 长对话评测出错：%s", e)
         last = self.db.get("persona_compare_last") or {}
         old = previous_body(self.db, self.brain.persona)
         if old and last.get("new_hash") != body_hash(self.brain.persona.body):
@@ -198,5 +209,6 @@ class EvalMixin:
                 "versions": [{"hash": v.get("hash"), "ts": v.get("ts")} for v in vs],
                 "current": body_hash(self.brain.persona.body), "running": bool(getattr(self, "_eval_running", False)),
                 "sigs": self.sig_stats(), "probe": self.db.get("probe_last") or {},
-                "label_nb": self.db.get("label_nb_status") or {}}
+                "label_nb": self.db.get("label_nb_status") or {}, "long": self.db.get("long_judge_last") or {},
+                "blind": (self.db.get("qq_blind_hist") or [])[-10:]}
 

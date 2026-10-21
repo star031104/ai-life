@@ -145,7 +145,15 @@ class IngestMixin:
         meta = {"at_other": bool([q for q in f.ats if q != "all"]) and not f.mentioned,
                 "reply_other": bool(f.reply_id) and not reply_to_her,
                 "sticker": bool(f.stickers) and len(re.sub(r"\[[^\]]*\]", "", text).strip()) == 0}
-        if not mentioned and self.gk(gid).get("guess_to_her", True) and hasattr(self, "member_names"):
+        bid = ""
+        if not mentioned and hasattr(self, "bid_from"):
+            bid = self.bid_from(gid, uid, clean_member_text(f.text), at_other=meta["at_other"], reply_other=meta["reply_other"])
+            if bid:                                 # 19.1 在接她刚才的话（Gottman 的“搭话”）：接住
+                st.batch_guess = f"bid:{name}:{bid[:30]}"
+                meta["guess"] = "bid"
+                self.note_bid(gid, name, bid)
+                tlog.info("群 %s：%s 在接她的话（她说的「%s」）：%s", gid, name, bid[:24], clean_member_text(f.text, 40))
+        if not bid and not mentioned and self.gk(gid).get("guess_to_her", True) and hasattr(self, "member_names"):
             from aigroup.chat.address import likely_to_her
             hers = [r["content"] for r in self.db.conn.execute(
                 "SELECT content FROM qq_group_messages WHERE group_id=? AND role='assistant' ORDER BY id DESC LIMIT 3",

@@ -165,6 +165,13 @@ mark{background:var(--warn-soft);color:inherit;border-radius:3px;padding:0 1px}
 .dtabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 .sec-t{font-size:var(--fs-sm);font-weight:700;color:var(--ink-2);margin:var(--sp-5) 0 var(--sp-2)}
 .sec-t:first-child{margin-top:0}
+.field.spec{margin-bottom:14px} .field.spec ul{margin:0;padding-left:18px} .field.spec .lt{font-weight:400}
+.hm{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--sp-3)}
+.hm .stat{background:var(--surface-2);box-shadow:none}
+.blind{list-style:none;margin:0;padding:0}
+.blind li{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)} .blind li:first-child{border-top:0}
+.blind li.her{background:var(--accent-soft);border-radius:var(--r-sm)} .blind li.miss{background:var(--warn-soft);border-radius:var(--r-sm)}
+.blind label{flex:1;display:flex;gap:10px;align-items:center;cursor:pointer}
 .pck{float:right;display:inline-flex;gap:4px}
 .pck .btn{min-height:22px;padding:0 8px;font-size:var(--fs-micro)}
 
@@ -360,7 +367,7 @@ body:not(.admin) .side .adm-gt{display:none}
               <input class="input" id="lfWhen" placeholder="2026-10-24 20:00">
               <select class="input" id="lfKind"><option value="remind">到点提醒大家</option><option value="ask">过后问结果</option></select>
               <button class="btn sm" id="lfPlanAdd">记下</button></div></details>
-          <details class="more"><summary>说过的</summary><ul class="rows" id="lfPlansDone"></ul></details></div>
+          <details class="more"><summary>历史（说过的、错过的、取消的）</summary><ul class="rows" id="lfPlansDone"></ul></details></div>
         <div><h4><span data-i="route"></span>大家在哪</h4><ul class="rows" id="lfWhere"></ul>
           <details class="more"><summary>手动加一个</summary>
             <div class="form2"><select class="input" id="lfWU"></select><input class="input" id="lfWC" placeholder="城市，比如：珠海" maxlength="20">
@@ -512,6 +519,20 @@ body:not(.admin) .side .adm-gt{display:none}
     <div class="card c12" id="labCard">
       <div class="card-h"><h3><span data-i="quote"></span>这一刻她该不该说</h3><span class="sp"></span><span class="hint" id="labStat">你判的会直接用来调她什么时候开口（每晚重新拟合时权重最高）</span></div>
       <div class="card-b" id="labBox"></div>
+    </div>
+    <div class="card c12" id="humaneCard">
+      <div class="card-h"><h3><span data-i="heart"></span>像不像人（这一周）</h3><span class="sp"></span><span class="hint">该说没说、不该说却说用的是你上面的标注；搭话 = 别人接她的话</span></div>
+      <div class="card-b"><div class="hm" id="humane"></div></div>
+    </div>
+    <div class="card c12" id="agentCard">
+      <div class="card-h"><h3><span data-i="search"></span>她查过什么</h3><span class="sp"></span><span class="hint" id="agentStat">回话前先想一想要不要查：每次查了几轮、多久、交了什么简报</span></div>
+      <div class="card-b"><ul class="rows scrollbox" id="agentList"><li class="empty">还没查过</li></ul></div>
+    </div>
+    <div class="card c12" id="blindCard">
+      <div class="card-h"><h3><span data-i="quote"></span>盲测：哪几句是她说的</h3><span class="sp"></span><span class="hint" id="blindStat">她这周说的混在群友说的里，勾出你觉得是她的</span>
+        <button class="btn sm" id="blindNew">出一组</button></div>
+      <div class="card-b"><ul class="blind" id="blindList"><li class="empty">点“出一组”开始</li></ul>
+        <div class="form2" id="blindActs" hidden><button class="btn pri sm" id="blindGo">交卷</button></div></div>
     </div>
     <div class="card c12">
       <div class="card-h"><h3><span data-i="route"></span>她现在想不想开口</h3><span class="sp"></span><span class="hint">最近 1 小时的发言配额：概率过了阈值才会去想说什么</span></div>
@@ -1018,7 +1039,10 @@ async function openPerson(uid,gsel){
       $("dVer").innerHTML=r.versions.length?`<ul class="said-list">${r.versions.map(v=>`<li><span class="t">${fmtDay(v.ts).replace(/ 星期.$/,"")} ${fmtTime(v.ts)}</span><span>${v.diff.length?v.diff.slice(0,6).map(esc).join("<br>"):"（和后一版一样）"} <button class="btn sm ghost" data-ver="${v.id}">退回这一版</button></span></li>`).join("")}</ul>`:'<div class="small muted">还没有改过</div>';
       document.querySelectorAll("[data-ver]").forEach(b=>b.onclick=async()=>{if(!confirm("把画像退回到这一版？"))return;try{const x=await api("/api/person/restore",{uid,gid:+DG,id:+b.dataset.ver});toast(x.message||x.error);if(x.ok)openPerson(uid,DG)}catch(e){toast("出错了："+e.message)}});
     }catch(e){toast("没加载出来")}}}
-  if(DG)api("/api/insight?gid="+DG).then(d=>{const e=(d.experience||[]).find(z=>z.uid===uid);if(e&&$("dExp"))$("dExp").innerHTML=`<div class="field" style="margin-bottom:14px"><label>她和他相处的经验 <span style="font-weight:400">· 每晚从她的话有没有被接总结的</span></label><ul style="margin:0;padding-left:18px">${e.lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul></div>`}).catch(()=>{});
+  if(DG)api("/api/insight?gid="+DG).then(d=>{const e=(d.experience||[]).find(z=>z.uid===uid),sp=(d.specs||[]).find(z=>z.uid===uid);if(!$("dExp"))return;
+    $("dExp").innerHTML=(sp?`<div class="field spec"><label>相处说明书 <span class="lt">· 她每周从他的话里总结的潜台词</span></label><ul>${sp.how.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>
+      ${sp.tease_ok.length?`<div class="meta">能开玩笑的：${sp.tease_ok.map(esc).join("、")}</div>`:""}${sp.tease_no.length?`<div class="meta">别拿来开玩笑：${sp.tease_no.map(esc).join("、")}</div>`:""}${sp.care?`<div class="meta">${esc(sp.care)}</div>`:""}</div>`:"")
+      +(e?`<div class="field spec"><label>她和他相处的经验 <span class="lt">· 每晚从她的话有没有被接总结的</span></label><ul>${e.lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul></div>`:"")}).catch(()=>{});
   barChart($("dHours"),[...Array(24).keys()],[{name:"说的话",data:hrs,color:hue(x.user_id)}],{h:110,every:6,fmtLabel:l=>l+"时",title:l=>`${l}:00 – ${l}:59`});
   if(per.length>1)mkSeg($("dgseg"),per.map(g=>[String(g.gid),g.name,g.msgs]),DG,v=>openPerson(uid,v));
   $("dForget").textContent=per.length>1?"清空这个群的画像":"清空画像";
@@ -1125,7 +1149,7 @@ async function loadLearn(){
     :'<li class="empty">还没有词条（整理群聊时会把群梗、黑话自动加进来，也可以自己写）</li>';
   document.querySelectorAll("[data-lore]").forEach(b=>b.onclick=async()=>{const body={id:+b.dataset.lore};if(b.dataset.del){if(!confirm("删掉这条？"))return;body.delete=true}else body.status=b.dataset.st;
     try{const x=await api("/api/lore",body);toast(x.message||x.error);loadLearn()}catch(e){toast("出错了："+e.message)}});
-  loadPair();loadLabel();markEmpty();
+  loadPair();loadLabel();loadHumane();loadAgent();markEmpty();
   document.querySelectorAll("[data-fact]").forEach(b=>b.onclick=async()=>{const a=b.dataset.act;if(a==="delete"&&!confirm("删掉这条？"))return;
     try{const x=await api("/api/learned/fact",{id:+b.dataset.fact,delete:a==="delete",expire:a==="expire"});toast(x.message);loadLearn()}catch(e){toast("出错了："+e.message)}});
   document.querySelectorAll("[data-stk]").forEach(b=>b.onclick=async()=>{try{const x=await api("/api/learned/sticker",{id:+b.dataset.stk,status:b.dataset.st});toast(x.message);loadLearn()}catch(e){toast("出错了："+e.message)}});
@@ -1180,10 +1204,11 @@ const KGROUPS=[["说话多少",["talkativeness","max_per_10min","max_bubbles","c
   ["回复节奏（像真人）",["pace","typing_chars_per_sec"]],["怎么想",["plan_json","gate_judge","rethink_max","learn","quality_check","candidates","memory_recall","profile_detail"]],
   ["小动作",["repeat_chance","react_chance","welcome_chance","night_catch_up","see_images","hear_voice","voice_reply","stickers","typo_rate","poke_back_chance","update_signature"]],
   ["像真人（2.2）",["lore","mood","human_latency","explore_rate"]],["群冷了冒个泡",["idle_hours","idle_chance","idle_gap_hours","active_hours"]],
-  ["记性",["profile_every","impression_every"]],["联网",["read_links","web_search","search_per_hour","remember_web","weekly_reflect"]],
+  ["记性",["profile_every","impression_every"]],["联网",["read_links","web_search","search_per_hour","agent","agent_per_day","agent_deep_thinking","agent_filler","remember_web","weekly_reflect"]],
   ["慢慢长",["monthly_self","plans","plans_per_day","fix_knowledge","celebrate","birthday_card","plans_cheer","share_per_day","share_chance","share_fresh_days","photo_share_chance"]],
   ["人格和分寸（14.0）",["signatures","signature_k","persona_examples","example_k","hold_thoughts","pester_calls","weekly_probe","label_nb"]],
   ["懂人（16.0）",["rel_experience","absent_hours","state_judge"]],
+  ["更像人（19.1）",["bids","bid_hours","no_repeat_today","no_monologue","lonely_hours","self_score","self_score_min","person_spec"]],
   ["B 站视频和天气",["watch_videos","video_frames","weather","weather_care"]],
   ["每周评测",["weekly_eval"]]];
 let K={},KG="all";
@@ -1199,6 +1224,9 @@ async function loadEval(){let E;try{E=await api("/api/eval")}catch(e){return}
       (h.traits?`<div class="small" style="margin-top:6px">人格一致性：和人格文件平均差 ${h.traits.dist??"?"} 档${(h.traits.off||[]).length?"，差得多："+h.traits.off.map(([c,v])=>`${esc(c)} ${v>0?"+":""}${v}`).join("、"):""}；幽默 ${Object.entries(h.traits.humor||{}).map(([a,b])=>`${esc(a)} ${b}`).join("、")}${(h.traits.attack||[]).length?`<div class="meta">攻击型：${h.traits.attack.map(esc).join(" / ")}</div>`:""}</div>`:"")+
             ((h.worst||[]).length?`<ul class="rows" style="margin-top:6px">${h.worst.map(w=>`<li><span class="tag ${w.score<70?"hot":"warm"}">${w.score}</span><div class="grow">${esc(w.said)}<div class="meta">${esc(w.why)}</div></div></li>`).join("")}</ul>`:"")})()
     :`<div class="empty">还没评过（每周一自动评一次，也可以点“现在评一次”）${E.running?" · 正在评…":""}</div>`;
+  const LJ=E.long||{};
+  if(LJ.scores)$("evHist").innerHTML+=`<div class="small" style="margin-top:12px">长对话六项（${fmtDay(LJ.ts)}，从一整段聊天看）：平均 ${LJ.avg} / 5</div>
+    <div class="chips" style="margin-top:6px">${Object.entries(LJ.scores).map(([k,v])=>`<span class="tag ${v<=2?"hot":v>=4?"ok":"warm"}">${esc(k)} ${v}</span>`).join("")}</div>${LJ.worst?`<div class="meta">最大的毛病：${esc(LJ.worst)}</div>`:""}`;
   const PB=E.probe||{},NB=E.label_nb||{};
   if(PB.n)$("evHist").innerHTML+=`<div class="small" style="margin-top:12px">定向测试（${fmtDay(PB.ts)}，每条签名、每个“不懂 / 没兴趣”编一段假聊天让她回）：平均 ${PB.avg} / 5，签名挑中率 ${Math.round((PB.coverage||0)*100)}%</div>
     <ul class="rows" style="margin-top:6px">${(PB.items||[]).slice(0,6).map(x=>`<li><span class="tag ${x.score<=2?"hot":x.score>=4?"ok":"warm"}">${x.score}</span><div class="grow"><b>${esc(x.id)}</b>${x.picked?"":" <span class=\"tag wait\">没挑中这条签名</span>"}<div>${esc(x.reply)}</div><div class="meta">${esc(x.why)}</div></div></li>`).join("")}</ul>`;
@@ -1245,6 +1273,33 @@ async function loadKnobs(){
     else inp.onchange=()=>send(inp.value)});
   $("knobs").querySelectorAll("[data-reset]").forEach(b=>b.onclick=async()=>{await api("/api/settings",{reset:b.dataset.reset,gid:gm?+KG:undefined});toast(gm?"跟回全局了":"恢复了");loadKnobs()});
 }
+/* 19.1 像不像人：这一周的几个数 + 20.0 盲测 */
+async function loadHumane(){let h;try{h=await api(`/api/humane?gid=${LSEL}`)}catch(e){return}
+  const pc=v=>v==null?"—":Math.round(v*100)+"%";
+  $("humane").innerHTML=[["该说没说",pc(h.mir),h.labels?`你标了 ${h.labels} 条，目标 ≤ 50%`:"先在上面标几条"],["不该说却说",pc(h.fir),"目标 ≤ 10%"],
+    ["搭话接住",pc(h.bid_rate),h.bids?`${h.bids_caught} / ${h.bids} 次，目标 ≥ 80%`:"这周还没人接她的话"],["当天说重复",String(h.repeats),"同一天同样的意思，目标 0"],
+    ["没人理还追发",String(h.monologues),"说完 30 分钟没人接又说，目标 0"]]
+    .map(([a,b,c])=>`<div class="stat"><div class="l">${a}</div><div class="v">${esc(b)}</div><div class="d">${esc(c)}</div></div>`).join("")}
+/* 19.0 她查过什么 */
+async function loadAgent(){let a;try{a=await api(`/api/agent?gid=${LSEL}`)}catch(e){return}
+  $("agentStat").textContent=(a.enabled?(a.on?"开着":"开着，但现在的模型不支持工具调用（退回只搜一次）"):"没开（性格开关 → 联网 → “先想一想再回”）")
+    +` · 今天查了 ${a.today} / ${a.per_day} 次 · Tavily 这个月 ${a.tavily_used} 次${a.tavily_out?"（免费额度用完了，改用免费搜索）":""}`;
+  const DEP={deep:"深查",quick:"快查"};
+  $("agentList").innerHTML=(a.logs||[]).map(x=>{const b=x.brief||{};const pts=(b.answer_points||[]).slice(0,4);
+    const src=(b.sources||[]).filter(s=>s&&typeof s==="object").slice(0,4).map(s=>esc(s.site||s.title||"")+(s.date?`（${esc(s.date)}）`:"")).join("；");
+    return `<li><span class="tag ${x.depth==="deep"?"hot":"ok"}">${DEP[x.depth]||esc(x.depth||"")}</span><div class="grow"><div><b>${esc(x.goal||"")}</b></div>
+    <div class="meta">${fmtDay(x.ts)} ${fmtTime(x.ts)} · ${x.rounds} 轮 · ${x.seconds} 秒${x.thinking?" · 开了思考":""}${x.forced?" · 到点交卷":""}${b.confidence?" · 把握 "+esc({high:"高",medium:"中",low:"低"}[b.confidence]||b.confidence):""}</div>
+    ${b.premise?`<div class="small">前提：${esc(b.premise)}</div>`:""}${pts.map(p=>`<div class="small">· ${esc(p)}</div>`).join("")}${b.unknown?`<div class="small muted">没查到：${esc(b.unknown)}</div>`:""}
+    ${src?`<div class="meta">来源：${src}</div>`:""}<details class="more"><summary>每一步</summary>${(x.steps||[]).map(s=>`<div class="meta">${esc(s)}</div>`).join("")||'<div class="meta">没用工具</div>'}</details></div></li>`}).join("")||'<li class="empty">还没查过（被问到最近的事、数据、新闻时她会先查一下）</li>'}
+let BLIND=null;
+$("blindNew").onclick=async()=>{try{BLIND=await api(`/api/blind?gid=${LSEL}`)}catch(e){return toast("出错了："+e.message)}
+  const it=BLIND.items||[];$("blindActs").hidden=!it.length;
+  $("blindList").innerHTML=it.length?it.map(x=>`<li data-bi="${x.i}"><label><input type="checkbox" value="${x.i}"> ${esc(x.text)}</label></li>`).join(""):'<li class="empty">这周的话还不够出一组</li>'};
+$("blindGo").onclick=async()=>{const picks=[...document.querySelectorAll("#blindList input:checked")].map(x=>+x.value);
+  let r;try{r=await api("/api/blind",{gid:LSEL,picks})}catch(e){return toast("出错了："+e.message)}
+  if(!r.ok)return toast(r.error);const her=new Set(r.her);
+  document.querySelectorAll("#blindList li[data-bi]").forEach(li=>{const i=+li.dataset.bi,picked=picks.includes(i);li.classList.toggle("her",her.has(i));li.classList.toggle("miss",picked&&!her.has(i))});
+  $("blindStat").textContent=`她说的 ${r.total} 句，你认出了 ${r.hit} 句（${Math.round((r.rate||0)*100)}%）；越接近一半越像群友`;$("blindActs").hidden=true};
 /* 18.0 空的卡片不占一整行：两张并排、内容区收紧（单数时最后一张占满） */
 function markEmpty(){document.querySelectorAll(".page .grid>.card").forEach(c=>{const b=c.querySelector(".card-b:last-child")||c.querySelector(".card-b"),e=b&&b.querySelector(".empty,.small.muted:only-child");
   c.classList.toggle("is-empty",!!e&&!c.querySelector("input,textarea,select,#labCard *")&&c.id!=="labCard"&&b.textContent.trim()===e.textContent.trim())});
@@ -1320,11 +1375,15 @@ async function loadLife(){
     <div class="grow"><div style="display:flex;gap:8px;align-items:center"><b>${esc(p.name)}</b>${famTag(p.tier)}${p.owner?'<span class="tag ok">你</span>':""}<span class="sp" style="flex:1"></span><span class="small muted num">${p.score}</span></div>
     <div class="meter"><i style="width:${Math.min(100,p.score)}%"></i></div></div></li>`).join("")||'<li class="empty">还没认识谁</li>';
   $("lfClose").innerHTML=(L.close_events||[]).map(e=>`<li><div class="grow">${esc(e.name)}：${esc(e.from)} → <b>${esc(e.to)}</b><div class="meta">${fmtDay(e.ts)}</div></div></li>`).join("")||'<li class="empty">还没有</li>';
-  const pl=p=>`<li><div class="grow"><div><span class="tag ${p.kind==="remind"?"ok":"warm"}">${p.kind==="remind"?"提醒":"问结果"}</span> <b>${esc(p.what)}</b>${p.user_id?` · ${esc(p.who)}`:""}</div>
-    <div class="meta">${fmtDay(p.due)} ${p.all_day?"":fmtTime(p.due)}${p.status==="open"?"":" · 已经说过"}</div></div>${p.status==="open"?`<button class="btn sm ghost" data-pskip="${p.id}">不用了</button>`:""}</li>`;
+  const PST={done:"说过了",missed:"错过了（程序停太久）",failed:"没说出来",cancelled:"取消了",skip:"不用了",expired:"过期了"};
+  const REP={daily:"每天",weekday:"工作日",weekly:"每周"};
+  const pl=p=>`<li><div class="grow"><div><span class="tag ${p.kind==="remind"?"ok":"warm"}">${p.kind==="remind"?"提醒":"问结果"}</span>${p.source==="tool"?' <span class="tag hot">当面要的</span>':""} <b>${esc(p.what)}</b>${p.user_id?` · ${esc(p.who)}`:""}</div>
+    <div class="meta">${fmtDay(p.due)} ${p.all_day?"":fmtTime(p.due)}${p.repeat?" · "+(REP[p.repeat]||esc(p.repeat)):""}${p.asker&&p.asker!==p.who?" · "+esc(p.asker)+"让记的":""}${p.status==="open"?(p.tries?` · 没说出来 ${p.tries} 次，过会儿再试`:""):" · "+(PST[p.status]||esc(p.status))}</div></div>${p.status==="open"?`<span class="adm-only"><button class="btn sm ghost" data-pwhen="${p.id}">改时间</button> <button class="btn sm ghost" data-pskip="${p.id}">不用了</button></span>`:""}</li>`;
   $("lfPlans").innerHTML=(L.plans||[]).map(pl).join("")||'<li class="empty">现在没有记着的约定（群里约了时间的事她会自己记下）</li>';
   $("lfPlansDone").innerHTML=(L.plans_done||[]).map(pl).join("")||'<li class="empty">还没有</li>';
   document.querySelectorAll("[data-pskip]").forEach(b=>b.onclick=async()=>{try{const r=await api("/api/life/plan",{id:+b.dataset.pskip,status:"skip"});toast(r.message||r.error);loadLife()}catch(e){toast("出错了："+e.message)}});
+  document.querySelectorAll("[data-pwhen]").forEach(b=>b.onclick=async()=>{const w=prompt("改到什么时候？比如 2026-10-24 20:00");if(!w)return;
+    try{const r=await api("/api/life/plan",{id:+b.dataset.pwhen,when:w});toast(r.message||r.error);loadLife()}catch(e){toast("出错了："+e.message)}});
   $("lfShares").innerHTML=(L.shares||[]).map(x=>`<li><span class="tag ${x.kind==="photo"?"hot":"ok"}">${x.kind==="photo"?"照片":"刷到的"}</span><div class="grow">${esc(x.text)}<div class="meta">${fmtDay(x.ts)} ${fmtTime(x.ts)}${x.topic?" · "+esc(x.topic):""}${L.names&&x.gid?" · "+esc(L.names[x.gid]||""):""}</div></div></li>`).join("")||'<li class="empty">我还没分享过东西（每天最多一次，挑群里不忙的时候）</li>';
   $("lfPhoto").hidden=!L.photo_ready;
   $("lfWhere").innerHTML=(L.where||[]).map(w=>`<li><div class="grow"><div><b>${esc(w.name)}</b> <span class="tag ${w.kind==="trip"?"warm":"ok"}">${esc(w.why||(w.kind==="trip"?"在外地":"住"))}</span> ${esc(w.city)}</div>

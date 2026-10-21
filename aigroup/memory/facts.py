@@ -361,12 +361,16 @@ class Memory:
                 str(f.get("source") or "") if f.get("subject_id") not in (-1, 0) else "", "")
             exp = (f"（到 {datetime.fromtimestamp(f['t_invalid'], self.tz):%m-%d} 为止）"
                    if f.get("t_invalid") else "")
-            lines.append(f"- （{day}）{who}{clean_member_text(f['text'], 120)}{src}{exp}")
+            fuzzy = ""
+            if f.get("created") and self.strength(f["created"], f.get("hits") or 0, time.time()) < 0.35:
+                fuzzy = "（记得不太清了：说的时候带个“好像”“我记得是”）"     # 20.0 记忆会淡：太久没想起的别说得斩钉截铁
+            lines.append(f"- （{day}）{who}{clean_member_text(f['text'], 120)}{src}{exp}{fuzzy}")
         for m in found.get("messages") or []:
             day = datetime.fromtimestamp(m["ts"], self.tz).strftime("%m-%d %H:%M")
             who = "你" if m["role"] == "assistant" else m["name"]
             txt = clean_member_text(m["content"], 80)                 # 老数据可能没洗过：和聊天记录一样消毒、加引号
-            lines.append(f"- [{day}] {who} 说过：{txt if m['role'] == 'assistant' else quote_member(txt)}")
+            old = "（很久以前的，印象有点模糊）" if time.time() - float(m["ts"]) > 30 * 86400 else ""
+            lines.append(f"- [{day}] {who} 说过：{txt if m['role'] == 'assistant' else quote_member(txt)}{old}")
         if not lines:
             return ""
         return "# 你隐约想起来的（以前群里的事，聊到了可以自然提一下，没聊到就别硬提；可能已经过时）\n" + "\n".join(lines)
