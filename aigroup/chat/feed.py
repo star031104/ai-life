@@ -7,7 +7,7 @@
 1. 兴趣表（feed_interests_{gid}）：群友画像里的“兴趣 / 在意”（几个人都在意的权重高）+ 她自己的兴趣（权重低一点）+ 她查过、被聊到多的话题。
    每晚重算；分享后有没有人接会回过头调权重（接得好 +0.1，冷场 −0.1，最低 0.1）。小屋“学到的”能看能删。
    依据：Ask Now, Use Later（2026-05）：让智能体问用户偏好，问中的只有 6~10%；从聊天里抽更靠谱。
-2. 候选池（qq_feed）：每 3 小时在后台给权重前几的话题各搜一次最近 3 天的新闻（DeepSeek 搜索约 ¥0.005 / 次），不调大模型。
+2. 候选池（qq_feed）：每 6 小时在后台给权重前几的话题各搜一次最近 3 天的新闻（DeepSeek 搜索约 ¥0.005 / 次），不调大模型。
 3. 按事件去重：向量（bge-m3）余弦 > 0.82、或者标题字二元组重合 > 0.5，10 天内算同一件事（event_id）。
    依据：实时新闻事件识别（2025-08）：BGE-M3 + 实体聚类 AMI 0.84。分享过的事件再来新消息，只有出现新数字才算“后续”。
 4. 打分（规则）：兴趣权重 × 新鲜度（半衰期 1 天）× 新颖度（新事件 1、后续 0.5）。过线（feed_min，默认 0.25）才进下一步：
@@ -131,12 +131,12 @@ class FeedMixin:
 
     # ---------------- 候选池 ----------------
     def feed_tick(self, gid: int, now: float):
-        """idle_tick 里每分钟调：每 feed_hours 小时（默认 3）在后台刷一次。"""
+        """idle_tick 里每分钟调：每 feed_hours 小时（默认 6）在后台刷一次。"""
         g = self.gk(gid)
         if not g.get("feed", True) or not getattr(self, "web", None) or not self.web.enabled:
             return
         k = f"feed_last_{gid}"
-        if now - float(self.db.get(k, 0) or 0) < float(g.get("feed_hours", 3)) * 3600:
+        if now - float(self.db.get(k, 0) or 0) < float(g.get("feed_hours", 6)) * 3600:
             return
         if not 8 <= self.brain.now().hour < 23:
             return
