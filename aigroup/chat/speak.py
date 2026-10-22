@@ -633,7 +633,8 @@ class SpeakMixin:
                               "；毛病：" + "、".join(res["issues"]) if res.get("issues") else "", "" if enforced else "【只记录】")
                 if enforced and res.get("window") == "never":
                     plan["act"] = "skip"
-                elif enforced and res.get("window") == "early":
+                elif enforced and res.get("window") in ("early", "ok"):
+                    # 21.1.1 “可以（不说也行）”也先放着：真人这时候多半不说；等一会儿再判还只是“可以”就算了
                     if pitch or not self.gk(gid).get("pitch_queue", True):
                         plan["act"] = "skip"
                     else:

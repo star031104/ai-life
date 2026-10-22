@@ -143,7 +143,8 @@ DEFAULTS = {
     "person_card": True,           # 21.0 在聊的人合成一张人卡（≤120 字），代替“今天状态 / 刚回来 / 相处经验 / 相处说明书”四段
     "listener_mode": "auto",       # 21.1 听者：auto 先只记、和你的标注一致率够了自动接管；on 直接管；shadow 只记；off 不用
     "listener_agree": 0.7,         # auto 接管要的一致率
-    "listener_min_each": 15,       # auto 接管前“该接”“时机不对”各要攒这么多条你的标注
+    "listener_min_each": 15,
+    "listener_margin": 0.08,       # 或者：听者比她自己现在的做法和你一致率高这么多（且 ≥ 0.6）也接管       # auto 接管前“该接”“时机不对”各要攒这么多条你的标注
     "listener_panel": True,        # 配了 llm.routes.listener2 时两个模型一起判，意见不一就等等
     "appraise_enforce": False,     # 21.1 她自己的九问自评要不要直接拦（默认只记录：自评不可信）
     "move_cooldown": True,         # 21.1 同一种接法半小时里用过 2 次就提醒她换一种
@@ -283,6 +284,7 @@ KNOBS = {
     "person_card": ("人卡", "bool", None, None, None, "在聊的人合成一张 ≤120 字的卡，代替分散的四段"),
     "listener_mode": ("听者", "str", None, None, None, "auto：先只记录，和你的标注一致率够了自动接管；on：直接管；shadow：只记录；off：不用"),
     "listener_agree": ("听者接管要的一致率", "float", 0.5, 0.95, 0.05, ""),
+    "listener_margin": ("听者比她自己准多少就接管", "float", 0, 0.5, 0.01, "和你一致率比她现在的做法高这么多（且 ≥ 60%）也接管"),
     "listener_min_each": ("接管前每类要几条标注", "int", 5, 100, 1, "“该接”“时机不对”各要这么多"),
     "listener_panel": ("两个模型一起判", "bool", None, None, None, "配了 routes.listener2 才有用；意见不一就先等等"),
     "appraise_enforce": ("她的自评直接拦", "bool", None, None, None, "默认只记录（模型给自己打分不可信）"),

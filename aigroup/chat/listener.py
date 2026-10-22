@@ -25,8 +25,9 @@ CN_WIN = {"正好": "now", "现在": "now", "可以": "ok", "太早": "early", "
 PROMPT = """你在旁边看一个微信群聊天，帮一个叫“{name}”的群友判断：她想说的这句，插在最后一条消息后面合不合适。
 真人在群里大多数时候不说话；同一句话，早了会打断别人、晚了就冷了。你不是在判断这句话相不相关，而是在判断**时机**：
 - 正好（now）：有人在等回应、话题停在一个能接的口子上、她接一句明显让聊天更好
-- 可以（ok）：插进去不突兀，不说也行
-- 太早（early）：最后说话的人还在连着发、问的是别人而那人还没回、两个人正一来一回聊着、话题还没到她能接的地方
+- 可以（ok）：插进去不突兀，但不说也完全没问题（真人这时候多半不说）
+- 太早（early）：问的是别人而那人还没回、两个人正一来一回聊着而且跟她无关、话题还没到她能接的地方
+  （只是对方刚连发了几条不算太早：程序已经等他说完了；对方在跟她说话、在等她回应时更不算）
 - 不该说（never）：跟她无关、会打断、重复别人、说了会冷场或让人尴尬
 另外顺手看这句有没有毛病（没有就空着）：说漏了别人私下的事或幕后的事；让人当众下不来台（纠错、拒绝、损人却没给台阶）；
 只是顺着别人说；把别人刚说的再说一遍；跟她最近的接法一样（{recent_acts}）；这句明显是在接别人的话却当成冲她来的。
@@ -68,14 +69,17 @@ def signals(rows: list[dict], her_name: str, now: float, her_share: float, names
 
 
 def signals_text(s: dict) -> str:
+    """21.1.1：只写事实，不替听者下结论。回放你的 45 条标注时发现：写“可能还没说完”“她占比高”会把听者推向“太早”，
+    该接的也判成太早（一致率 58%）；程序在问听者之前已经等过连发说完（merge_wait_seconds）。"""
     lines = [f"- 最后一条是 {s['secs_since_last']} 秒前"]
-    if s.get("burst", 0) >= 2:
-        lines.append(f"- 最后说话的人 20 秒内连发了 {s['burst']} 条，可能还没说完")
+    if s.get("burst", 0) >= 3 and s.get("secs_since_last", 99) < 8:
+        lines.append(f"- 最后说话的人刚连发了 {s['burst']} 条")
     if s.get("pending_q"):
         lines.append(f"- {s['pending_q']}")
     if s.get("two_person"):
-        lines.append("- 最近几条只有两个人在一来一回地聊")
-    lines.append(f"- 她最近 30 分钟占了群里 {int(s.get('her_share', 0) * 100)}% 的消息")
+        lines.append("- 最近几条只有两个人在一来一回地聊（她不在其中）")
+    if s.get("her_share", 0) >= 0.35:
+        lines.append(f"- 她最近 30 分钟占了群里 {int(s['her_share'] * 100)}% 的消息，有点多")
     return "\n".join(lines)
 
 
@@ -94,7 +98,9 @@ def parse_listen(out: str) -> dict:
         w = next((v for k, v in CN_WIN.items() if k in s), "") or next((x for x in WINDOWS if x in s.lower()), "ok")
     issues = d.get("issues") if isinstance(d.get("issues"), list) else []
     issues = [str(x).strip()[:60] for x in issues if str(x).strip() and str(x).strip() not in ("无", "没有", "空")][:3]
-    return {"window": w, "until": str(d.get("until") or "")[:30], "addressee": str(d.get("addressee") or "")[:20],
+    until = str(d.get("until") or "").strip()
+    until = "" if until in ("空", "无", "没有", "null", "None") else until
+    return {"window": w, "until": until[:30], "addressee": str(d.get("addressee") or "")[:20],
             "issues": issues, "why": str(d.get("why") or "")[:100]}
 
 
@@ -114,9 +120,34 @@ def merge_panel(votes: list[dict]) -> dict:
     return out
 
 
+SAY = ("now",)      # 21.1.1：只有“正好”才算该说。回放你的 45 条标注：把“可以（不说也行）”也算说，一致 53%；只算“正好”，64%
+
+
+def listener_examples(db, gid: int, exclude: int | None = None, k: int = 3) -> str:
+    """你判过的例子（她当时说了的那种）：最后 3 句 + 她说的那句 → 你的判断。给听者当标准（few-shot）。"""
+    out = []
+    for lab, word in ((1, "正好（群主判：该接）"), (0, "不该说（群主判：时机不对）")):
+        try:
+            rows = db.conn.execute(
+                "SELECT g.id, g.ts, e.text her FROM qq_gate_log g JOIN qq_reply_effect e ON e.gate_id=g.id "
+                "WHERE g.group_id=? AND g.human=? AND g.mentioned=0 AND g.spoke=1 AND IFNULL(e.text,'')!='' "
+                "AND NOT (g.human=0 AND IFNULL(g.human_why,'')='说的不对') AND g.id!=? ORDER BY RANDOM() LIMIT ?",
+                (gid, lab, int(exclude or 0), k)).fetchall()
+        except Exception:  # noqa: BLE001
+            return ""
+        for r in rows:
+            ctx = list(reversed(db.conn.execute(
+                "SELECT name, role, content FROM qq_group_messages WHERE group_id=? AND ts<=? ORDER BY id DESC LIMIT 3",
+                (gid, float(r["ts"]) + 1)).fetchall()))
+            if ctx:
+                lines = " / ".join(f"{'她' if c['role'] == 'assistant' else c['name']}：{str(c['content'] or '')[:30]}" for c in ctx)
+                out.append(f"- {lines} → 她想说「{str(r['her'])[:30]}」→ {word}")
+    return "\n".join(out)
+
+
 def agreement(rows: list) -> dict:
-    """听者和你的标注对一对：early / never ↔ 不该插（时机不对 / 没分原因的），now / ok ↔ 该接。"""
-    n = ok = n0 = n1 = 0
+    """听者和你的标注对一对：只有 now ↔ 该接；ok / early / never ↔ 不该插（时机不对 / 没分原因的）。"""
+    n = ok = n0 = n1 = her = 0
     for r in rows:
         try:
             v = json.loads(r["listener"] or "{}")
@@ -131,8 +162,11 @@ def agreement(rows: list) -> dict:
         n += 1
         n0 += lab == 0
         n1 += lab == 1
-        ok += (lab == 1) == (w in ("now", "ok"))
-    return {"n": n, "n0": n0, "n1": n1, "agree": round(ok / n, 3) if n else None}
+        ok += (lab == 1) == (w in SAY)
+        if "spoke" in r.keys():
+            her += (lab == 1) == bool(r["spoke"])
+    return {"n": n, "n0": n0, "n1": n1, "agree": round(ok / n, 3) if n else None,
+            "her": round(her / n, 3) if n and rows and "spoke" in rows[0].keys() else None}
 
 
 class ListenerMixin:
@@ -148,7 +182,7 @@ class ListenerMixin:
         return float(r["h"] or 0) / float(r["n"]) if r["n"] else 0.0
 
     def listener_stats(self, gid: int | None = None) -> dict:
-        q = ("SELECT listener, human, IFNULL(human_why,'') human_why FROM qq_gate_log WHERE human IN (0,1) "
+        q = ("SELECT listener, human, IFNULL(human_why,'') human_why, spoke FROM qq_gate_log WHERE human IN (0,1) "
              "AND IFNULL(listener,'')!=''" + (" AND group_id=?" if gid is not None else ""))
         try:
             rows = self.db.conn.execute(q, ([gid] if gid is not None else [])).fetchall()
@@ -164,8 +198,13 @@ class ListenerMixin:
             return False
         st = self.listener_stats(gid)
         need = int(self.gk(gid).get("listener_min_each", 15))
-        return bool(st.get("agree") is not None and st["n0"] >= need and st["n1"] >= need
-                    and st["agree"] >= float(self.gk(gid).get("listener_agree", 0.7)))
+        if st.get("agree") is None or st["n0"] < need or st["n1"] < need:
+            return False
+        # 21.1.1：和你一致率够高（listener_agree）就接管；或者比她自己现在的做法明显更对（至少高 listener_margin、且不低于 0.6）
+        her = st.get("her")
+        return bool(st["agree"] >= float(self.gk(gid).get("listener_agree", 0.7))
+                    or (her is not None and st["agree"] >= 0.6
+                        and st["agree"] - her >= float(self.gk(gid).get("listener_margin", 0.08))))
 
     async def listen(self, gid: int, draft: list[str], now: float | None = None) -> dict:
         """问听者（配了 routes.listener2 时两个一起问）。出错返回 {}（当作没意见）。"""
@@ -179,13 +218,8 @@ class ListenerMixin:
                       self.member_names(gid) if hasattr(self, "member_names") else [])
         chat = "\n".join(f"[{int(now - float(r['ts']))}秒前] {'她（' + name + '）' if r['role'] == 'assistant' else r['name']}："
                          f"{str(r['content'] or '')[:80]}" for r in rows)
-        shots = ""
-        try:
-            from aigroup.chat.speak import judge_examples
-            ex = judge_examples(self.db, gid, self.cfg.tz)
-            shots = f"群主以前判过的例子（照这个标准，“不该插”多半是时机不对）：\n{ex}\n\n" if ex else ""
-        except Exception:  # noqa: BLE001
-            pass
+        ex = listener_examples(self.db, gid)
+        shots = f"群主以前判过的例子（照这个标准）：\n{ex}\n\n" if ex else ""
         recent = "、".join(self.recent_acts(gid)) if hasattr(self, "recent_acts") else ""
         prompt = PROMPT.format(name=name, signals=signals_text(sig), shots=shots, chat=chat,
                                draft=" / ".join(draft)[:200], recent_acts=recent or "没有")

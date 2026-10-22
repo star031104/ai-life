@@ -213,7 +213,10 @@ class SocialMixin:
         p = self.brain.persona
         out = []
         if META.search(text):
-            out.append("说了幕后的事（小屋、标注、门控、提示词这些别提）")
+            # 21.1.1：群友自己在聊她的机制（10-22 有人把机制说明贴进了群）时，她可以接着聊，不算“说幕后”
+            recent = " ".join(str(r["content"] or "") for r in self._rows(gid, 10) if r["role"] == "user")
+            if not (META.search(recent) or re.search(r"机制|提示词|代码|小屋|标注|门控|怎么做的|怎么实现", recent)):
+                out.append("说了幕后的事（小屋、标注、门控、提示词这些别提）")
         if getattr(p, "ai_open", False) and str(getattr(p, "life", "") or "free") == "free" and OFFLINE.search(text):
             out.append("编了线下的事（你没有线下生活：别说自己在上课、吃饭、出门、交稿）")
         if hasattr(self, "avoid_words"):

@@ -15,6 +15,12 @@ log = logging.getLogger("aigroup.group")
 class IdleMixin:
     async def idle_tick(self, step_minutes: float = 1.0):
         """每分钟调一次。"""
+        try:                                                    # 21.1.1 有地方写了数据库没提交：写锁一直占着，
+            if getattr(self.db.conn, "in_transaction", False):  # 小管家 / 回放脚本会报 database is locked。每分钟兜底提交一次
+                self.db.conn.commit()
+                self.db.set("open_txn_fixed", int(self.db.get("open_txn_fixed", 0) or 0) + 1)
+        except Exception:  # noqa: BLE001
+            pass
         from aigroup.core.schedule import in_quiet, parse_range
         try:
             self.evaluate_effects()

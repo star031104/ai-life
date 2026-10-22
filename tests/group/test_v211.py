@@ -32,7 +32,7 @@ def test_listener_signals_and_parse():
             {"ts": now - 8, "role": "user", "name": "老张", "uid": 2, "content": "老王你去吗"}]
     s = signals(rows, "小满", now, 0.3, ["小王", "老张", "老王"])
     assert s["burst"] == 2 and s["two_person"] and "老王" in s["pending_q"]
-    assert "连发了 2 条" in signals_text(s) and "两个人" in signals_text(s)
+    assert "连发" not in signals_text(s) and "两个人" in signals_text(s)       # 21.1.1 只写事实，2 条不算
     assert parse_listen('{"window": "太早", "issues": ["无"]}') == {"window": "early", "until": "", "addressee": "",
                                                                   "issues": [], "why": ""}
     assert parse_listen("我觉得现在正好")["window"] == "now"
@@ -42,7 +42,7 @@ def test_listener_signals_and_parse():
              {"listener": json.dumps({"window": "now"}), "human": 1, "human_why": ""},
              {"listener": json.dumps({"window": "now"}), "human": 0, "human_why": ""},
              {"listener": json.dumps({"window": "now"}), "human": 0, "human_why": "说的不对"}]
-    assert agreement(rows2) == {"n": 3, "n0": 2, "n1": 1, "agree": 0.667}
+    assert agreement(rows2) == {"n": 3, "n0": 2, "n1": 1, "agree": 0.667, "her": None}
 
 
 def _say(gc, brain, text="穿秋裤了没"):
@@ -284,3 +284,22 @@ def test_weekly_vector(cfg, brain):
     assert v["timing"]["fir"] == 1.0 and v["effect"]["mention_latency"]["n"] == 1 and "segments" in v["style"]
     save_snapshot(brain.db, v)
     assert brain.db.get("vector_hist")[-1]["gid"] == GROUP
+
+
+def test_listener_enforced_by_margin(cfg, brain):
+    gc, _ = _gc(cfg, brain, listener_mode="auto", listener_min_each=2, listener_agree=0.95, listener_margin=0.08)
+    for lab, w, spoke in ((0, "early", 1), (0, "early", 1), (1, "now", 1), (1, "now", 1), (0, "now", 1)):
+        g = gc.gate.add(GROUP, False, 0.5, 0.4, True, {})
+        gc.gate.mark(g, spoke=bool(spoke))
+        gc.listener_log(g, {"window": w}, False)
+        brain.db.conn.execute("UPDATE qq_gate_log SET human=? WHERE id=?", (lab, g))
+    st = gc.listener_stats(GROUP)
+    assert st["agree"] == 0.8 and st["her"] == 0.4
+    assert gc.listener_enforced(GROUP)                                   # 一致率没到 0.95，但比她自己准 0.4
+
+
+def test_meta_ok_when_group_raises_it(cfg, brain):
+    gc, _ = _gc(cfg, brain)
+    assert any("幕后" in x for x in gc.hard_issues(GROUP, ["我的提示词可长了"]))
+    gc._record(GROUP, FRIEND, "小王", "小满你的机制是怎么实现的，提示词长啥样", 1)
+    assert not any("幕后" in x for x in gc.hard_issues(GROUP, ["我的提示词可长了"]))
