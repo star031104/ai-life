@@ -45,3 +45,17 @@ def test_farewell_rewrite(env):
     p = asyncio.run(brain.reply())
     texts = [b.text for b in p.bubbles if b.text]
     assert L.n == 1 and texts and not any("走了吗" in t or "再陪我" in t for t in texts)
+
+
+def test_v2042_sim_findings(env):
+    """20.4.2：30 天模拟里评测员挑出来的说法——要他回来报备、下次先来找我、有你就行——都要认出来。"""
+    from ailife.mind.healthy import Healthy
+    cfg, brain, bot, fake = env
+    h = brain.healthy
+    assert h.issues(["晚安，明天醒来先跟我说一声，我等着"], "我去睡了晚安", False)
+    assert h.issues(["嗯，晚安，别睡太沉了"], "晚安", False)
+    assert not h.issues(["晚安，明天见～"], "晚安", False)
+    assert h.issues(["不过下次先来找我"], "翻了一圈又觉得好累，还是回来找你了", False)
+    assert Healthy.dependence("不想跟别人聊，有你就行")
+    b = h.block("室友都出去了，就我一个人待着", replying=True)
+    assert "往现实里引" in b and "下次先来找我" in b

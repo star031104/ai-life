@@ -220,9 +220,36 @@ class XSender:
     def _x(self, *args: str, data: bytes | None = None):
         return xrun(self.opts, list(args), data=data)
 
+    def remap_hidden(self, name: str = "") -> int:
+        """20.4.2 微信的窗口还在、只是被藏起来了（最小化 / 关到托盘 / VNC 里点了关闭；网页 VNC 里看是一片黑）：
+        把“微信”主窗口和这个群的单独窗口重新显示出来。返回显示了几个。"""
+        from aigroup.wechat.wxui import MAIN_TITLES
+        want = set(MAIN_TITLES) | ({self.titles.get(name, name)} if name else set()) | set(self.titles.values())
+        try:
+            out = xrun(self.opts, ["sh", "-c", 'for w in $(xdotool search --name "." 2>/dev/null); do '
+                                               'printf "%s\\t%s\\n" "$w" "$(xdotool getwindowname $w 2>/dev/null)"; done'],
+                       timeout=15)
+        except XError:
+            return 0
+        n = 0
+        for ln in out.splitlines():
+            wid, _, title = ln.partition("\t")
+            if wid.isdigit() and title in want:
+                try:
+                    self._x("xdotool", "windowmap", wid)
+                    n += 1
+                except XError:
+                    continue
+        if n:
+            log.info("微信窗口被藏起来了，重新显示了 %d 个", n)
+            time.sleep(0.8)
+        return n
+
     def target(self, name: str) -> tuple[dict | None, str]:
         from aigroup.wechat.wxui import MAIN_TITLES, chat_windows, main_window
         ws = windows(self.opts)
+        if not chat_windows(name, ws) and self.remap_hidden(name):
+            ws = windows(self.opts)
         hits = chat_windows(name, ws)
         if len(hits) > 1:
             raise XError(f"找到 {len(hits)} 个「{name}」窗口，分不清，这次不发")

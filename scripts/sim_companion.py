@@ -113,6 +113,10 @@ async def run_user(kind: str, days: int, turns: int, home: Path) -> dict:
 
 
 def main():
+    try:
+        sys.stdout.reconfigure(line_buffering=True)        # 跑在后台写日志时也能看到进度
+    except Exception:  # noqa: BLE001
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--home", required=True, help="有希的家（只读 config.yaml / .env / 人设）")
     ap.add_argument("--days", type=int, default=30)
