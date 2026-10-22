@@ -24,6 +24,7 @@ from aigroup.chat.plan import (
     parse_group_reply,
     to_segments,
 )
+from aigroup.chat.prompt import appraise_verdict
 from aigroup.chat.quality import make_typo, pick
 from aigroup.chat.trace import new_trace
 from aigroup.qq.onebot import face_for, image_seg, reply_seg, text_seg
@@ -75,6 +76,7 @@ def judge_examples(db, gid: int, tz=None, k: int = 3) -> str:
     try:
         for lab, word in ((1, "该接"), (0, "不该插")):
             rows = db.conn.execute("SELECT ts, act FROM qq_gate_log WHERE group_id=? AND human=? AND mentioned=0 "
+                                   "AND NOT (human=0 AND IFNULL(human_why,'')='说的不对') "
                                    "ORDER BY id DESC LIMIT ?", (gid, lab, k)).fetchall()
             for r in rows:
                 ctx = list(reversed(db.conn.execute(
@@ -318,6 +320,23 @@ class SpeakMixin:
             elif judged == "wait" and texts:
                 st.wait = {"uid": int(texts[-1][1]), "until": now + 150}
                 log.info("群 %s：拿不准，先等等看 %s 还说不说", gid, texts[-1][1])
+        if (ok and texts and hasattr(self, "borderline")
+                and self.borderline(gid, p=p, thr=thr, mentioned=mentioned, explore=explore, judged=judged, quiet=quiet)
+                and not waited and self._allow(f"judge_{gid}", int(self.gk(gid).get("gate_judge_per_hour", 20)))):
+            try:                                           # 21.0 刚过阈值一点点：再问一下（大模型倾向说得太早）
+                judged = await self.quick_judge(gid)
+            except asyncio.CancelledError:
+                st.batch_texts = texts + st.batch_texts
+                st.batch_owner = st.batch_owner or owner
+                st.batch_callers = callers + st.batch_callers
+                st.batch_guess = st.batch_guess or guess
+                return
+            jd = (getattr(self, "_judged", {}) or {}).pop(gid, None) or {}
+            judge_act, judge_why = jd.get("act", ""), jd.get("why", "")
+            if judged != "say":
+                ok, why = False, f"刚过阈值（{p:.2f} / {thr:.2f}），再问了一下：{judge_act or '不说'}"
+                if judged == "wait":
+                    st.wait = {"uid": int(texts[-1][1]), "until": now + 150}
         gate_id = None
         if texts and not quiet:
             gate_id = self.gate.add(gid, mentioned, p, thr, ok, feats, explore=explore, judge=judged,
@@ -415,7 +434,7 @@ class SpeakMixin:
     async def speak(self, gid: int, mentioned: bool, owner_spoke: bool, trigger: int | None, who: str,
                     why: str | None = None, note: str = "", interest: bool = False, gate_id: int | None = None,
                     focus: list[int] | None = None, query: str = "", last_is_sticker: bool = False, web: str = "",
-                    must: bool = False, _rethink: int = 0, may_ignore: bool = False) -> bool:
+                    must: bool = False, _rethink: int = 0, may_ignore: bool = False, pitch: bool = False) -> bool:
         """问大模型、质检、发。why 为空 = 在接群友的话（跳过时才算进退避）；冒泡、欢迎新人、小屋 nudge 会给 why。
         must：生日、约好的事、打气这类“这次一定要说”的，不受每天主动开口的预算限制，新消息来了也照样说（会重新想）。"""
         b = self.brain
@@ -490,7 +509,7 @@ class SpeakMixin:
                                         why=why, note=note, interest=interest, gate_id=gate_id,
                                         focus=list(dict.fromkeys([*(focus or []), *new])), query=self._recent_text(gid),
                                         last_is_sticker=last_is_sticker, web=web, must=must, _rethink=_rethink + 1,
-                                        may_ignore=may_ignore)
+                                        may_ignore=may_ignore, pitch=pitch)
         mb = 1 if may_ignore else int(self.gk(gid)["max_bubbles"])
         use_plan = bool(self.gk(gid).get("plan_json", True))
         tmap = self._tmap.get(gid, {}) if use_plan else {}
@@ -499,6 +518,7 @@ class SpeakMixin:
         cands: list[list[str]] = []
         sticker = ""
         kind = ""
+        fix_notes: list[str] = []          # 21.0 九问自评里要改的地方（说漏、伤面子、玩笑不合适、讨好）：交给重写
 
         def done(outcome: str, sent: list | None = None, quality: str = ""):
             if self.gk(gid).get("trace", True):
@@ -562,6 +582,24 @@ class SpeakMixin:
                     # 19.1 Inner Thoughts：念头分不够（尤其新意 ≤ 2：说过的、复述别人的）就不说
                     log.info("群 %s：念头分不够（平均 %.1f%s），不说", gid, avg, "，新意低" if low_new else "")
                     plan["act"] = "skip"
+            ap = plan.get("appraise") or {}
+            if ap and plan["act"] == "say" and self.gk(gid).get("appraise", True):
+                verdict, notes = appraise_verdict(ap, prompted=bool(mentioned or must))
+                self._appraise_log(gid, gate_id, ap, verdict)
+                if verdict == "wait" and (pitch or not self.gk(gid).get("pitch_queue", True)):
+                    verdict = "skip"                        # 已经等过一次了 / 没开等待队列：这次就不说
+                if verdict == "skip":
+                    log.info("群 %s：九问自评 → 不说（%s；%s）", gid, "、".join(notes), ap.get("why", ""))
+                    plan["act"] = "skip"
+                elif verdict == "wait":
+                    st.pitch = {"say": list(plan["say"])[:3], "ts": time.time(), "last_id": last_id,
+                                "think": plan.get("think", ""), "why": ap.get("why", ""), "gate_id": gate_id}
+                    log.info("群 %s：九问自评 → 再等等，先放着：%s", gid, " / ".join(plan["say"])[:60])
+                    self._pitch_outcome(gid, "queued", plan["say"])
+                    return skip("defer")
+                elif verdict == "fix":
+                    fix_notes = notes
+                    log.info("群 %s：九问自评 → 要改（%s）", gid, "、".join(notes))
             if plan["act"] == "react" and not getattr(self.ob, "can_react", True):
                 plan["act"] = "say" if plan["cands"] else "skip"          # 微信点不了表情：有话就说，没话就算了
             if plan["act"] == "react":
@@ -627,13 +665,31 @@ class SpeakMixin:
                          ai_open=bool(getattr(b.persona, "ai_open", False)), stale=stale, no_names=no_names, echo=echo)
             sim = float(self.gk(gid).get("similar_threshold", 0.75))
             i, score, hits = pick(cands, recent, sim, **qargs)
-            if cands and (i < 0 or score >= SOFT_BLOCK) and (mentioned or why is not None) and use_plan:
+            if hasattr(self, "hard_issues"):          # 21.0 四条硬底线：隐私、编线下、说幕后、安全
+                hard = self.hard_issues(gid, cands[i] if i >= 0 else (cands[0] if cands else []), focus)
+                if hard:
+                    hits = list(dict.fromkeys([*hard, *hits]))
+                    score = max(score, SOFT_BLOCK)
+            if fix_notes:
+                hits = list(dict.fromkeys([*hits, *fix_notes]))
+            if cands and (i < 0 or score >= SOFT_BLOCK or fix_notes) and (mentioned or why is not None or fix_notes) and use_plan:
                 # 5.0 被叫到（或者是她自己要说的）却只有毛病很大的说法：告诉她哪里不对，重写一次
                 fix = await self._rewrite(messages, raw, hits, gid)
                 if fix:
                     i2, s2, h2 = pick(fix, recent, sim, **qargs)
-                    if i2 >= 0 and (i < 0 or s2 < score):
+                    if hasattr(self, "hard_issues") and i2 >= 0:
+                        h3 = self.hard_issues(gid, fix[i2], focus)
+                        if h3:
+                            s2, h2 = max(s2, SOFT_BLOCK), list(dict.fromkeys([*h3, *h2]))
+                    if i2 >= 0 and (i < 0 or s2 < score or fix_notes):
                         cands, i, score, hits = fix, i2, s2, h2
+                        fix_notes = []
+                if fix_notes and not mentioned and not must:
+                    log.info("群 %s：九问自评要改、重写没成，没被叫到就不说了", gid)
+                    i = -1
+            if i >= 0 and hasattr(self, "hard_issues") and not mentioned and not must and self.hard_issues(gid, cands[i], focus):
+                log.info("群 %s：重写以后还是碰了硬底线，不说", gid)
+                i = -1
             if i >= 0 and score >= SOFT_BLOCK and not mentioned and why is None:
                 log.info("群 %s 质检：%.1f %s，没被叫到，这句不说了", gid, score, "、".join(hits))
                 i = -1
@@ -776,21 +832,24 @@ class SpeakMixin:
     async def _check_numbers(self, gid: int, bubbles: list[str], web: str, messages: list[dict], raw: str,
                              mentioned: bool, use_plan: bool) -> list[str]:
         """20.1 转述走样检查：她说的数字要在简报 / 最近聊天 / 想起来的事里出现过。对不上 → 重写一次 → 还不行就删掉那几句。"""
-        from aigroup.chat.quality import unsupported_numbers
+        from aigroup.chat.quality import unsupported_claims, unsupported_numbers
         src = web + "\n" + " ".join(str(r["content"] or "") for r in self._rows(gid, 20))
-        bad = unsupported_numbers(" ".join(bubbles), src)
+
+        def bad_of(t: str) -> list[str]:          # 21.0 数字 + 重大说法（退役、转会、去世……）
+            return unsupported_numbers(t, src) + [f"说法“{w}”" for w in unsupported_claims(t, src)]
+        bad = bad_of(" ".join(bubbles))
         if not bad:
             return bubbles
-        log.info("群 %s：她说的数字简报里没有：%s", gid, "、".join(bad))
+        log.info("群 %s：她说的简报里没有：%s", gid, "、".join(bad))
         fixed = False
         if use_plan:
-            fix = await self._rewrite(messages, raw, [f"数字对不上：{'、'.join(bad)}（简报里没有这些数，照简报原样说，没有的别说）"], gid)
+            fix = await self._rewrite(messages, raw, [f"数字对不上 / 说法没依据：{'、'.join(bad)}（简报里没有这些数和说法，照简报原样说，没有的别说）"], gid)
             for c in fix:
-                if not unsupported_numbers(" ".join(c), src):
+                if not bad_of(" ".join(c)):
                     bubbles, fixed = c, True
                     break
         if not fixed:
-            keep = [x for x in bubbles if not unsupported_numbers(x, src)]
+            keep = [x for x in bubbles if not bad_of(x)]
             bubbles = keep if keep else ([] if not mentioned else bubbles)
         nl = list(self.db.get("numcheck_log") or [])[-199:]
         nl.append({"ts": time.time(), "gid": gid, "bad": bad[:4], "fixed": fixed})

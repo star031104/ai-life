@@ -131,6 +131,16 @@ DEFAULTS = {
     "lonely_hours": "01:00-07:00", # 这段时间群里 20 分钟没人说话：不主动开口（空着 = 不管）
     "self_score": True,            # 想插话时先给念头打分（相关、信息差、效果、新意、时机），分低就不说
     "self_score_min": 3.0,         # 平均分低于这个、或者新意 ≤ 2：没人叫她时不说
+    "appraise": True,              # 21.0 开口前九问自评（代替上面的五项打分）：timing 现在 / 等等 / 不说、说漏、伤面子、玩笑合不合适……
+    "pitch_queue": True,           # 21.0 她觉得“再等等”的话先放着，过一会儿 / 群里停下来再判一次
+    "pitch_min_seconds": 60,       # 至少等这么久
+    "pitch_max_seconds": 240,      # 最多等这么久，过了就丢
+    "pitch_quiet_seconds": 40,     # 群里这么久没人说话算“停下来了”
+    "pitch_max_new": 8,            # 等的时候群里又说了这么多句：话题已经走了，丢掉
+    "borderline_judge": True,      # 21.0 门控刚过阈值一点点、没人叫她：再问一下便宜模型
+    "borderline_band": 0.1,        # 离阈值多近算“擦边过”
+    "person_card": True,           # 21.0 在聊的人合成一张人卡（≤120 字），代替“今天状态 / 刚回来 / 相处经验 / 相处说明书”四段
+    "hard_rules": True,            # 21.0 四条硬底线集中检查：别碰的话题、编线下、说幕后、对方难受时损他
     "person_spec": True,           # 每周给常聊的人写“相处说明书”（他说话的潜台词、能损什么、别碰什么）
     "gag_days": 3,                 # 20.0 她自己的梗这几天里反复用过：先歇一歇（0 = 只看最近几小时）
     "label_nb": True,              # 16.0 用你在小屋判过的“该不该说”训练小判断器（两类各 30 条以上才训练）
@@ -238,6 +248,16 @@ KNOBS = {
     "lonely_hours": ("深夜没人不主动开口", "str", None, None, None, "比如 01:00-07:00；这段时间群里 20 分钟没人说话就不主动说；空着 = 不管"),
     "self_score": ("插话前给念头打分", "bool", None, None, None, "相关、信息差、效果、新意、时机，分低就不说"),
     "self_score_min": ("念头分低于多少不说", "float", 1, 5, 0.25, "1~5 分的平均分"),
+    "appraise": ("开口前九问", "bool", None, None, None, "她开口前先结构化地想：时机、谁知道什么、伤不伤面子、玩笑合不合适；代替五项打分"),
+    "pitch_queue": ("觉得太早就先等等", "bool", None, None, None, "她觉得“再等等”的话先放着，群里停下来再判一次，过时了就丢"),
+    "pitch_min_seconds": ("至少等几秒", "int", 30, 300, 10, ""),
+    "pitch_max_seconds": ("最多等几秒", "int", 60, 600, 10, "过了就不说了"),
+    "pitch_quiet_seconds": ("多久没人说话算停下来", "int", 10, 180, 5, ""),
+    "pitch_max_new": ("等的时候又来几句就丢", "int", 2, 30, 1, "话题已经走了"),
+    "borderline_judge": ("擦边过的再问一下", "bool", None, None, None, "门控刚过阈值一点点、没人叫她时，再让便宜模型判一次"),
+    "borderline_band": ("离阈值多近算擦边", "float", 0, 0.3, 0.01, ""),
+    "person_card": ("人卡", "bool", None, None, None, "在聊的人合成一张 ≤120 字的卡，代替分散的四段"),
+    "hard_rules": ("四条硬底线", "bool", None, None, None, "别碰的话题、编线下、说幕后、对方难受时损他：碰了就重写，没被叫到就不说"),
     "person_spec": ("给常聊的人写相处说明书", "bool", None, None, None, "每周一次：他说话的潜台词、能损什么、别碰什么"),
     "label_nb": ("用你的标注训练小判断器", "bool", None, None, None, "“该不该说”两类各 30 条以上才训练；有把握时不用再问大模型"),
     "weekly_probe": ("每周定向测试人格", "bool", None, None, None, "每条签名、每个“不懂 / 没兴趣”编一段假聊天让她回、打分"),

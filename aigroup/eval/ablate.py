@@ -15,7 +15,7 @@ import time
 NAMES = {
     "recall": "想起来的事", "lore": "群梗词条", "known": "她知道的事", "today": "今天说过的", "people_today": "大家今天的状态",
     "absent": "谁刚回来", "rel_exp": "和他相处的经验", "spec": "相处说明书", "signatures": "情境签名", "held": "憋着没说的话",
-    "examples": "对话示例",
+    "examples": "对话示例", "person_card": "人卡",
 }
 MIN_N = 30
 

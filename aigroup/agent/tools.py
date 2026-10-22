@@ -87,6 +87,7 @@ import contextvars  # noqa: E402
 
 SEEN: contextvars.ContextVar = contextvars.ContextVar("agent_seen_queries", default=None)
 QUESTION: contextvars.ContextVar = contextvars.ContextVar("agent_question", default="")
+DEPTH: contextvars.ContextVar = contextvars.ContextVar("agent_depth", default="")   # 21.0 快查用 DeepSeek（快），深查先用 Tavily 免费额度
 
 
 def _qnorm(q: str) -> str:
@@ -213,6 +214,8 @@ class Toolbox:
         kw = {"site": site} if site else {}
         if QUESTION.get():
             kw["question"] = QUESTION.get()
+        if DEPTH.get() == "quick" and getattr(self.web, "ds_key", ""):
+            kw["prefer"] = "deepseek"
         res, eng = await self.web.agent_search(q, 6, days, **kw)
         return format_results(res, eng)
 

@@ -13,6 +13,7 @@ GroupChat 由这些 Mixin 组成（每个文件管一件事，彼此通过 self 
     PromptMixin    chat/prompt.py     提示词（聊天记录、群里的人、规则）
     PeopleMixin    memory/people.py   群友：画像、别名、成员列表
     DigestMixin    memory/digest.py   整理：群里的事和梗、画像、群日报
+    SocialMixin    chat/social.py     21.0 九问自评记录、等等队列、擦边再问、人卡、四条硬底线
 
 设置都在 chat/settings.py；每个群的运行时状态在 chat/state.py。
 """
@@ -40,6 +41,7 @@ from aigroup.chat.mood import Mood
 from aigroup.chat.plan import NAME_TAIL
 from aigroup.chat.prompt import PromptMixin
 from aigroup.chat.settings import DEAD_KNOBS, DEFAULTS, GLOBAL_ONLY, KNOBS, group_key
+from aigroup.chat.social import SocialMixin
 from aigroup.chat.speak import SpeakMixin
 from aigroup.chat.state import GroupState
 from aigroup.chat.trace import Tracer
@@ -81,7 +83,7 @@ MSG_COLUMNS = {"to_her": "INTEGER NOT NULL DEFAULT 0",   # 这条是在叫她（
 
 
 class GroupChat(FeedMixin, IngestMixin, SpeakMixin, IdleMixin, FeedbackMixin, LifeMixin, PromptMixin, PeopleMixin, DigestMixin,
-                NetMixin, GrowMixin, EvalMixin, StyleMixin, InsightMixin, AgentMixin, HumaneMixin):
+                NetMixin, GrowMixin, EvalMixin, StyleMixin, InsightMixin, AgentMixin, HumaneMixin, SocialMixin):
     """她在群里的一切：收消息 → 判断要不要说 → 说 → 看效果；空闲时冒泡、整理记忆。
 
     这个类只负责把各部分装起来、放共用的小工具；具体的活在各个 Mixin 里（见文件开头的说明）。

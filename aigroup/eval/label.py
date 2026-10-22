@@ -21,6 +21,10 @@ from datetime import datetime
 
 LABELS = {1: "该接", 2: "可接可不接", 0: "不该插", -1: "看不出来"}
 HOW = ["接住", "回答", "追问", "接梗", "纠错", "补充", "关心"]
+# 21.0 “不该插”拆两种：时机不对（这一刻就不该开口）/ 说的不对（可以说，但她说的那句不行：编了、读错、梗用错……）
+# 说的不对的不进门控、小判断器、拿不准时的例子和“不该说却说率”——那是“怎么说”的问题，不是“该不该开口”
+WHY0 = ["时机不对", "说的不对"]
+TIMING_ONLY = "NOT (human=0 AND IFNULL(human_why,'')='说的不对')"
 
 
 def _pick_sql(kind: str) -> str:
@@ -171,7 +175,7 @@ def batch(db, gid: int | None, tz=None, n: int = 10, days: int = 14) -> list[dic
     return [_pack(db, r, tz) for r in _rows(db, gid, n, days, set())]
 
 
-def answer(db, gate_id: int, label: int | None, how: str = ""):
+def answer(db, gate_id: int, label: int | None, how: str = "", why0: str = ""):
     """label：1 该接、2 可接可不接、0 不该插、None 看不出来（标成 -1，不再出现，也不当标签用）。how：该怎么接（可选）。"""
     if label is None:
         v = -1
@@ -179,7 +183,8 @@ def answer(db, gate_id: int, label: int | None, how: str = ""):
         v = int(label)
         v = v if v in (0, 1, 2) else (1 if v else 0)
     how = how if how in HOW and v == 1 else ""
-    db.conn.execute("UPDATE qq_gate_log SET human=?, human_act=? WHERE id=?", (v, how, int(gate_id)))
+    why0 = why0 if why0 in WHY0 and v == 0 else ""
+    db.conn.execute("UPDATE qq_gate_log SET human=?, human_act=?, human_why=? WHERE id=?", (v, how, why0, int(gate_id)))
     db.conn.commit()
 
 
@@ -199,7 +204,7 @@ def weak_labels(db, days: int = 14) -> int:
 
 def stats(db) -> dict:
     """标了多少；她做的和你判的一致的比例；分开看“该说的她说了”（召回）和“她说的是该说的”（精确）。“可接可不接”不算进去。"""
-    rows = db.conn.execute("SELECT spoke, human FROM qq_gate_log WHERE human IN (0, 1)").fetchall()
+    rows = db.conn.execute(f"SELECT spoke, human FROM qq_gate_log WHERE human IN (0, 1) AND {TIMING_ONLY}").fetchall()
     n = len(rows)
     tp = sum(1 for r in rows if r["spoke"] and r["human"] == 1)
     fp = sum(1 for r in rows if r["spoke"] and r["human"] == 0)
@@ -207,12 +212,45 @@ def stats(db) -> dict:
     agree = sum(1 for r in rows if bool(r["spoke"]) == bool(r["human"]))
     try:
         n2 = int(db.conn.execute("SELECT COUNT(*) c FROM qq_gate_log WHERE human=2").fetchone()["c"])
+        nc = int(db.conn.execute("SELECT COUNT(*) c FROM qq_gate_log WHERE human=0 AND human_why='说的不对'").fetchone()["c"])
         w = db.conn.execute("SELECT SUM(weak=0) w0, SUM(weak=1) w1 FROM qq_gate_log WHERE human IS NULL").fetchone()
         w0, w1 = int(w["w0"] or 0), int(w["w1"] or 0)
     except Exception:  # noqa: BLE001
-        n2 = w0 = w1 = 0
+        n2 = w0 = w1 = nc = 0
     return {"n": n, "n1": sum(1 for r in rows if r["human"] == 1), "n0": sum(1 for r in rows if r["human"] == 0),
-            "n2": n2, "w0": w0, "w1": w1,
+            "n2": n2, "w0": w0, "w1": w1, "n0_content": nc,
             "agree": round(agree / n, 3) if n else None,
             "precision": round(tp / (tp + fp), 3) if tp + fp else None,
             "recall": round(tp / (tp + fn), 3) if tp + fn else None}
+
+
+def appraise_stats(db, gid: int | None = None) -> dict:
+    """21.0 九问自评对你的标注：哪一问最常判错。
+    - 时机（timing）：她写“现在”但你判“时机不对” = 太早；她写“等等 / 不说”但你判“该接” = 太晚
+    - 内容（你判“说的不对”的那些）：她自评里有没有提前标出 leak / face_risk≥2 / fresh=false / tease_ok=false；都没标 = 没看出来"""
+    q = ("SELECT human, IFNULL(human_why,'') hw, appraise FROM qq_gate_log WHERE human IN (0, 1) AND IFNULL(appraise,'')!=''"
+         + (" AND group_id=?" if gid is not None else ""))
+    try:
+        rows = db.conn.execute(q, ([gid] if gid is not None else [])).fetchall()
+    except Exception:  # noqa: BLE001
+        return {}
+    t_ok = early = late = content = caught = 0
+    for r in rows:
+        try:
+            a = json.loads(r["appraise"] or "{}")
+        except ValueError:
+            continue
+        tm = a.get("timing") or "now"
+        if r["human"] == 1:
+            t_ok += tm == "now"
+            late += tm in ("wait", "no")
+        elif r["hw"] == "说的不对":
+            content += 1
+            caught += bool(a.get("leak") or int(a.get("face_risk") or 0) >= 2 or a.get("fresh") is False
+                           or a.get("tease_ok") is False or a.get("flatter"))
+        else:
+            early += tm == "now"
+            t_ok += tm in ("wait", "no")
+    n_t = t_ok + early + late
+    return {"n": len(rows), "timing_acc": round(t_ok / n_t, 3) if n_t else None, "too_early": early, "too_late": late,
+            "content": content, "content_caught": round(caught / content, 3) if content else None}

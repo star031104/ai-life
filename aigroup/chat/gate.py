@@ -190,7 +190,8 @@ def labeled_rows(db, since: float = 0.0) -> list[tuple[dict, float, float]]:
     # 13.0：没过门槛的也能有标签——你在小屋里标的（最准，权重 2）；拿不准时问出来的“不 / 等”（弱标签，权重 0.3）
     try:
         extra = db.conn.execute("SELECT id, feats, human, judge FROM qq_gate_log WHERE mentioned=0 AND ts>? AND "
-                                "(human IN (0, 1) OR (passed=0 AND judge IN ('skip', 'wait')))", (since,)).fetchall()
+                                "((human IN (0, 1) AND NOT (human=0 AND IFNULL(human_why,'')='说的不对')) "
+                                "OR (passed=0 AND judge IN ('skip', 'wait')))", (since,)).fetchall()
     except Exception:  # noqa: BLE001
         extra = []
     for r in extra:
@@ -352,6 +353,8 @@ class GateLog:
             "human_act": "TEXT NOT NULL DEFAULT ''",     # 20.0 你判“该接”时顺手选的：该怎么接
             "ablated": "TEXT NOT NULL DEFAULT ''",       # 20.1 这次随机去掉了提示词里的哪一段（模块消融）
             "drift": "TEXT NOT NULL DEFAULT ''",         # 20.1 这一轮是不是容易漂走的场景（加了锚点）
+            "appraise": "TEXT NOT NULL DEFAULT ''",      # 21.0 她开口前的九问自评（JSON）：拿你的标注对每一问
+            "human_why": "TEXT NOT NULL DEFAULT ''",     # 21.0 你判“不该插”时选的：时机不对 / 说的不对
         })
         db.conn.commit()
 

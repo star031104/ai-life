@@ -532,7 +532,8 @@ body:not(.admin) .side .adm-gt{display:none}
           <ul>
             <li><b>该接</b>：不接就像没听见、冷场了，或者接一句明显让聊天更好（有人在问、在接她的话、说错了她有把握纠正）。可以顺手点一下“怎么接”。</li>
             <li><b>可接可不接</b>：接了不奇怪，不接也很正常。<b>大多数时刻其实是这种</b>，拿不准就选它，不会算进“该说没说”。</li>
-            <li><b>不该插</b>：别人在互相聊、话还没说完、插进去突兀或抢话、她说了也没人接是活该的。</li>
+            <li><b>不该插</b>：别人在互相聊、话还没说完、插进去突兀或抢话、她说了也没人接是活该的。她说了的那种，再点一下是哪种：
+              <b>时机不对</b>（这一刻就不该开口）/ <b>说的不对</b>（可以说，但那句编了、读错了、梗用错了）。“说的不对”只用来改她怎么说，不算进“该不该开口”。</li>
             <li><b>看不出来</b>：上下文不够，跳过。</li>
           </ul>
           <p>每条下面的“她当时是怎么决定的”按顺序写了四步：①本地门控（不花钱，按消息特征算“想说的程度”，和这一小时的门槛比）→ ②离门槛不远时，小判断器或便宜模型再判一次 → ③过了的，她自己再想一次要不要说 → ④说了之后有没有人接。</p>
@@ -1217,46 +1218,56 @@ const pct=v=>v==null?"—":Math.round(v*100)+"%";
 const LHOWS=["接住","回答","追问","接梗","纠错","补充","关心"];
 /* 20.0：三档（该接 / 可接可不接 / 不该插）+ 看不出来；一条条判或一屏 10 条；每条写清她当时是怎么决定的 */
 function labProg(s){const n0=s.n0??0,n1=s.n1??0,need=30,w0=s.w0||0,w1=s.w1||0;
-  $("labStat").textContent=s.n||s.n2?`判了 ${s.n+(s.n2||0)} 条（该接 ${n1} · 可接可不接 ${s.n2||0} · 不该插 ${n0}） · 她做的和你判的一致 ${pct(s.agree)} · 她说了的里该接的 ${pct(s.precision)} · 该接的她接了 ${pct(s.recall)}`:"还没判过：先展开上面的“怎么判”看一眼";
+  $("labStat").textContent=s.n||s.n2?`判了 ${s.n+(s.n2||0)} 条（该接 ${n1} · 可接可不接 ${s.n2||0} · 不该插 ${n0}${s.n0_content?` + 说的不对 ${s.n0_content}`:""}） · 她做的和你判的一致 ${pct(s.agree)} · 她说了的里该接的 ${pct(s.precision)} · 该接的她接了 ${pct(s.recall)}`:"还没判过：先展开上面的“怎么判”看一眼";
   // 20.4.1：显示真实条数（以前封顶在 30，判了也看不出变化）；够 30 条后标“够了”
   const bar=(v,lab,mine)=>`<div><div class="k"><span>${lab}</span><b class="num">${v}${v>=need?" ✓":" / "+need}</b></div><div class="bar" role="progressbar" aria-label="${lab}" aria-valuemin="0" aria-valuemax="${need}" aria-valuenow="${Math.min(v,need)}"><span style="width:${Math.min(100,v/need*100)}%"></span></div><div class="small muted">${mine}</div></div>`;
-  return `<div class="lab-prog"><div><div class="k"><span>这次判了</span><b class="num">${LABN} 条</b></div><div class="small muted">键盘 <span class="kbd">Y</span> 该接 <span class="kbd">M</span> 可接可不接 <span class="kbd">N</span> 不该插 <span class="kbd">S</span> 看不出来 · <span class="kbd">1</span>~<span class="kbd">7</span> 选怎么接</div></div>
+  return apLine()+`<div class="lab-prog"><div><div class="k"><span>这次判了</span><b class="num">${LABN} 条</b></div><div class="small muted">键盘 <span class="kbd">Y</span> 该接 <span class="kbd">M</span> 可接可不接 <span class="kbd">N</span> 不该插 <span class="kbd">S</span> 看不出来 · <span class="kbd">1</span>~<span class="kbd">7</span> 选怎么接</div></div>
     ${bar(n1+Math.floor(w1/2),"“该接”（小判断器要 30）",`你判的 ${n1}${w1?` + 弱标签 ${w1}（两条算一条）`:""}`)}${bar(n0+Math.floor(w0/2),"“不该插”（小判断器要 30）",`你判的 ${n0}${w0?` + 弱标签 ${w0}`:""}`)}</div>
     <div class="small muted" style="margin:-6px 0 12px">${NBS&&NBS.trained?`小判断器已经在用（留出准确率 ${Math.round((NBS.acc||0)*100)}%），每晚用新标注重新训练`:(n1+Math.floor(w1/2)>=need&&n0+Math.floor(w0/2)>=need?"两类都够了：今晚整理时训练，明天开始用":"两类各够 30 条后当晚训练、第二天开始用")}。弱标签是程序自己推的（她说了没人接 → 不该插、接得很好 → 该接）</div>`}
 function labCtx(m){return `${m.context.length?`<div class="lab-q">${m.context.map(esc).join("<br>")}</div>`:""}
     <div class="lab-did">最后一句之后：<b>${esc(m.did)}</b></div>
     <details class="lab-steps-d"><summary class="small">她当时是怎么决定的</summary><div class="lab-steps">${(m.steps||[]).map(esc).join("<br>")}</div></details>`}
+/* 21.0 “不该插”拆成两种：她说了的才问——时机不对（这一刻就不该开口）/ 说的不对（可以说，但那句不行）。说的不对的不进门控 */
+const LWHYS=["时机不对","说的不对"];let LWHY0="";
+function why0Chips(m,cur,attr){if(!m.spoke)return "";return `<div class="lab-how"><span class="small muted">判“不该插”的话，是哪种：</span>${LWHYS.map((h,i)=>`<span class="tag ${cur===h?"on":""}" ${attr}="${h}">${i?"B":"T"} ${h}</span>`).join("")}<span class="small muted">（说的不对 = 可以说、但她那句编了 / 读错了 / 梗用错了：不算进“该不该开口”）</span></div>`}
 function howChips(cur,attr){return `<div class="lab-how"><span class="small muted">该接的话，怎么接（可不选）：</span>${LHOWS.map((h,i)=>`<span class="tag ${cur===h?"on":""}" ${attr}="${h}">${i+1} ${h}</span>`).join("")}</div>`}
-async function loadLabel(){if(NBS===null){try{NBS=(await api("/api/eval")).label_nb||{}}catch(e){NBS={}}}
+let APS=null;
+function apLine(){const a=APS||{};if(!a.n&&!(a.pitch&&Object.keys(a.pitch).length))return "";const pc=v=>v==null?"—":Math.round(v*100)+"%";const pt=a.pitch||{};
+  return `<div class="small muted" style="margin:-4px 0 10px">九问自评对你的标注（${a.n||0} 条）：时机判对 ${pc(a.timing_acc)}（太早 ${a.too_early||0} · 太晚 ${a.too_late||0}）· “说的不对”她自己看出来的 ${pc(a.content_caught)}（${a.content||0} 条）${Object.keys(pt).length?` · 先等等的：放着 ${pt.queued||0}，后来说了 ${pt.sent||0}，没说 ${pt.skipped||0}，过时丢掉 ${(pt.dropped_stale||0)+(pt.dropped_taken||0)}`:""}</div>`}
+async function loadLabel(){if(NBS===null){try{const ev=await api("/api/eval");NBS=ev.label_nb||{};APS=ev.appraise||{}}catch(e){NBS={}}}
   if(LABM==="batch")return loadBatch();
-  try{const r=await api(`/api/label/next?gid=${LSEL}`);LAB=r.moment;LHOW="";const prog=labProg(r.stats);
+  try{const r=await api(`/api/label/next?gid=${LSEL}`);LAB=r.moment;LHOW="";LWHY0="";const prog=labProg(r.stats);
   if(!LAB){$("labBox").innerHTML=prog+'<div class="small muted">暂时没有要判的（群里聊一阵子就有了）</div>';return}
-  $("labBox").innerHTML=prog+labCtx(LAB)+howChips(LHOW,"data-how")+`<div class="lab-acts"><button class="btn" data-lab="1"><span class="kbd">Y</span>该接</button><button class="btn ghost" data-lab="2"><span class="kbd">M</span>可接可不接</button><button class="btn" data-lab="0"><span class="kbd">N</span>不该插</button><button class="btn ghost" data-lab="skip"><span class="kbd">S</span>看不出来</button></div>`;
+  $("labBox").innerHTML=prog+labCtx(LAB)+howChips(LHOW,"data-how")+why0Chips(LAB,LWHY0,"data-why0")+`<div class="lab-acts"><button class="btn" data-lab="1"><span class="kbd">Y</span>该接</button><button class="btn ghost" data-lab="2"><span class="kbd">M</span>可接可不接</button><button class="btn" data-lab="0"><span class="kbd">N</span>不该插</button><button class="btn ghost" data-lab="skip"><span class="kbd">S</span>看不出来</button></div>`;
   document.querySelectorAll("[data-lab]").forEach(b=>b.onclick=()=>answerLabel(b.dataset.lab));
   document.querySelectorAll("[data-how]").forEach(b=>b.onclick=()=>pickHow(b.dataset.how));
+  document.querySelectorAll("[data-why0]").forEach(b=>b.onclick=()=>pickWhy0(b.dataset.why0));
 }catch(e){$("labBox").innerHTML='<div class="small muted">没加载出来</div>'}}
+function pickWhy0(h){LWHY0=LWHY0===h?"":h;document.querySelectorAll("[data-why0]").forEach(b=>b.classList.toggle("on",b.dataset.why0===LWHY0))}
 function pickHow(h){LHOW=LHOW===h?"":h;document.querySelectorAll("[data-how]").forEach(b=>b.classList.toggle("on",b.dataset.how===LHOW))}
 async function answerLabel(v){if(!LAB||LABBUSY)return;LABBUSY=true;
-  try{await api("/api/label/answer",{id:LAB.id,label:v,how:v==="1"?LHOW:""});if(v!=="skip")LABN++;
-    toast(v==="1"?"记下：该接"+(LHOW?"（"+LHOW+"）":""):v==="2"?"记下：可接可不接":v==="0"?"记下：不该插":"跳过了");await loadLabel()}
+  try{await api("/api/label/answer",{id:LAB.id,label:v,how:v==="1"?LHOW:"",why0:v==="0"?LWHY0:""});if(v!=="skip")LABN++;
+    toast(v==="1"?"记下：该接"+(LHOW?"（"+LHOW+"）":""):v==="2"?"记下：可接可不接":v==="0"?"记下：不该插"+(LWHY0?"（"+LWHY0+"）":""):"跳过了");await loadLabel()}
   catch(e){toast("出错了："+e.message)}finally{LABBUSY=false}}
-async function loadBatch(){try{const r=await api(`/api/label/batch?gid=${LSEL}&n=10`);LBATCH=r.items.map(m=>({...m,lab:null,how:""}));const prog=labProg(r.stats);
+async function loadBatch(){try{const r=await api(`/api/label/batch?gid=${LSEL}&n=10`);LBATCH=r.items.map(m=>({...m,lab:null,how:"",why0:""}));const prog=labProg(r.stats);
   if(!LBATCH.length){$("labBox").innerHTML=prog+'<div class="small muted">暂时没有要判的（群里聊一阵子就有了）</div>';return}
-  $("labBox").innerHTML=prog+LBATCH.map((m,i)=>`<div class="lab-item" data-bi="${i}">${labCtx(m)}${howChips("",`data-bh="${i}" data-h`)}
+  $("labBox").innerHTML=prog+LBATCH.map((m,i)=>`<div class="lab-item" data-bi="${i}">${labCtx(m)}${howChips("",`data-bh="${i}" data-h`)}${why0Chips(m,"","data-w")}
     <div class="lab-acts"><button class="btn" data-bl="1">该接</button><button class="btn ghost" data-bl="2">可接可不接</button><button class="btn" data-bl="0">不该插</button><button class="btn ghost" data-bl="skip">看不出来</button></div></div>`).join("")
     +`<div class="lab-acts"><button class="btn" id="labSubmit">提交判了的（<span id="labDone">0</span> / ${LBATCH.length}）</button><span class="small muted">没判的留着下次出</span></div>`;
   document.querySelectorAll(".lab-item").forEach(el=>{const i=+el.dataset.bi;
     el.querySelectorAll("[data-bl]").forEach(b=>b.onclick=()=>{LBATCH[i].lab=b.dataset.bl;el.querySelectorAll("[data-bl]").forEach(x=>x.classList.toggle("on",x===b));$("labDone").textContent=LBATCH.filter(x=>x.lab!==null).length});
-    el.querySelectorAll("[data-h]").forEach(b=>b.onclick=()=>{const h=b.dataset.h;LBATCH[i].how=LBATCH[i].how===h?"":h;el.querySelectorAll("[data-h]").forEach(x=>x.classList.toggle("on",x.dataset.h===LBATCH[i].how))})});
+    el.querySelectorAll("[data-h]").forEach(b=>b.onclick=()=>{const h=b.dataset.h;LBATCH[i].how=LBATCH[i].how===h?"":h;el.querySelectorAll("[data-h]").forEach(x=>x.classList.toggle("on",x.dataset.h===LBATCH[i].how))});
+    el.querySelectorAll("[data-w]").forEach(b=>b.onclick=()=>{const h=b.dataset.w;LBATCH[i].why0=LBATCH[i].why0===h?"":h;el.querySelectorAll("[data-w]").forEach(x=>x.classList.toggle("on",x.dataset.w===LBATCH[i].why0))})});
   $("labSubmit").onclick=submitBatch;
 }catch(e){$("labBox").innerHTML='<div class="small muted">没加载出来</div>'}}
-async function submitBatch(){const items=LBATCH.filter(x=>x.lab!==null).map(x=>({id:x.id,label:x.lab,how:x.lab==="1"?x.how:""}));
+async function submitBatch(){const items=LBATCH.filter(x=>x.lab!==null).map(x=>({id:x.id,label:x.lab,how:x.lab==="1"?x.how:"",why0:x.lab==="0"?x.why0:""}));
   if(!items.length){toast("还没判");return}
   try{const r=await api("/api/label/answers",{items});LABN+=items.filter(x=>x.label!=="skip").length;toast(`记下了 ${r.done} 条`);await loadBatch()}catch(e){toast("出错了："+e.message)}}
 document.querySelectorAll("#labMode [data-m]").forEach(b=>b.onclick=()=>{LABM=b.dataset.m;document.querySelectorAll("#labMode [data-m]").forEach(x=>x.classList.toggle("on",x===b));loadLabel()});
 document.addEventListener("keydown",e=>{if(cur!=="learn"||LABM!=="one"||!LAB||e.ctrlKey||e.metaKey||e.altKey)return;
   const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;if($("drawer").classList.contains("on"))return;
   const k=e.key.toLowerCase();if(/^[1-7]$/.test(k)){e.preventDefault();pickHow(LHOWS[+k-1]);return}
+  if(LAB.spoke&&(k==="t"||k==="b")){e.preventDefault();pickWhy0(k==="t"?"时机不对":"说的不对");return}
   const v=k==="y"?"1":k==="m"?"2":k==="n"?"0":k==="s"?"skip":null;if(v===null)return;e.preventDefault();answerLabel(v)});
 
 /* ============ 性格开关 ============ */
@@ -1269,6 +1280,7 @@ const KGROUPS=[["说话多少",["talkativeness","max_per_10min","max_bubbles","c
   ["人格和分寸（14.0）",["signatures","signature_k","persona_examples","example_k","hold_thoughts","pester_calls","weekly_probe","label_nb"]],
   ["懂人（16.0）",["rel_experience","absent_hours","state_judge"]],
   ["更像人（19.1）",["bids","bid_hours","no_repeat_today","no_monologue","lonely_hours","self_score","self_score_min","person_spec"]],
+  ["开口前九问（21.0）",["appraise","pitch_queue","pitch_min_seconds","pitch_max_seconds","pitch_quiet_seconds","pitch_max_new","borderline_judge","borderline_band","person_card","hard_rules"]],
   ["B 站视频和天气",["watch_videos","video_frames","weather","weather_care"]],
   ["20.x 说话时机、守住人格、联网整合",["typing_abort","drift_anchor","ablate_rate","number_check","ledger","feed","feed_min","rel_tone"]],
   ["每周评测",["weekly_eval"]]];

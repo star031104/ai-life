@@ -216,3 +216,21 @@ def unsupported_numbers(text: str, sources: str) -> list[str]:
         if not any(c and (c in src or c in src_alt) for c in cands):
             bad.append(t)
     return bad
+
+
+# 21.0 说法检查（E3 从数字扩到“重大说法”）：她说某人退役 / 转会 / 去世……简报里得有这个说法
+MAJOR_CLAIM = re.compile(r"退役|转会|离队|加盟|去世|逝世|离世|塌房|被捕|官宣|解散|停更|封号|跑路|倒闭|涨价|降价|暴涨|暴跌|夺冠|"
+                         r"离婚|结婚|辞职|下架|停服|确诊")
+NEGATED = re.compile(r"(没|没有|不是|并没|还没|未|辟谣|谣言|假的)\S{0,4}$")
+
+
+def unsupported_claims(text: str, sources: str) -> list[str]:
+    """她话里的重大说法（动词），简报 / 聊天记录里都没出现过的。说“没退役”“是谣言”这种否定的不算。"""
+    bad = []
+    for m in MAJOR_CLAIM.finditer(text or ""):
+        w = m.group(0)
+        if w in (sources or "") or NEGATED.search(text[max(0, m.start() - 6):m.start()]):
+            continue
+        if w not in bad:
+            bad.append(w)
+    return bad

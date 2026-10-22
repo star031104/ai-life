@@ -250,7 +250,8 @@ class HumaneMixin:
         """该说没说率、不该说却说率（你的标注）、搭话接住率、当天重复、没人理还追发的次数。"""
         now = now or time.time()
         since = now - days * 86400
-        lab = self.db.conn.execute("SELECT spoke, human FROM qq_gate_log WHERE group_id=? AND human IN (0,1)", (gid,)).fetchall()
+        lab = self.db.conn.execute("SELECT spoke, human FROM qq_gate_log WHERE group_id=? AND human IN (0,1) "
+                                   "AND NOT (human=0 AND IFNULL(human_why,'')='说的不对')", (gid,)).fetchall()
         should = [r for r in lab if r["human"] == 1]
         shouldnt = [r for r in lab if r["human"] == 0]
         mir = round(sum(1 for r in should if not r["spoke"]) / len(should), 3) if should else None

@@ -43,6 +43,12 @@ class IdleMixin:
             # 半夜有人叫她：醒了（免打扰时段一过）就补一句，不用等到冒泡时段
             if await self._night_catch_up(gid, st, now):
                 continue
+            if hasattr(self, "pitch_tick"):                      # 21.0 刚才觉得“再等等”的那句：到时候了再判一次
+                try:
+                    if await self.pitch_tick(gid, st, now):
+                        continue
+                except Exception as e:  # noqa: BLE001
+                    log.info("群 %s 等等再说出错：%s", gid, e)
             if not in_active:
                 continue
             if hasattr(self, "celebrate_tick") and await self.celebrate_tick(gid, st):   # 生日、节日：说一声

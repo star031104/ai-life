@@ -118,7 +118,7 @@ def test_thought_pool_and_people_today_in_prompt(cfg, brain):
     gc.hold_thought(GROUP, "加班的时候记得吃晚饭")
     msgs = asyncio.run(gc.build_messages(GROUP, False, False, "", None, query="加班好累", focus=[FRIEND]))
     u = msgs[1]["content"]
-    assert "小王今天" in u and "状态不太好" in u and "在忙" in u
+    assert "小王（" in u and "状态不太好" in u and "在忙" in u      # 21.0 人卡
     assert "还没说出口的" in u and "加班的时候记得吃晚饭" in u
     assert '"hold"' in msgs[0]["content"]
 

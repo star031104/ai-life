@@ -74,6 +74,21 @@ def format_page(info: dict, url: str, offset: int) -> str:
             f'{info.get("title", "")}\n{info.get("text", "")}\n</资料>{more}')
 
 
+def research_budget(g: dict, depth: str, qtype: str) -> tuple[int, float, str]:
+    """21.0 力度：按问题类型给轮数 / 秒数 / 快深（prompts.TYPES）；没给类型就按判断层的 quick / deep 和老设置。"""
+    t = P.TYPES.get(qtype or "")
+    if t:
+        _, _, _, _, dep, r, sec = t
+        if depth == "deep" and dep == "quick" and qtype not in ("fact", "calc"):
+            dep, r, sec = "deep", max(r, 3), max(sec, 30)          # 判断层觉得要深查的，就深一点
+        scale = float(g.get("agent_quick_seconds", 15)) / 15 if dep == "quick" else float(g.get("agent_deep_seconds", 40)) / 40
+        return r, round(sec * scale, 1), dep
+    deep = depth == "deep"
+    return (int(g.get("agent_deep_rounds", 4) if deep else g.get("agent_quick_rounds", 2)),
+            float(g.get("agent_deep_seconds", 40) if deep else g.get("agent_quick_seconds", 15)),
+            "deep" if deep else "quick")
+
+
 def time_window(after, before) -> tuple[str, str] | None:
     """判断层给的 after / before（YYYY-MM-DD）→ (起, 止)；格式不对的丢掉。"""
     def ok(x):
@@ -109,22 +124,61 @@ def _point_text(x) -> str:
     return str(x or "").strip()
 
 
+CONF = {"高": "high", "中": "medium", "低": "low", "high": "high", "medium": "medium", "low": "low"}
+MAJOR = re.compile(r"退役|转会|离队|加盟|去世|逝世|离世|塌房|被捕|官宣|解散|停更|封号|跑路|倒闭|涨价|降价|暴涨|暴跌|夺冠")
+
+
 def parse_brief(text: str) -> dict:
-    """研究员交的 JSON → 简报。20.1 第 2 版（要点带来源编号、conflict、counter、answerable、facts）；旧版也认。"""
+    """研究员交的 JSON → 简报。21.0 第 3 版：一句结论 + 一条条说法（各带来源和置信度）+ 冲突 / 辟谣 / 没查到 / 假设 / 可补充；
+    20.1 第 2 版（answer_points + conflict + answerable）和更老的也认。返回里总有 answer_points（字符串列表）给老代码和小屋用。"""
     from aigroup.chat.plan import lenient_json
     d = lenient_json(text or "")
-    if not isinstance(d, dict) or ("answer_points" not in d and not d.get("premise") and "answerable" not in d):
+    keys = ("answer_points", "answer_short", "claims", "premise", "answerable")
+    if not isinstance(d, dict) or not any(k in d for k in keys):
         t = (text or "").strip()
         return {"answer_points": [t[:400]] if t else [], "premise": "", "as_of": "", "sources": [],
                 "confidence": "low", "unknown": "" if t else "没查到", "conflict": [], "counter": [], "facts": [],
-                "answerable": bool(t), "points": []}
-    pts = d.get("answer_points") or []
-    pts = pts if isinstance(pts, list) else [pts]
-    d["points"] = [p if isinstance(p, dict) else {"text": str(p)} for p in pts if _point_text(p)][:6]
-    d["answer_points"] = [_point_text(p) for p in d["points"]]          # 老代码、小屋都按字符串列表用
-    d["conflict"] = [c for c in (d.get("conflict") or []) if isinstance(c, dict) and c.get("sides")][:3]
+                "answerable": bool(t), "points": [], "claims": [], "answer_short": "", "followups": [], "assumptions": []}
+    claims = []
+    for c in (d.get("claims") or []) if isinstance(d.get("claims"), list) else []:
+        if isinstance(c, dict) and str(c.get("text") or "").strip():
+            srcs = [x for x in (c.get("sources") or []) if isinstance(x, dict)][:4]
+            claims.append({"text": str(c["text"]).strip()[:200], "sources": srcs,
+                           "confidence": CONF.get(str(c.get("confidence") or "").strip(), "medium")})
+    d["claims"] = claims[:6]
+    if claims:
+        d["points"] = [{"text": c["text"], "conf": c["confidence"], "n_src": len(c["sources"])} for c in claims]
+        d["answer_points"] = [c["text"] for c in claims]
+        if not d.get("sources"):
+            seen, srcs = set(), []
+            for c in claims:
+                for x in c["sources"]:
+                    k = (x.get("site") or "", x.get("date") or "")
+                    if k not in seen:
+                        seen.add(k)
+                        srcs.append({"site": x.get("site") or "", "date": x.get("date") or "", "title": ""})
+            d["sources"] = srcs[:6]
+        if not d.get("confidence"):
+            order = ["low", "medium", "high"]
+            d["confidence"] = order[max(order.index(c["confidence"]) for c in claims[:2])]
+    else:
+        pts = d.get("answer_points") or []
+        pts = pts if isinstance(pts, list) else [pts]
+        d["points"] = [p if isinstance(p, dict) else {"text": str(p)} for p in pts if _point_text(p)][:6]
+        d["answer_points"] = [_point_text(p) for p in d["points"]]
+    d["answer_short"] = str(d.get("answer_short") or "").strip()[:160]
+    if d["answer_short"] and not d["answer_points"]:
+        d["answer_points"] = [d["answer_short"]]
+    d["confidence"] = CONF.get(str(d.get("confidence") or "").strip(), d.get("confidence") or "medium")
+    conf = d.get("conflicts") if isinstance(d.get("conflicts"), list) else d.get("conflict")
+    d["conflict"] = [c for c in (conf or []) if isinstance(c, dict) and c.get("sides")][:3]
     d["counter"] = [str(x).strip() for x in (d.get("counter") or []) if str(x).strip()][:3] \
         if isinstance(d.get("counter"), list) else ([str(d["counter"])] if d.get("counter") else [])
+    unk = d.get("unknowns")
+    if isinstance(unk, list) and unk:
+        d["unknown"] = "；".join(str(x) for x in unk if str(x).strip())[:200]
+    for k in ("followups", "assumptions"):
+        d[k] = [str(x).strip()[:80] for x in (d.get(k) or []) if str(x).strip()][:4] if isinstance(d.get(k), list) else []
     d["facts"] = [f for f in (d.get("facts") or []) if isinstance(f, dict) and f.get("entity") and f.get("value")][:5] \
         if isinstance(d.get("facts"), list) else []
     ans = d.get("answerable")
@@ -134,15 +188,31 @@ def parse_brief(text: str) -> dict:
     return d
 
 
+def single_source_major(d: dict) -> list[str]:
+    """21.0 重大消息（退役、转会、去世……）只有一个来源的那几条说法。依据：Is Deep Research Reliable?（2026-07）：
+    一篇误导文档就让深度研究 54.7% 采信错误结论 → 这种说法要降置信度、要反搜辟谣。"""
+    out = []
+    for c in d.get("claims") or []:
+        if MAJOR.search(c.get("text") or "") and len({(x.get("site") or "") for x in c.get("sources") or []}) < 2:
+            out.append(c["text"])
+    return out
+
+
 def brief_block(goal: str, d: dict, fresh: bool = True) -> str:
-    """简报 → 放进她提示词里的一段。20.1：按情况（前提、查不到、冲突、辟谣、把握）给她一句该怎么说。"""
+    """简报 → 放进她提示词里的一段。21.0：先给一句结论，再给一条条说法（标把握），再冲突 / 辟谣 / 没查到，最后告诉她这次怎么说。"""
     head = (f"# 你刚在手机上查了一下：{goal}" if fresh else f"# 你刚才查过的（还记得）：{goal}")
     if d.get("as_of"):
         head += f"（信息截至 {d['as_of']}）"
     lines = [head]
     if d.get("premise"):
         lines.append(f"前提：{d['premise']}")
-    lines += [f"- {p}" for p in d.get("answer_points") or []]
+    if d.get("answer_short"):
+        lines.append(f"结论：{d['answer_short']}")
+    word = {"high": "", "medium": "（大概）", "low": "（不太确定）"}
+    if d.get("claims"):
+        lines += [f"- {c['text']}{word.get(c['confidence'], '')}" for c in d["claims"]]
+    else:
+        lines += [f"- {p}" for p in d.get("answer_points") or []]
     if not d.get("answer_points") and not d.get("premise"):
         lines.append("- （什么都没查到）")
     for c in d.get("conflict") or []:
@@ -153,6 +223,8 @@ def brief_block(goal: str, d: dict, fresh: bool = True) -> str:
         lines.append(f"辟谣 / 反证：{x}")
     if d.get("unknown"):
         lines.append(f"没查到 / 不确定：{d['unknown']}")
+    if d.get("followups"):
+        lines.append("被追问时可以补：" + "；".join(d["followups"]))
     conf = {"high": "比较有把握", "medium": "大概对", "low": "把握不大"}.get(str(d.get("confidence") or ""), "")
     if conf:
         lines.append(f"把握：{conf}")
@@ -171,8 +243,12 @@ def brief_block(goal: str, d: dict, fresh: bool = True) -> str:
             say.append(P.BRIEF_SAY[t])
     if d.get("counter"):
         say.append(P.BRIEF_SAY["counter"])
+    if d.get("single_major"):
+        say.append(P.BRIEF_SAY["single"])
     if str(d.get("confidence") or "") == "low" or (d.get("unknown") and d.get("answerable") is not False):
         say.append(P.BRIEF_SAY["low"])
+    if d.get("answer_short") or d.get("followups"):
+        say.append(P.BRIEF_SAY["followups"])
     if say:
         lines.append("这次怎么说：" + "；".join(say) + "。")
     lines.append(P.BRIEF_HOWTO)
@@ -289,7 +365,8 @@ class AgentMixin:
             block = await self._agent_research(gid, str(research["goal"]).strip()[:120],
                                                "deep" if research.get("depth") == "deep" else "quick", mentioned,
                                                question=str(asker["content"] or "")[:128],
-                                               window=time_window(research.get("after"), research.get("before")))
+                                               window=time_window(research.get("after"), research.get("before")),
+                                               qtype=str(research.get("type") or ""))
             if block is None:
                 old = await self.web_block(gid, [r["content"] for r in users[-4:]], mentioned)
                 if old:
@@ -300,7 +377,7 @@ class AgentMixin:
 
     # ---------------- 研究层 ----------------
     async def _agent_research(self, gid: int, goal: str, depth: str, mentioned: bool, question: str = "",
-                              window: tuple[str, str] | None = None) -> str | None:
+                              window: tuple[str, str] | None = None, qtype: str = "") -> str | None:
         g = self.gk(gid)
         day_key = self._agent_day_key(gid)
         if int(self.db.get(day_key, 0) or 0) >= int(g.get("agent_per_day", 60)):
@@ -310,19 +387,19 @@ class AgentMixin:
             log.info("群 %s：这小时查得够多了，退回只搜一次", gid)
             return None
         self.db.set(day_key, int(self.db.get(day_key, 0) or 0) + 1)
+        rounds, deadline, depth = research_budget(g, depth, qtype)       # 21.0 按问题类型配力度
         deep = depth == "deep"
         if deep and mentioned and g.get("agent_filler", True):
             await self._agent_filler(gid)
         thinking = deep and bool(g.get("agent_deep_thinking", True))
-        rounds = int(g.get("agent_deep_rounds", 4) if deep else g.get("agent_quick_rounds", 2))
-        deadline = float(g.get("agent_deep_seconds", 40) if deep else g.get("agent_quick_seconds", 15))
         msgs = [{"role": "system", "content": P.RESEARCH_SYSTEM.format(
                     now=self._now_text(), name=self.brain.persona.name,
                     rounds=f"这次最多查 {rounds} 轮，一般 {max(1, rounds - 1)} 轮就该交卷。")},
-                {"role": "user", "content": P.RESEARCH_USER.format(goal=goal + window_text(window),
+                {"role": "user", "content": P.RESEARCH_USER.format(goal=goal + window_text(window) + P.type_note(qtype),
                                                                    context=self.transcript(gid, 6))}]
-        from aigroup.agent.tools import QUESTION
+        from aigroup.agent.tools import DEPTH, QUESTION
         QUESTION.set(question or goal)
+        DEPTH.set(depth)
         try:
             tb = self.toolbox()
             res = await tool_loop(self.brain.llm, msgs, tb.schemas(recall=True),
@@ -342,11 +419,39 @@ class AgentMixin:
         d = stale_check(d, window)
         if not d.get("answer_points") and not d.get("premise"):
             return brief_block(goal, {"answer_points": [], "unknown": d.get("unknown") or "没查到", "answerable": False})
+        d = await self._recheck_major(d, res.steps)
         self._save_brief(gid, goal, d)
         self.ledger_write(gid, d)
         if g.get("remember_web", True) and d.get("confidence") != "low" and d.get("answer_points"):
             self._spawn(self.learn(gid, goal, [{"title": goal, "snippet": "；".join(d["answer_points"][:3])}]))
         return brief_block(goal, d)
+
+    async def _recheck_major(self, d: dict, steps: list[str]) -> dict:
+        """21.0 重大消息只有一个来源：降到“中”；研究员没搜过辟谣的，补搜一次“xx 辟谣 / 澄清”，搜到就记进 counter。"""
+        single = single_source_major(d)
+        if not single:
+            return d
+        d["single_major"] = single[:2]
+        for c in d.get("claims") or []:
+            if c["text"] in single and c["confidence"] == "high":
+                c["confidence"] = "medium"
+        if d.get("confidence") == "high":
+            d["confidence"] = "medium"
+        if any(re.search(r"辟谣|澄清|不实|谣言|假的", s) for s in steps):
+            return d
+        try:
+            from aigroup.agent.tools import DEPTH
+            DEPTH.set("quick")
+            q = re.sub(r"[，,。].*$", "", single[0])[:30] + " 辟谣 澄清"
+            res, _ = await self.web.agent_search(q, 5, prefer="deepseek")
+        except Exception as e:  # noqa: BLE001
+            log.info("补搜辟谣出错：%s", e)
+            return d
+        hit = [r for r in res if re.search(r"辟谣|不实|谣言|澄清|假消息|并未|否认", (r.get("title") or "") + (r.get("snippet") or ""))]
+        if hit:
+            d["counter"] = (d.get("counter") or []) + [f"{hit[0].get('site') or ''}：{hit[0].get('title', '')[:40]}"]
+            d["confidence"] = "low"
+        return d
 
     async def _agent_filler(self, gid: int):
         """要查一会儿：先说一句“等我看看”（每个群 10 分钟最多一次）。"""

@@ -262,7 +262,19 @@ class EvalMixin:
                 "label_nb": self.db.get("label_nb_status") or {}, "long": self.db.get("long_judge_last") or {},
                 "blind": (self.db.get("qq_blind_hist") or [])[-10:],
                 "calib": self.db.get("judge_calib") or {}, "qa": self._slim(self.db.get("qa_last"), "items", 15),
-                "pairs": self._slim(self.db.get("pair_last"), "items", 10)}
+                "pairs": self._slim(self.db.get("pair_last"), "items", 10), "appraise": self._appraise_snapshot()}
+
+    def _appraise_snapshot(self) -> dict:
+        """21.0 九问自评 vs 你的标注、等等队列这一周的去向。"""
+        from aigroup.eval.label import appraise_stats
+        out = appraise_stats(self.db)
+        if hasattr(self, "pitch_stats"):
+            agg: dict = {}
+            for gid in getattr(self, "groups", []) or []:
+                for k, v in self.pitch_stats(gid).items():
+                    agg[k] = agg.get(k, 0) + v
+            out["pitch"] = agg
+        return out
 
     @staticmethod
     def _slim(d, key: str, k: int):

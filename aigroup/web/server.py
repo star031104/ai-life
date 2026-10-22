@@ -1037,7 +1037,8 @@ class GroupHome:
         from aigroup.eval.label import answer, stats
         try:
             lab = d.get("label")
-            answer(self.db, int(d["id"]), None if lab in (None, "", "skip") else int(lab), str(d.get("how") or ""))
+            answer(self.db, int(d["id"]), None if lab in (None, "", "skip") else int(lab), str(d.get("how") or ""),
+                   str(d.get("why0") or ""))
         except (KeyError, TypeError, ValueError):
             return web.json_response({"ok": False, "error": "参数不对"}, status=400)
         return web.json_response({"ok": True, "stats": stats(self.db)})
@@ -1057,7 +1058,8 @@ class GroupHome:
         try:
             for it in list(d.get("items") or [])[:40]:
                 lab = it.get("label")
-                answer(self.db, int(it["id"]), None if lab in (None, "", "skip") else int(lab), str(it.get("how") or ""))
+                answer(self.db, int(it["id"]), None if lab in (None, "", "skip") else int(lab), str(it.get("how") or ""),
+                       str(it.get("why0") or ""))
                 done += 1
         except (KeyError, TypeError, ValueError, AttributeError):
             return web.json_response({"ok": False, "error": "参数不对", "done": done}, status=400)

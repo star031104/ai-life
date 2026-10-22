@@ -35,7 +35,8 @@ def reset(db_path: Path, backup: bool = True) -> dict:
     cols = {r[1] for r in c.execute("PRAGMA table_info(qq_gate_log)")} if "qq_gate_log" in tabs else set()
     if "human" in cols:
         out["labels"] = c.execute("SELECT COUNT(*) FROM qq_gate_log WHERE human IS NOT NULL").fetchone()[0]
-        sets = ["human=NULL"] + (["human_act=''"] if "human_act" in cols else []) + (["weak=NULL"] if "weak" in cols else [])
+        sets = ["human=NULL"] + (["human_act=''"] if "human_act" in cols else []) + (["weak=NULL"] if "weak" in cols else []) \
+            + (["human_why=''"] if "human_why" in cols else [])
         c.execute(f"UPDATE qq_gate_log SET {', '.join(sets)}")
     for t in ("qq_human_score", "qq_pairs"):
         if t in tabs:

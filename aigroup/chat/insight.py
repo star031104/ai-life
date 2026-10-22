@@ -401,7 +401,8 @@ class InsightMixin:
         return toks
 
     def train_label_nb(self, min_each: int = 30) -> dict:
-        rows = self.db.conn.execute("SELECT id, group_id, ts, feats, human FROM qq_gate_log WHERE human IN (0, 1)").fetchall()
+        rows = self.db.conn.execute("SELECT id, group_id, ts, feats, human FROM qq_gate_log WHERE human IN (0, 1) "
+                                    "AND NOT (human=0 AND IFNULL(human_why,'')='说的不对')").fetchall()
         try:            # 20.0 程序推的弱标签（她说了没人接 → 0、接得很好 → 1）也拿来凑数，但每条只算半条、不进验证集
             weak = self.db.conn.execute("SELECT id, group_id, ts, feats, weak human FROM qq_gate_log "
                                         "WHERE human IS NULL AND weak IN (0, 1)").fetchall()
