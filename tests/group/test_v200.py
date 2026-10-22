@@ -89,7 +89,7 @@ def test_deepseek_search(monkeypatch, cfg):
     from aigroup.agent.mixin import format_results
     cfg["net"] = {**dict(cfg.get("net") or {}), "deepseek_key": "sk-test", "tavily_key": ""}
     w = S.WebSearch(cfg)
-    assert w.ds_key == "sk-test" and w.ds_first
+    assert w.ds_key == "sk-test" and not w.ds_first          # 20.4.3 默认 Tavily 在前（这里没配 Tavily，直接 DeepSeek）
     sent = {}
 
     class R:
@@ -141,3 +141,42 @@ def test_deepseek_key_from_llm_profile(cfg):
     cfg["net"] = {}
     cfg["llm"] = {"profiles": {"ds": {"base_url": "https://api.deepseek.com/v1", "api_key": "sk-abc", "model": "x"}}}
     assert deepseek_key(cfg) == "sk-abc"
+
+
+def test_tavily_first_then_deepseek(monkeypatch, cfg):
+    """20.4.3：配了 Tavily 先用它的免费额度；这个月用完（432）以后改用 DeepSeek，后台刷候选直接用 DeepSeek。"""
+    from aigroup.net import search as S
+    cfg["net"] = {**dict(cfg.get("net") or {}), "deepseek_key": "sk-test", "tavily_key": "tv-test"}
+    w = S.WebSearch(cfg)
+    kv = {}
+
+    class KV:
+        def get(self, k, d=None):
+            return kv.get(k, d)
+
+        def set(self, k, v):
+            kv[k] = v
+    w.kv = KV()
+    used = []
+
+    async def tav(q, n, days=0, snippet=220, site=""):
+        used.append("Tavily")
+        if kv.get("quota_gone"):
+            kv["tavily_out"] = w._month()
+            raise RuntimeError("Tavily 额度用完")
+        return [{"title": "t", "url": "https://a.com", "snippet": "s", "date": ""}]
+
+    async def ds(q, n, days=0, snippet=220, site="", question=""):
+        used.append("DeepSeek")
+        return [{"title": "d", "url": "https://b.com", "snippet": "s", "date": ""}]
+    w._tavily, w._deepseek = tav, ds
+    assert asyncio.run(w.agent_search("aspas 近况", 3))[1] == "Tavily"
+    kv["quota_gone"] = True
+    assert asyncio.run(w.agent_search("TenZ 近况", 3))[1] == "DeepSeek"
+    assert w.tavily_out()
+    used.clear()
+    assert asyncio.run(w.agent_search("EDG 比分", 3))[1] == "DeepSeek" and used == ["DeepSeek"]   # 用完了这个月不再试 Tavily
+    kv.pop("tavily_out")
+    kv.pop("quota_gone")
+    used.clear()
+    assert asyncio.run(w.agent_search("KPL 最新", 3, prefer="deepseek"))[1] == "DeepSeek" and used == ["DeepSeek"]

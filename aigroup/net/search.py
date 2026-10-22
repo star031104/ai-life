@@ -157,7 +157,8 @@ class WebSearch:
         self._clients: dict[str, httpx.AsyncClient] = {}
         self.kv = None                    # 19.0 GroupChat 挂上数据库：记 Tavily 这个月用了几次、免费额度用完没
         self.ds_key = deepseek_key(cfg) if c.get("deepseek_search", True) else ""
-        self.ds_first = str(c.get("search_first") or "deepseek").lower() != "tavily"   # 20.0 先 DeepSeek 还是先 Tavily
+        # 20.4.3 默认先用 Tavily 的每月免费额度，用完（或出错）再用 DeepSeek；search_first: deepseek 改回 DeepSeek 在前
+        self.ds_first = str(c.get("search_first") or "tavily").lower() == "deepseek"
         self.ds_ip = str(c.get("deepseek_ip") or "").strip()      # 20.1 固定按哪个 IP 出结果（不同 IP 前 10 只重合 0.58）
         self.buckets = {"DeepSeek": Bucket(float(c.get("deepseek_qps", 5))), "Tavily": Bucket(float(c.get("tavily_qps", 2)))}
         self.last_engine = ""
@@ -360,14 +361,14 @@ class WebSearch:
         return {"title": str(res.get("title") or ""), "text": str(res.get("raw_content") or "")}
 
     async def agent_search(self, query: str, n: int = 6, days: int = 0, site: str = "",
-                           question: str = "") -> tuple[list[dict], str]:
+                           question: str = "", prefer: str = "") -> tuple[list[dict], str]:
         """给“查资料”用：DeepSeek / Tavily 优先（带日期、摘要长一点），都不行就换百度、360（没有日期）。
         返回（结果, 用的哪个引擎）。"""
         q = re.sub(r"\s+", " ", query or "").strip()[:80]
         site = re.sub(r"^https?://|/.*$", "", (site or "").strip().lower())[:60]
         if not self.enabled or len(q) < 2:
             return [], ""
-        ck = f"agent|{q}|{days}|{site}"
+        ck = f"agent|{q}|{days}|{site}"            # 缓存不分引擎
         hit = self._cache.get(ck)
         if hit:
             return hit, "缓存"
@@ -378,7 +379,8 @@ class WebSearch:
             ds = ("DeepSeek", lambda: self._deepseek(q, n, int(days or 0), snippet=320, site=site, question=question))
             # 实测（deepseek-search-bench 2026-10）：公众号、小红书完全搜不到，加 site: 也不行 → 这类放到最后
             weak = bool(re.search(r"小红书|公众号|xiaohongshu|weixin\.qq", q + site, re.I))
-            tries = tries + [ds] if (weak or not self.ds_first) else [ds] + tries
+            first = (prefer == "deepseek") or (self.ds_first and prefer != "tavily")
+            tries = tries + [ds] if (weak or not first) else [ds] + tries
         qq = f"site:{site} {q}" if site else q                   # 19.3 只搜某个网站（百度 / 360 认 site:）
         tries += [(e[0], (lambda e=e: self._engine(*e, qq, n))) for e in ENGINES]
         for name, fn in tries:

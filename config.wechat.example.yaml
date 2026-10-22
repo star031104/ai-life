@@ -167,7 +167,7 @@ net:
   search: true                   # 能不能上网搜（关掉就只读群友发的链接）
   deepseek_search: true         # 20.0 用 DeepSeek 搜索 / 读网页（和聊天同一个官方 DeepSeek Key；¥5 / 千次成功请求，空结果不收钱）
   deepseek_key: ""               # 可选：单独给搜索用的 Key；不填就用 llm.profiles 里 api.deepseek.com 的 Key
-  search_first: deepseek        # 20.0 先用哪个：deepseek / tavily
+  search_first: tavily          # 先用哪个：tavily（默认，先用每月免费额度，用完再 DeepSeek）/ deepseek
   deepseek_ip: ""               # 20.1 可选：填服务器公网 IP，DeepSeek 搜索按它出结果（不同 IP 结果只重合约六成，固定了更稳）
   deepseek_qps: 5               # 20.1 DeepSeek 搜索每秒最多几次（超了会 429，自动歇 10 秒）
   tavily_qps: 2

@@ -157,7 +157,8 @@ class FeedMixin:
         n = 0
         for it in pick:
             try:
-                res, _ = await self.web.agent_search(f"{it['topic']} 最新", 5, days=int(g.get("share_fresh_days", 3) or 3))
+                res, _ = await self.web.agent_search(f"{it['topic']} 最新", 5, days=int(g.get("share_fresh_days", 3) or 3),
+                                                     prefer="deepseek")   # 后台刷得多：用便宜的，别吃掉 Tavily 免费额度
             except Exception as e:  # noqa: BLE001
                 log.info("群 %s 刷「%s」出错：%s", gid, it["topic"], e)
                 continue

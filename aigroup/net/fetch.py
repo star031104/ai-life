@@ -294,10 +294,12 @@ class WebReader:
         if self.browser is not None and time.time() >= self._browser_off:
             out.append("无头浏览器")
         w = self.web
-        if w is not None and getattr(w, "ds_key", "") and not w._ds_down():
-            out.append("DeepSeek 代读")
+        rd = []
         if self.tavily_extract and w is not None and getattr(w, "tavily_key", "") and not w.tavily_out():
-            out.append("Tavily 代读")
+            rd.append("Tavily 代读")
+        if w is not None and getattr(w, "ds_key", "") and not w._ds_down():
+            rd.append("DeepSeek 代读")
+        out += list(reversed(rd)) if getattr(w, "ds_first", False) else rd
         return out
 
     def _cookie(self, url: str) -> str:
@@ -407,18 +409,22 @@ class WebReader:
                 return None, "down"
         except ValueError:
             pass
-        got, err, via = {}, "", "DeepSeek"
-        if ds:                                            # 20.0 先让 DeepSeek 读（便宜，不占 Tavily 额度）
-            try:
-                got = await w.ds_fetch(url)
-            except Exception as e:  # noqa: BLE001
-                err = str(e)[:80]
-        if not (got and got.get("text")) and tav:
-            via = "Tavily"
-            try:
-                got = await w.extract(url)
-            except Exception as e:  # noqa: BLE001
-                return None, str(e)[:80]
+        got, err, via = {}, "", ""
+        # 20.4.3 先用哪个跟搜索一样（默认 Tavily 免费额度在前，用完再 DeepSeek）
+        order = (["DeepSeek", "Tavily"] if getattr(w, "ds_first", False) else ["Tavily", "DeepSeek"])
+        for name in order:
+            if got and got.get("text"):
+                break
+            if name == "DeepSeek" and ds:
+                try:
+                    got, via = await w.ds_fetch(url), "DeepSeek"
+                except Exception as e:  # noqa: BLE001
+                    err = str(e)[:80]
+            elif name == "Tavily" and tav:
+                try:
+                    got, via = await w.extract(url), "Tavily"
+                except Exception as e:  # noqa: BLE001
+                    err = str(e)[:80]
         if err and not got:
             return None, err
         if not got or not got.get("text"):
