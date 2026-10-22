@@ -38,6 +38,20 @@ SPEC_PROMPT = """你是{me}，在一个群里和大家聊天。下面是群友�
   "care": "他什么时候想要被关心、什么时候只想被损两句（一句话，看不出来就空）"}}"""
 
 
+# 21.0 她问大家的一句（没点名）：某一小句以问号或“啥 / 什么 / 吗 / 没 / 呢 / 哪 / 咋 / 多少”结尾
+_Q_END = re.compile(r"([？?]|啥|什么|吗|嘛|没|呢|几点|哪|哪儿|哪里|怎么样|咋样|咋了|多少|几个)$")
+
+
+class _OpenQ:
+    @staticmethod
+    def search(text: str) -> bool:
+        t = re.sub(r"\[[^\]]*\]", "", str(text or ""))
+        return any(_Q_END.search(c.strip()) for c in re.split(r"[，,。！!～~\s]+", t) if c.strip())
+
+
+OPEN_Q = _OpenQ()
+
+
 class HumaneMixin:
     # ================= 19.1 搭话：别人在接她的话 =================
     def names_of(self, gid: int, uid: int) -> list[str]:
@@ -53,7 +67,8 @@ class HumaneMixin:
                  now: float | None = None) -> str:
         """这句是不是在接她的话（“搭话”）：
         1) 她这几个小时里点过他（叫了他的名字、@ 他、回的就是他），这是他之后说的第一句；
-        2) 或者这句接了她刚说过的词（≥ 4 个字的共同片段），而且是这几个小时里第一次接。
+        2) 或者这句接了她刚说过的词（≥ 4 个字的共同片段），而且是这几个小时里第一次接；
+        3) 21.0 她刚问了大家一句（“中午吃啥”“赢了没”），这是 open_question_minutes 分钟里他说的第一句——在回答她。
         返回她那句话的原文（是搭话）或 ""。@ 了别人、回复别人的不算。"""
         g = self.gk(gid)
         if not g.get("bids", True) or at_other or reply_other or not text or not str(text).strip():
@@ -82,6 +97,10 @@ class HumaneMixin:
                 (gid, uid, h["ts"])).fetchone()["n"])
             called = any(n in content for n in names) or any(abs(t - float(h["ts"])) <= 120 for t in targeted)
             if called and said_since == 0:
+                done.add(h["id"])
+                return content
+            if (said_since == 0 and now - float(h["ts"]) <= float(g.get("open_question_minutes", 10)) * 60
+                    and OPEN_Q.search(content)):
                 done.add(h["id"])
                 return content
             if said_since <= 2 and len(re.sub(r"\s", "", text)) >= 3:

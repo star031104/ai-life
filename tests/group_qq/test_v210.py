@@ -198,3 +198,23 @@ def test_label_split_and_appraise_stats(cfg, brain):
     assert a["too_early"] == 1 and a["too_late"] == 1 and a["content"] == 1 and a["content_caught"] == 1.0
     assert brain.db.conn.execute("SELECT human_why FROM qq_gate_log WHERE id=?", (ids[3],)).fetchone()[0] == ""
     assert gc.humane_metrics(GROUP)["fir"] == 1.0                       # 说的不对的不算进“不该说却说”
+
+
+# ---------------- 她问了大家一句，有人回答：接住（10-22 中午“中午吃啥”→“我自己烧饭吃”她没接） ----------------
+def test_answer_to_her_open_question_is_bid(cfg, brain):
+    from aigroup.chat.humane import OPEN_Q
+    assert OPEN_Q.search("中午吃啥，我这会儿只能看菜单") and not OPEN_Q.search("看这表情就知道了，我不问了")
+    gc, ob = _gc(cfg, brain, cooldown_seconds=0)
+    gc._record(GROUP, 0, "小满", "中午吃啥，我这会儿只能看菜单", 1, role="assistant")
+    assert gc.bid_from(GROUP, FRIEND, "我自己烧饭吃") == "中午吃啥，我这会儿只能看菜单"
+    assert gc.bid_from(GROUP, FRIEND, "我自己烧饭吃") == ""                 # 同一句只算一次
+
+
+def test_bid_not_skipped_by_self_check(cfg, brain):
+    from conftest import _msg, _run
+    gc, ob = _gc(cfg, brain, cooldown_seconds=0)
+    gc._record(GROUP, 0, "小满", "中午吃啥，我这会儿只能看菜单", 1, role="assistant")
+    brain.llm.reply = J(act="say", kind="I2", to=2, len="short", say=["你还会烧饭？烧的啥"],
+                        appraise={"timing": "现在", "fresh": True, "share_high": True})
+    _run(gc, _msg(FRIEND, "小王", "我自己烧饭吃", 2))
+    assert any("烧的啥" in str(x) for x in ob.sent)

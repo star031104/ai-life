@@ -421,7 +421,7 @@ class SpeakMixin:
                     said = await self.speak(gid, mentioned=mentioned, owner_spoke=owner, trigger=trigger, who=who,
                                      note=note, interest=interest, gate_id=gate_id, focus=list(dict.fromkeys([t[1] for t in texts] + self.alias_hits(joined))),
                                      query=joined, last_is_sticker=bool(texts and texts[-1][3].get("sticker")),
-                                     may_ignore=may_ignore)
+                                     may_ignore=may_ignore, bid=guess.startswith("bid:"))
                     if guess.startswith("bid:") and hasattr(self, "note_bid"):
                         self.note_bid(gid, "", "", answered=bool(said))
                 except Exception as e:  # noqa: BLE001
@@ -434,7 +434,8 @@ class SpeakMixin:
     async def speak(self, gid: int, mentioned: bool, owner_spoke: bool, trigger: int | None, who: str,
                     why: str | None = None, note: str = "", interest: bool = False, gate_id: int | None = None,
                     focus: list[int] | None = None, query: str = "", last_is_sticker: bool = False, web: str = "",
-                    must: bool = False, _rethink: int = 0, may_ignore: bool = False, pitch: bool = False) -> bool:
+                    must: bool = False, _rethink: int = 0, may_ignore: bool = False, pitch: bool = False,
+                    bid: bool = False) -> bool:
         """问大模型、质检、发。why 为空 = 在接群友的话（跳过时才算进退避）；冒泡、欢迎新人、小屋 nudge 会给 why。
         must：生日、约好的事、打气这类“这次一定要说”的，不受每天主动开口的预算限制，新消息来了也照样说（会重新想）。"""
         b = self.brain
@@ -509,7 +510,7 @@ class SpeakMixin:
                                         why=why, note=note, interest=interest, gate_id=gate_id,
                                         focus=list(dict.fromkeys([*(focus or []), *new])), query=self._recent_text(gid),
                                         last_is_sticker=last_is_sticker, web=web, must=must, _rethink=_rethink + 1,
-                                        may_ignore=may_ignore, pitch=pitch)
+                                        may_ignore=may_ignore, pitch=pitch, bid=bid)
         mb = 1 if may_ignore else int(self.gk(gid)["max_bubbles"])
         use_plan = bool(self.gk(gid).get("plan_json", True))
         tmap = self._tmap.get(gid, {}) if use_plan else {}
@@ -574,7 +575,7 @@ class SpeakMixin:
                 log.info("群 %s：她判断这和她无关（%s），不说", gid, kind)
                 plan["act"] = "skip"
             sc = plan.get("score") or {}
-            if (sc and plan["act"] == "say" and not mentioned and not must and self.gk(gid).get("self_score", True)
+            if (sc and plan["act"] == "say" and not mentioned and not must and not bid and self.gk(gid).get("self_score", True)
                     and (replying or why is not None)):
                 avg = sum(sc.values()) / len(sc)
                 low_new = sc.get("新意", 5) <= 2
@@ -584,7 +585,8 @@ class SpeakMixin:
                     plan["act"] = "skip"
             ap = plan.get("appraise") or {}
             if ap and plan["act"] == "say" and self.gk(gid).get("appraise", True):
-                verdict, notes = appraise_verdict(ap, prompted=bool(mentioned or must))
+                # 别人在接她的话、回答她刚问的（bid）：和被叫到一样，只改说法、不会不说（Gottman：接住搭话）
+                verdict, notes = appraise_verdict(ap, prompted=bool(mentioned or must or bid))
                 self._appraise_log(gid, gate_id, ap, verdict)
                 if verdict == "wait" and (pitch or not self.gk(gid).get("pitch_queue", True)):
                     verdict = "skip"                        # 已经等过一次了 / 没开等待队列：这次就不说
