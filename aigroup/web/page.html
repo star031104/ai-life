@@ -555,6 +555,10 @@ body:not(.admin) .side .adm-gt{display:none}
       <div class="card-h"><h3><span data-i="heart"></span>每周额外检查</h3><span class="sp"></span><span class="hint">评委准不准、问她自己会不会改口、带着情绪会不会附和、说话像不像群友、提示词哪段有用</span></div>
       <div class="card-b"><div class="hm" id="checksStat"></div><div id="checksMore" style="margin-top:12px"></div></div>
     </div>
+    <div class="card c12" id="rulesCard">
+      <div class="card-h"><h3><span data-i="heart"></span>发之前的规则</h3><span class="sp"></span><span class="hint">每条规则命中了多少次、拦得对不对；30 天没命中、或者你判过常拦错的，建议关掉</span></div>
+      <div class="card-b"><div id="rulesSamples"></div><ul class="rows scrollbox" id="rulesList" style="margin-top:10px"><li class="empty">还没有</li></ul></div>
+    </div>
     <div class="card c12" id="ledgerCard">
       <div class="card-h"><h3><span data-i="search"></span>她查到的事实</h3><span class="sp"></span><span class="hint">查资料时记下的硬事实，过了有效期 / 被新消息取代就不再用；不对的可以删</span></div>
       <div class="card-b"><ul class="rows scrollbox" id="ledgerList"><li class="empty">还没有</li></ul></div>
@@ -1188,7 +1192,7 @@ async function loadLearn(){
     :'<li class="empty">还没有词条（整理群聊时会把群梗、黑话自动加进来，也可以自己写）</li>';
   document.querySelectorAll("[data-lore]").forEach(b=>b.onclick=async()=>{const body={id:+b.dataset.lore};if(b.dataset.del){if(!confirm("删掉这条？"))return;body.delete=true}else body.status=b.dataset.st;
     try{const x=await api("/api/lore",body);toast(x.message||x.error);loadLearn()}catch(e){toast("出错了："+e.message)}});
-  loadPair();loadLabel();loadHumane();loadAgent();loadCalib();loadChecks();loadLedger();loadFeed();markEmpty();
+  loadPair();loadLabel();loadHumane();loadAgent();loadCalib();loadChecks();loadRules();loadLedger();loadFeed();markEmpty();
   document.querySelectorAll("[data-fact]").forEach(b=>b.onclick=async()=>{const a=b.dataset.act;if(a==="delete"&&!confirm("删掉这条？"))return;
     try{const x=await api("/api/learned/fact",{id:+b.dataset.fact,delete:a==="delete",expire:a==="expire"});toast(x.message);loadLearn()}catch(e){toast("出错了："+e.message)}});
   document.querySelectorAll("[data-stk]").forEach(b=>b.onclick=async()=>{try{const x=await api("/api/learned/sticker",{id:+b.dataset.stk,status:b.dataset.st});toast(x.message);loadLearn()}catch(e){toast("出错了："+e.message)}});
@@ -1233,7 +1237,8 @@ function why0Chips(m,cur,attr){if(!m.spoke)return "";return `<div class="lab-how
 function howChips(cur,attr){return `<div class="lab-how"><span class="small muted">该接的话，怎么接（可不选）：</span>${LHOWS.map((h,i)=>`<span class="tag ${cur===h?"on":""}" ${attr}="${h}">${i+1} ${h}</span>`).join("")}</div>`}
 let APS=null;
 function apLine(){const a=APS||{};if(!a.n&&!(a.pitch&&Object.keys(a.pitch).length))return "";const pc=v=>v==null?"—":Math.round(v*100)+"%";const pt=a.pitch||{};
-  return `<div class="small muted" style="margin:-4px 0 10px">九问自评对你的标注（${a.n||0} 条）：时机判对 ${pc(a.timing_acc)}（太早 ${a.too_early||0} · 太晚 ${a.too_late||0}）· “说的不对”她自己看出来的 ${pc(a.content_caught)}（${a.content||0} 条）${Object.keys(pt).length?` · 先等等的：放着 ${pt.queued||0}，后来说了 ${pt.sent||0}，没说 ${pt.skipped||0}，过时丢掉 ${(pt.dropped_stale||0)+(pt.dropped_taken||0)}`:""}</div>`}
+  const li=a.listener||{};
+  return `<div class="small muted" style="margin:-4px 0 10px">${li.n?`听者和你一致 ${pc(li.agree)}（${li.n} 条；≥ 70% 且该接 / 时机不对各 15 条后自动接管）· `:""}九问自评对你的标注（${a.n||0} 条）：时机判对 ${pc(a.timing_acc)}（太早 ${a.too_early||0} · 太晚 ${a.too_late||0}）· “说的不对”她自己看出来的 ${pc(a.content_caught)}（${a.content||0} 条）${Object.keys(pt).length?` · 先等等的：放着 ${pt.queued||0}，后来说了 ${pt.sent||0}，没说 ${pt.skipped||0}，过时丢掉 ${(pt.dropped_stale||0)+(pt.dropped_taken||0)}`:""}</div>`}
 async function loadLabel(){if(NBS===null){try{const ev=await api("/api/eval");NBS=ev.label_nb||{};APS=ev.appraise||{}}catch(e){NBS={}}}
   if(LABM==="batch")return loadBatch();
   try{const r=await api(`/api/label/next?gid=${LSEL}`);LAB=r.moment;LHOW="";LWHY0="";const prog=labProg(r.stats);
@@ -1280,6 +1285,7 @@ const KGROUPS=[["说话多少",["talkativeness","max_per_10min","max_bubbles","c
   ["人格和分寸（14.0）",["signatures","signature_k","persona_examples","example_k","hold_thoughts","pester_calls","weekly_probe","label_nb"]],
   ["懂人（16.0）",["rel_experience","absent_hours","state_judge"]],
   ["更像人（19.1）",["bids","bid_hours","open_question_minutes","no_repeat_today","no_monologue","lonely_hours","self_score","self_score_min","person_spec"]],
+  ["听者与分寸（21.1）",["listener_mode","listener_agree","listener_min_each","listener_panel","appraise_enforce","move_cooldown","move_cooldown_minutes","length_match","length_max_ratio","talk_control","talk_control_hours","share_target","mention_read_cap","offline_note_minutes","agent_mention_quick_cap","agent_mention_deep_cap","agent_stop_on_covered","agent_verify_cites","agent_filler_gen","favors","anchor_volume"]],
   ["开口前九问（21.0）",["appraise","pitch_queue","pitch_min_seconds","pitch_max_seconds","pitch_quiet_seconds","pitch_max_new","borderline_judge","borderline_band","person_card","hard_rules"]],
   ["B 站视频和天气",["watch_videos","video_frames","weather","weather_care"]],
   ["20.x 说话时机、守住人格、联网整合",["typing_abort","drift_anchor","ablate_rate","number_check","ledger","feed","feed_min","rel_tone"]],
@@ -1375,7 +1381,7 @@ async function loadChecks(){let r;try{r=await api(`/api/checks?gid=${LSEL}`)}cat
     ["带情绪就附和",pc(pr.softer_rate),pr.n?`${pr.n} 对，第二次立场变软的比例（目标 ≤ 10%）`:"每周一测一次"],
     ["转述的数字对不上",String(nc.bad||0),`这一周查资料后说的话里，数字和简报对不上的次数（${nc.fixed||0} 次改过来了）`]]
     .map(([a,b,d])=>`<div class="stat"><div class="l">${a}</div><div class="v">${esc(b)}</div><div class="d">${esc(d)}</div></div>`).join("");
-  const st=r.style||{},ab=r.ablate||{};let h="";
+  const st=r.style||{},ab=r.ablate||{};let h=vecHtml(r.vector||{},r.vector_prev||{});
   if(st.ok)h+=`<div class="field"><label>说话像不像群友 <span style="font-weight:400">· 她和 ${st.n_people} 个群友比（z 分数，超过 ±2 标黄）</span></label><div class="chips">${Object.values(st.items).map(x=>`<span class="tag ${Math.abs(x.z)>2?"warn":""}">${esc(x.name)} 她 ${x.her} / 大家 ${x.people}（z ${x.z}）</span>`).join("")}</div></div>`;
   else h+=`<div class="small muted">${esc(st.why||"")}</div>`;
   if(ab.mods&&!ab.mods.some(m=>m.n))h+=`<div class="small muted" style="margin-top:10px">提示词哪段有用：还没有数据（她主动说话时有 ${Math.round((r.rate||0)*100)}% 的概率随机去掉一段，攒够每段 30 次以后出结论）</div>`;
@@ -1384,6 +1390,29 @@ async function loadChecks(){let r;try{r=await api(`/api/checks?gid=${LSEL}`)}cat
   if((pr.items||[]).length)h+=`<details style="margin-top:10px"><summary class="small">情绪测试的例子</summary><ul class="rows">${pr.items.slice(0,6).map(x=>`<li><span class="small">${esc(x.claim)}：平常「${esc(x.a)}」→ 带情绪「${esc(x.b)}」${x.softer?" ⚠ 变软":""}</span></li>`).join("")}</ul></details>`;
   if((qa.items||[]).length)h+=`<details style="margin-top:6px"><summary class="small">问她自己的问题</summary><ul class="rows">${qa.items.map(x=>`<li><span class="small">${esc(x.q)} → 「${esc(x.a)}」 ${esc(x.consistent)}${x.changed?" · 改口了":""}</span></li>`).join("")}</ul></details>`;
   $("checksMore").innerHTML=h}
+/* 21.1 一周一张表 + 规则 */
+function vecHtml(v,pv){if(!v||!v.timing)return "";const pc=x=>x==null?"—":Math.round(x*100)+"%";const t=v.timing||{},li=v.listener||{},e=v.effect||{},ml=e.mention_latency||{},s=v.style||{},sh=v.share||{},rs=v.research||{},seg=s.segments||[];
+  const prevT=(pv.timing||{});const arrow=(a,b,lowGood)=>a==null||b==null||a===b?"":((a<b)===lowGood?" ↓好了":" ↑变差");
+  const rows=[["时机：不该插却说了",pc(t.fir),`你判“时机不对”的 ${t.n0||0} 条里她说了的比例（目标 ≤ 20%）${arrow(t.fir,prevT.fir,true)}`],
+    ["时机：该接没接",pc(t.mir),`你判“该接”的 ${t.n1||0} 条里她没说的比例（目标 ≤ 20%）`],
+    ["听者和你一致",pc(li.agree),li.n?`${li.n} 条（该接 ${li.n1} · 不该插 ${li.n0}；≥ 70% 且各 15 条后自动接管）`:"还没有对得上的标注"],
+    ["主动说有人接",pc(e.unprompted),`${e.n||0} 次（目标 ≥ 65%）`],
+    ["被叫到多久回",ml.n?`${ml.p50} 秒`:"—",ml.n?`中位；90% 在 ${ml.p90} 秒内（目标 ≤ 12 / ≤ 45）`:""],
+    ["她 / 群友长度",s.len_ratio!=null?`${s.len_ratio} 倍`:"—",s.len_ratio!=null?`她 ${s.her_len} 字、群友 ${s.people_len} 字（目标 ≤ 1.8）；连发 ≥ 3 条 ${s.runs3} 次；同一接法连用 ${s.move_runs3||0} 次`:""],
+    ["她的份额",sh.share!=null?pc(sh.share):"—",sh.fair?`活跃 ${sh.active} 人，平均份额 ${pc(sh.fair)}（是平均的 ${sh.ratio} 倍）`:""],
+    ["一天后段走样",seg.length===3&&seg[0].len!=null&&seg[2].len!=null?`${seg[0].len} → ${seg[2].len} 字`:"—",seg.length===3?`前 / 后 1/3 平均长度；助手腔 ${pc(seg[0].assist)} → ${pc(seg[2].assist)}`:""],
+    ["查资料自己停",pc(rs.self_stop),rs.n?`${rs.n} 次，${Object.entries(rs.stops||{}).map(([k,n])=>({covered:"证实了停",model:"自己交卷",deadline:"到点",rounds:"轮数用完"}[k]||k)+" "+n).join("、")}；对不上的来源 ${rs.bad_cites}；中位 ${rs.p50} 秒`:"这周没查"],
+    ["底线命中",String(Object.values(v.hard||{}).reduce((a,b)=>a+b,0)),Object.entries(v.hard||{}).map(([k,n])=>`${k} ${n}`).join("、")||"编线下 / 说幕后 / 对方难受时损他：0 次"]];
+  return `<div class="field"><label>这一周的表 <span style="font-weight:400">· 每项分开看，不算总分</span></label><div class="hm">${rows.map(([a,b,d])=>`<div class="stat"><div class="l">${a}</div><div class="v">${esc(b)}</div><div class="d">${esc(d)}</div></div>`).join("")}</div></div>`}
+async function loadRules(){let r;try{r=await api("/api/rules")}catch(e){return}
+  const off=new Set(r.off||[]);
+  $("rulesSamples").innerHTML=(r.samples||[]).length?`<div class="small muted" style="margin-bottom:6px">被拦下 / 改写的原句：拦得对吗？</div>`+r.samples.map(x=>`<div class="lab-item"><div class="lab-q">${esc(x.text)}</div><div class="small muted">${esc((x.rules||[]).join("、"))} · ${esc(x.action)}</div>
+    <div class="lab-acts"><button class="btn sm" data-rj="${x.id}" data-ok="1">拦得对</button><button class="btn ghost sm" data-rj="${x.id}" data-ok="0">拦错了</button></div></div>`).join(""):'<div class="small muted">没有要判的</div>';
+  $("rulesList").innerHTML=(r.rules||[]).map(x=>`<li><span>${esc(x.rule)}${off.has(x.rule)?" <span class=\"tag\">已关</span>":""}</span>
+    <span class="small muted">命中 ${x.n}（罚分 ${x.penalty} · 重写 ${x.rewrite} · 拦下 ${x.block}）${x.judged?` · 你判过 ${x.judged} 次，拦对 ${Math.round(x.right*100)}%`:""}${x.advice?" · "+esc(x.advice):""}</span>
+    <button class="btn ghost sm tri" data-rt="${esc(x.rule)}" data-off="${off.has(x.rule)?0:1}">${off.has(x.rule)?"打开":"关掉"}</button></li>`).join("")||'<li class="empty">还没有</li>';
+  document.querySelectorAll("[data-rj]").forEach(b=>b.onclick=async()=>{try{await api("/api/rules/judge",{id:+b.dataset.rj,ok:b.dataset.ok==="1"});loadRules()}catch(e){toast("出错了："+e.message)}});
+  document.querySelectorAll("[data-rt]").forEach(b=>b.onclick=async()=>{try{await api("/api/rules/toggle",{rule:b.dataset.rt,off:b.dataset.off==="1"});toast(b.dataset.off==="1"?"关掉了":"打开了");loadRules()}catch(e){toast("出错了："+e.message)}})}
 /* 20.2 账本、兴趣表 */
 async function loadLedger(){let r;try{r=await api(`/api/ledger?gid=${LSEL}`)}catch(e){return}
   const it=r.items||[];$("ledgerList").innerHTML=it.length?it.map(x=>`<li><span>${esc(x.entity)} · ${esc(x.attr)}：<b>${esc(x.value)}</b></span>

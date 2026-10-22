@@ -294,7 +294,7 @@ class PromptMixin:
         out = []
         if self.gk(gid).get("person_card", True) and hasattr(self, "person_cards"):
             # 21.0 人卡：今天状态、刚回来、别碰、能不能调侃、跟他怎么说，一人一张 ≤120 字（代替下面分开的四段）
-            pc = self.person_cards(gid, focus or []) if drop != "person_card" else ""
+            pc = self.person_cards(gid, focus or [], drop=drop) if drop != "person_card" else ""
             if pc:
                 out.append(pc)
                 if "状态不太好" in pc:
@@ -314,6 +314,11 @@ class PromptMixin:
             sp = self.spec_block(gid, focus or []) if hasattr(self, "spec_block") and drop != "spec" else ""          # 19.1 相处说明书
             if sp:
                 out.append(sp)
+        lb = self.length_block(gid) if hasattr(self, "length_block") else ""
+        for extra in ((self.moves_block(gid) if hasattr(self, "moves_block") and drop != "moves" else ""),
+                      ("# 长度\n" + lb if lb else "")):
+            if extra:
+                out.append(extra)                            # 21.1 接法冷却
         t = getattr(p, "traits", None)
         if not hasattr(self, "_last_sigs") or not isinstance(self._last_sigs, dict):
             self._last_sigs = {}
@@ -342,6 +347,10 @@ class PromptMixin:
                     "\n".join(f"{who}：{txt.replace('|||', ' / ')}" for who, txt in e.turns) for e in exs))
         self._drift = getattr(self, "_drift", {}) if isinstance(getattr(self, "_drift", None), dict) else {}
         self._drift[gid] = self.drift_kind(f) if self.gk(gid).get("drift_anchor", True) else ""
+        vol = int(self.gk(gid).get("anchor_volume", 20) or 0)
+        if (not self._drift[gid] and vol and self.gk(gid).get("drift_anchor", True)
+                and hasattr(self, "her_today") and len(self.her_today(gid)) >= vol):
+            self._drift[gid] = "long"                        # 21.1 今天说多了：人设会慢慢退回默认（Persistent Personas：后段少 41%）
         return "\n\n".join(out)
 
     @staticmethod
@@ -351,6 +360,7 @@ class PromptMixin:
         return next((k for k in DRIFT_FLAGS if k in flags), "")
 
     DRIFT_NOTE = {
+        "long": ("今天你已经说了不少", "别越聊越像客服、越来越顺着别人说、越说越长；还是你平时那样：短、口语、有自己的态度和口头禅"),
         "self_talk": ("有人在问你自己", "别突然变成一本正经讲 AI 原理、讲“作为一个 AI 我……”的样子，也别编一段深情独白；"
                       "就用你平时的口气答，可以自嘲、可以反问"),
         "sad": ("有人状态不好", "别变成心理咨询师（“我理解你的感受”“你可以试试深呼吸”这种），也别一下子温柔得不像你；"
@@ -379,7 +389,8 @@ class PromptMixin:
                 + ("。你这种时候不会：" + "；".join(nots) if nots else "") + "。")
 
     ABLATABLE = ("recall", "lore", "known", "today", "people_today", "absent", "rel_exp", "spec", "signatures", "held",
-                 "examples", "person_card")
+                 "examples", "person_card", "card_state", "card_absent", "card_avoid", "card_tease", "card_how",
+                 "card_favor", "card_care")
     CARD_PARTS = ("people_today", "absent", "rel_exp", "spec")       # 21.0 开着人卡时这四段已经合进人卡
 
     def pick_ablation(self, gid: int, mentioned: bool, why: str | None) -> str:
@@ -389,7 +400,7 @@ class PromptMixin:
         if mentioned or why or rate <= 0 or _r.random() >= rate:
             return ""
         card = bool(self.gk(gid).get("person_card", True))
-        pool = [x for x in self.ABLATABLE if (x not in self.CARD_PARTS if card else x != "person_card")]
+        pool = [x for x in self.ABLATABLE if (x not in self.CARD_PARTS if card else (x != "person_card" and not x.startswith("card_")))]
         return _r.choice(pool)
 
     def anchor(self) -> str:
@@ -449,9 +460,11 @@ class PromptMixin:
     "len": "short" 或 "mid" 或 "long"（短：一句；中：两三句；长：认真说一段，很少用）,
 {'    "react": "react 时点的表情：开心/大笑/喜欢/惊讶/无语/哭/得意 之一",' + chr(10) if can_react else ""}    "say": ["要发的第一条", "第二条（可以没有）"]{alt}{stk},
     "next": null 或 {{"wait_for": 编号（等这条消息的人再开口时你再接）, "timeout": 秒数（数字）}},
-    "hold": null 或 "一句你很想说、但现在时机不对的话（等聊到相关的、或者群里冷下来再说）"{score}}}
+    "hold": null 或 "一句你很想说、但现在时机不对的话（等聊到相关的、或者群里冷下来再说）",
+    "move": "你这句的接法：接住/回答/追问/接梗/损/关心/分享/吐槽/自嘲 之一"{score}}}
 - 不是每句话都要接。S1、S2 一般就 "skip"。下面这些时候也 skip：群里聊得正顺、已经有人在回答、问的是别人、你只会把别人的话复述一遍。
 {'- 有时候不用说话，给某条消息点个表情就够了：act 写 "react"，to 写那条的编号。' + chr(10) if can_react else ""}- 被人叫到（@你、叫你名字、回复你）一定要 say，哪怕很短。
+- 有人分享好事、好消息：追问一个具体的细节、替他高兴（“几分？”“哪家？”），别只回“恭喜”“好厉害”；有人帮过你，记着，合适时还回去。
 - 想等某个人回你（比如你刚问了他问题）再接着说，可以写 next。
 - say 里最多 {mb} 条，每条一句话左右，像随手打的字。"""
         else:
@@ -643,7 +656,8 @@ class PromptMixin:
                 "hold": (str(d.get("hold")).strip()[:80] if d.get("hold") and str(d.get("hold")).strip().lower()
                          not in ("null", "none") else ""),
                 "partial": bool(d.get("_partial")), "score": _score(d.get("score")),
-                "appraise": _appraise(d.get("appraise"))}
+                "appraise": _appraise(d.get("appraise")),
+                "move": str(d.get("move") or "").strip()[:4]}
 
     def parse_plan(self, raw: str) -> dict | None:
         return self.parse_plan_text(raw)

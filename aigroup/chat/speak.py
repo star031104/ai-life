@@ -283,6 +283,8 @@ class SpeakMixin:
         p = 1.0 if mentioned else likelihood(feats, self.weights)
         probs, spoke = self.gate.window(gid, now)
         talk = float(self.gk(gid).get("talkativeness", 0.3)) * talk_factor(self.gk(gid).get("talk_curve"), f"{self.brain.now():%H:%M}")
+        if hasattr(self, "talk_mult"):                    # 21.1 群里有人让她少说 / 多说；份额超了收紧
+            talk *= self.talk_mult(gid, now) * self.share_factor(gid)
         thr, keep, tie = threshold_ex(probs, min(1.0, talk), spoke)
         ok, why = decide(mentioned=mentioned, now=now, last_reply_ts=st.last_reply_ts, replies_10min=n10, quiet=quiet,
                          g=self.gk(gid), p=p, thr=thr, backoff_wait=st.backoff.waiting(now), pending=len(texts), tie=tie,
@@ -350,6 +352,8 @@ class SpeakMixin:
         log.info("群 %s：%s", gid, why)
         if mentioned:
             delay = self.secs("busy_delay_minutes", gid) * 60 if busy else self.human_delay(gid, "read_delay", 0.5)
+            if not busy:                                 # 21.1 被叫到：回得快 = 有连接感（Templeton 2022），看到消息最多拖这么久
+                delay = min(delay, float(self.gk(gid).get("mention_read_cap", 20)))
         else:
             delay = self.human_delay(gid, "notice_delay", 1.0)
         if st.mention_due and now - st.mention_due > 120:
@@ -358,6 +362,7 @@ class SpeakMixin:
             delay = max(0.0, st.mention_due - now)       # 18.1 已经定好什么时候回：新消息不让她重新等
         if mentioned and st.mentioned_since and now - st.mentioned_since > 600:
             delay = 0                                    # 叫她已经等了 10 分钟（中间一直有新消息）：别再拖
+        st.last_wait = delay + (now - st.mentioned_since if mentioned and st.mentioned_since else 0)
         if delay > 0:
             if mentioned and not st.mentioned_since:
                 st.mentioned_since = now
@@ -375,8 +380,14 @@ class SpeakMixin:
                 st.batch_callers = callers + st.batch_callers
                 self.gate.drop(gate_id)
                 return
+        waited_for = (now - st.mentioned_since) if (mentioned and st.mentioned_since) else 0.0
         st.mentioned_since = st.mention_due = 0.0
         note = ""
+        if getattr(st, "talk_note", ""):                 # 21.1 有人让她少说点 / 多说点
+            note += st.talk_note
+            st.talk_note = ""
+        if waited_for and hasattr(self, "offline_note"):
+            note += self.offline_note(gid, waited_for)
         if busy and activity:
             note = f"你现在正在：{activity}。" + ("偷空看了眼手机，回一句就好。" if mentioned else "抽空看了眼群。")
         many = list(dict.fromkeys(n for n, _ in callers))
@@ -442,6 +453,8 @@ class SpeakMixin:
         st = self._st(gid)
         start = time.time()
         trace = new_trace(gid)
+        tm: dict = {"wait": round(float(getattr(st, "last_wait", 0) or 0), 1)}   # 21.1 每一段花了几秒（小屋回放里看慢在哪）
+        st.last_wait = 0.0
         replying = why is None and not mentioned
         cap = int(self.gk(gid).get("unprompted_per_day", 0) or 0)
         if not mentioned and not must and cap and self.unprompted_today(gid) >= cap:      # 13.0 每天主动开口的总预算（插话、冒泡、分享共用）
@@ -465,7 +478,9 @@ class SpeakMixin:
             web = None
             if hasattr(self, "agent_on") and self.agent_on(gid):        # 19.0 先想一想：要不要查、要不要设提醒
                 try:
+                    t_a = time.time()
                     web = await self.agent_think(gid, mentioned, who, trigger)
+                    tm["think"] = round(time.time() - t_a, 1)
                 except Exception as e:  # noqa: BLE001
                     log.warning("群 %s：想一想出错，退回只搜一次：%s", gid, e)
                     web = None
@@ -482,8 +497,10 @@ class SpeakMixin:
                 self.db.conn.commit()
             except Exception:  # noqa: BLE001
                 pass
+        t_l = time.time()
         raw = await b.llm.chat(messages, role=str(self.gk(gid).get("route") or "chat"),
                                json_mode=bool(self.gk(gid).get("plan_json", True)))
+        tm["llm"] = round(time.time() - t_l, 1)
         tlog.info("群 %s 原文：%s", gid, raw)
         fresh = self.db.conn.execute("SELECT COUNT(*) n, IFNULL(MAX(to_her), 0) h FROM qq_group_messages "
                                      "WHERE group_id=? AND role='user' AND id>?", (gid, last_id)).fetchone()
@@ -524,9 +541,10 @@ class SpeakMixin:
         def done(outcome: str, sent: list | None = None, quality: str = ""):
             if self.gk(gid).get("trace", True):
                 try:
+                    tm["total"] = round(time.time() - start, 1)
                     self.tracer.add(trace=trace, gid=gid, gate_id=gate_id, mentioned=mentioned, why=why or "",
                                     messages=messages, raw=raw, plan=plan, sent=sent or [], quality=quality,
-                                    outcome=outcome)
+                                    outcome=outcome, timing=tm)
                 except Exception as e:  # noqa: BLE001
                     log.debug("存回放失败：%s", e)
 
@@ -588,6 +606,8 @@ class SpeakMixin:
                 # 别人在接她的话、回答她刚问的（bid）：和被叫到一样，只改说法、不会不说（Gottman：接住搭话）
                 verdict, notes = appraise_verdict(ap, prompted=bool(mentioned or must or bid))
                 self._appraise_log(gid, gate_id, ap, verdict)
+                if not self.gk(gid).get("appraise_enforce", False):
+                    verdict = "say"              # 21.1 自评只记录（不可信，线上 10/10 “现在”），时机交给听者
                 if verdict == "wait" and (pitch or not self.gk(gid).get("pitch_queue", True)):
                     verdict = "skip"                        # 已经等过一次了 / 没开等待队列：这次就不说
                 if verdict == "skip":
@@ -602,6 +622,29 @@ class SpeakMixin:
                 elif verdict == "fix":
                     fix_notes = notes
                     log.info("群 %s：九问自评 → 要改（%s）", gid, "、".join(notes))
+            if (plan["act"] == "say" and not mentioned and not must and not bid and (replying or pitch)
+                    and hasattr(self, "listen") and str(self.gk(gid).get("listener_mode", "auto")) != "off"):
+                # 21.1 独立的听者判时机（她自己的自评不可信）；影子模式只记不拦
+                res = await self.listen(gid, plan["say"])
+                enforced = bool(res) and self.listener_enforced(gid)
+                self.listener_log(gate_id, res, enforced)
+                if res:
+                    tlog.info("群 %s 听者：%s（%s）%s%s", gid, res["window"], res.get("why", ""),
+                              "；毛病：" + "、".join(res["issues"]) if res.get("issues") else "", "" if enforced else "【只记录】")
+                if enforced and res.get("window") == "never":
+                    plan["act"] = "skip"
+                elif enforced and res.get("window") == "early":
+                    if pitch or not self.gk(gid).get("pitch_queue", True):
+                        plan["act"] = "skip"
+                    else:
+                        st.pitch = {"say": list(plan["say"])[:3], "ts": time.time(), "last_id": last_id,
+                                    "think": plan.get("think", ""), "why": res.get("why", ""), "until": res.get("until", ""),
+                                    "gate_id": gate_id}
+                        log.info("群 %s：听者说太早（等到：%s），先放着", gid, res.get("until") or "群里停一下")
+                        self._pitch_outcome(gid, "queued", plan["say"])
+                        return skip("defer")
+                if enforced and res.get("issues") and plan["act"] == "say":
+                    fix_notes = list(dict.fromkeys([*fix_notes, *res["issues"]]))
             if plan["act"] == "react" and not getattr(self.ob, "can_react", True):
                 plan["act"] = "say" if plan["cands"] else "skip"          # 微信点不了表情：有话就说，没话就算了
             if plan["act"] == "react":
@@ -666,7 +709,12 @@ class SpeakMixin:
             qargs = dict(avoid=avoid, detector=self.detector,
                          ai_open=bool(getattr(b.persona, "ai_open", False)), stale=stale, no_names=no_names, echo=echo)
             sim = float(self.gk(gid).get("similar_threshold", 0.75))
+            from aigroup.chat import quality as _q
+            _q.OFF = set(self.gk(gid).get("rules_off") or [])           # 21.1 小屋里关掉的规则
+            orig = " / ".join(cands[0]) if cands else ""
             i, score, hits = pick(cands, recent, sim, **qargs)
+            rewrote = False
+            rule_hits: list = []
             if hasattr(self, "hard_issues"):          # 21.0 四条硬底线：隐私、编线下、说幕后、安全
                 hard = self.hard_issues(gid, cands[i] if i >= 0 else (cands[0] if cands else []), focus)
                 if hard:
@@ -684,8 +732,10 @@ class SpeakMixin:
                         if h3:
                             s2, h2 = max(s2, SOFT_BLOCK), list(dict.fromkeys([*h3, *h2]))
                     if i2 >= 0 and (i < 0 or s2 < score or fix_notes):
+                        rule_hits = list(hits)
                         cands, i, score, hits = fix, i2, s2, h2
                         fix_notes = []
+                        rewrote = True
                 if fix_notes and not mentioned and not must:
                     log.info("群 %s：九问自评要改、重写没成，没被叫到就不说了", gid)
                     i = -1
@@ -695,8 +745,31 @@ class SpeakMixin:
             if i >= 0 and score >= SOFT_BLOCK and not mentioned and why is None:
                 log.info("群 %s 质检：%.1f %s，没被叫到，这句不说了", gid, score, "、".join(hits))
                 i = -1
+            if i >= 0 and hasattr(self, "too_long") and self.too_long(
+                    gid, cands[i], mentioned=bool(mentioned or bid), long_ok=bool(plan and plan.get("len") == "long")):
+                # 21.1 主动说却比群友长好几倍（她中位 20 字、群友 7 字）：换短的候选，没有就让她只说一半
+                short = [j for j, c in enumerate(cands) if not self.too_long(gid, c, mentioned=False, long_ok=False)]
+                if short:
+                    i = short[0]
+                elif use_plan:
+                    L = self.group_len(gid)
+                    fix = await self._rewrite(messages, raw, [f"太长了：群里一条一般 {L} 个字，你这句砍到一半，只留最想说的"], gid)
+                    ok2 = [c for c in fix if not self.too_long(gid, c, mentioned=False, long_ok=False)]
+                    if ok2:
+                        cands, i = ok2, 0
+                hits = list(dict.fromkeys([*hits, "太长"]))
             bubbles = cands[i] if i >= 0 else None
             qtxt = f"{score:.1f} {'、'.join(hits)}".strip()
+            try:                                           # 21.1 规则登记：哪条规则命中了、最后怎么处理的
+                from aigroup.chat.rules import note as _rnote
+                if rewrote:
+                    _rnote(self.db, gid, rule_hits or hits, "重写", orig)
+                elif i < 0 and cands:
+                    _rnote(self.db, gid, hits, "拦下", orig)
+                elif hits:
+                    _rnote(self.db, gid, hits, "罚分")
+            except Exception as e:  # noqa: BLE001
+                log.debug("记规则命中失败：%s", e)
             if hits:
                 log.info("群 %s 质检：%s（%d 个候选，选了第 %d 个）", gid, qtxt, len(cands), i + 1)
         else:
@@ -826,8 +899,14 @@ class SpeakMixin:
                 log_.append({"id": int(cur.lastrowid), "gid": gid, "sigs": sigs, "ts": now})
                 self.db.set("sig_log", log_[-600:])
             self.use_thoughts(gid, " ".join(sent_txt))
+            if plan and plan.get("move") and hasattr(self, "note_move"):
+                self.note_move(gid, plan["move"], now)           # 21.1 接法冷却：记下这次怎么接的
+            if hasattr(self, "send_ok"):
+                self.send_ok(gid)
             done("say", sent_txt, qtxt)
         else:
+            if hasattr(self, "send_failed"):
+                self.send_failed(gid)                            # 21.1 连着发不出去：小屋 / 小管家提醒
             done("send_fail", [], qtxt)
         return bool(sent_ids)
 

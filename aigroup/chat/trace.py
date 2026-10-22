@@ -70,10 +70,12 @@ class Tracer:
     def __init__(self, db):
         self.db = db
         db.conn.executescript(SCHEMA)
+        from aigroup.core.store import ensure_columns
+        ensure_columns(db.conn, "qq_trace", {"timing": "TEXT NOT NULL DEFAULT ''"})    # 21.1 每一段花了几秒
         db.conn.commit()
 
     def add(self, *, trace: str, gid: int, gate_id: int | None, mentioned: bool, why: str, messages: list,
-            raw: str, plan: dict | None, sent: list, quality: str, outcome: str):
+            raw: str, plan: dict | None, sent: list, quality: str, outcome: str, timing: dict | None = None):
         """system 提示按哈希只存一份；messages 列里只存 user 那条（2.0 每条都存整段，一天能有好几 MB）。"""
         sysm = next((m["content"] for m in messages if m.get("role") == "system"), "")
         h = hashlib.md5(sysm.encode()).hexdigest()[:16]
@@ -82,11 +84,11 @@ class Tracer:
         body = json.dumps([m for m in messages if m.get("role") != "system"], ensure_ascii=False)
         self.db.conn.execute(
             "INSERT INTO qq_trace(trace, ts, group_id, gate_id, mentioned, why, prompt_hash, messages, raw, plan, sent, "
-            "quality, outcome) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "quality, outcome, timing) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (trace, time.time(), gid, gate_id, int(mentioned), (why or "")[:200],
              h, body, (raw or "")[:2000],
              json.dumps(plan, ensure_ascii=False) if plan else "", json.dumps(sent, ensure_ascii=False),
-             quality[:200], outcome))
+             quality[:200], outcome, json.dumps(timing or {})))
         self.db.conn.commit()
 
     def prune(self, days: float = KEEP_DAYS):

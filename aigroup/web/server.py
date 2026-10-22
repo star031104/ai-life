@@ -105,6 +105,9 @@ class GroupHome:
         r.add_post("/api/label/answer", self.label_answer)
         r.add_get("/api/calib/next", self.calib_next)          # 20.1 给她的话打分（评委校准）
         r.add_post("/api/calib/answer", self.calib_answer)
+        r.add_get("/api/rules", self.rules_info)               # 21.1 规则登记：命中、拦对率、关掉
+        r.add_post("/api/rules/judge", self.rules_judge)
+        r.add_post("/api/rules/toggle", self.rules_toggle)
         r.add_get("/api/checks", self.checks)                  # 20.1 每周额外检查：评委、问答一致、讨好、说话统计、消融
         r.add_get("/api/ledger", self.ledger_list)             # 20.2 她查到的事实（账本）
         r.add_post("/api/ledger/delete", self.ledger_delete)
@@ -277,7 +280,44 @@ class GroupHome:
             "qa": {k: v for k, v in qa.items() if k != "answers"} if qa else {},
             "pairs": pr, "style": style_z(self.db, gid), "ablate": ablation_stats(self.db, gid=gid), "names": NAMES,
             "numcheck": {"bad": len(nl), "fixed": sum(1 for x in nl if x.get("fixed")), "recent": nl[-5:]},
-            "rate": float(self.gc.gk(gid).get("ablate_rate", 0.1) or 0)})
+            "rate": float(self.gc.gk(gid).get("ablate_rate", 0.1) or 0),
+            "vector": self._vector(gid),
+            "vector_prev": next((v for v in reversed(self.db.get("vector_hist") or []) if v.get("gid") == gid), {})})
+
+    def _vector(self, gid):
+        from aigroup.eval.vector import weekly_vector
+        try:
+            return weekly_vector(self.gc, gid) if gid is not None else {}
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)[:100]}
+
+    async def rules_info(self, req):
+        """21.1 规则：每条命中多少、拦对率、建议；被拦下 / 改写的原句等你判。"""
+        from aigroup.chat.rules import KEY_SAMPLES, known_rules, report
+        off = list(self.gc.g.get("rules_off") or [])
+        sm = [x for x in reversed(self.db.get(KEY_SAMPLES) or []) if x.get("ok") is None][:10]
+        return web.json_response({"rules": report(self.db, known_rules()), "off": off, "samples": sm})
+
+    async def rules_judge(self, req):
+        d = await self._json(req)
+        from aigroup.chat.rules import judge
+        try:
+            ok = judge(self.db, int(d["id"]), bool(d.get("ok")))
+        except (KeyError, TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "参数不对"}, status=400)
+        return web.json_response({"ok": ok})
+
+    async def rules_toggle(self, req):
+        d = await self._json(req)
+        rule = str(d.get("rule") or "")[:20]
+        if not rule:
+            return web.json_response({"ok": False, "error": "参数不对"}, status=400)
+        off = [x for x in (self.gc.g.get("rules_off") or []) if x != rule] + ([rule] if d.get("off") else [])
+        over = dict(self.db.get("web_overrides") or {})
+        over["rules_off"] = off
+        self.gc.g["rules_off"] = off
+        self.db.set("web_overrides", over)
+        return web.json_response({"ok": True, "off": off})
 
     async def ledger_list(self, req):
         gid = self._gid(req)
@@ -450,6 +490,8 @@ class GroupHome:
             "qq": {"ready": bool(self.ob.ready), "self_id": getattr(self.ob, "self_wxid", "") or self.ob.self_id,
                    "nick": self.nick, "ws": ""},
             "wechat": self._wechat_status(),
+            "send_health": max(((gc.send_health(g) if hasattr(gc, "send_health") else {}) for g in gc.groups),
+                               key=lambda d: int(d.get("streak") or 0), default={}),
             "channel": self.cfg.get("channel") or ("wechat" if hasattr(self.ob, "status") else "qq"),
             "owner_id": gc.owner_id, "uptime": now - self.started,
             "groups": groups, "hours": {"all": hours_all, "her": hours_her,

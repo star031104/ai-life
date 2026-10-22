@@ -141,6 +141,28 @@ DEFAULTS = {
     "borderline_judge": True,      # 21.0 门控刚过阈值一点点、没人叫她：再问一下便宜模型
     "borderline_band": 0.1,        # 离阈值多近算“擦边过”
     "person_card": True,           # 21.0 在聊的人合成一张人卡（≤120 字），代替“今天状态 / 刚回来 / 相处经验 / 相处说明书”四段
+    "listener_mode": "auto",       # 21.1 听者：auto 先只记、和你的标注一致率够了自动接管；on 直接管；shadow 只记；off 不用
+    "listener_agree": 0.7,         # auto 接管要的一致率
+    "listener_min_each": 15,       # auto 接管前“该接”“时机不对”各要攒这么多条你的标注
+    "listener_panel": True,        # 配了 llm.routes.listener2 时两个模型一起判，意见不一就等等
+    "appraise_enforce": False,     # 21.1 她自己的九问自评要不要直接拦（默认只记录：自评不可信）
+    "move_cooldown": True,         # 21.1 同一种接法半小时里用过 2 次就提醒她换一种
+    "move_cooldown_minutes": 30,
+    "length_match": True,          # 21.1 长度靠拢群友：告诉她群里一条一般几个字，主动说太长就换短的
+    "length_max_ratio": 3,         # 主动说时一条超过群友中位长度的几倍算太长
+    "talk_control": True,          # 21.1 群里有人冲她说“少说点 / 多说点”：话痨度 ×0.5 / ×1.5
+    "talk_control_hours": 3,       # 管多久（群主说的管到明早）
+    "share_target": 0.8,           # 21.1 她的消息份额超过“平均份额 × 这个”就收紧（0 = 不管）
+    "mention_read_cap": 20,        # 21.1 被叫到“看到消息”最多拖几秒（在忙除外）
+    "offline_note_minutes": 30,    # 21.1 被叫到隔了这么久才回：带一句“刚掉线了 / 才看到”
+    "agent_mention_quick_cap": 12, # 21.1 被叫到时快查最多几秒（到点交卷，没覆盖的写进“没查到”）
+    "agent_mention_deep_cap": 25,  # 被叫到时深查最多几秒
+    "agent_stop_on_covered": True, # 21.1 研究员写的“要证实”的都有资料了就交卷（HALT），不等到时间到
+    "agent_verify_cites": True,    # 21.1 简报里的来源必须在这次搜到的结果里出现过，对不上的删掉
+    "agent_filler_gen": True,      # 21.1 要查一会儿时先用她自己的口气现写一句短回（不是固定那几句）
+    "favors": True,                # 21.1 每晚记人情账（谁帮过她、她答应过谁），人卡里提一句
+    "anchor_volume": 20,           # 21.1 她今天在这个群说了这么多句以后，每次在提示词最后提一遍人格核心（0 = 不管）
+    "rules_off": [],               # 21.1 小屋“规则”里关掉的质检规则（按名字）
     "hard_rules": True,            # 21.0 四条硬底线集中检查：别碰的话题、编线下、说幕后、对方难受时损他
     "person_spec": True,           # 每周给常聊的人写“相处说明书”（他说话的潜台词、能损什么、别碰什么）
     "gag_days": 3,                 # 20.0 她自己的梗这几天里反复用过：先歇一歇（0 = 只看最近几小时）
@@ -259,6 +281,27 @@ KNOBS = {
     "borderline_judge": ("擦边过的再问一下", "bool", None, None, None, "门控刚过阈值一点点、没人叫她时，再让便宜模型判一次"),
     "borderline_band": ("离阈值多近算擦边", "float", 0, 0.3, 0.01, ""),
     "person_card": ("人卡", "bool", None, None, None, "在聊的人合成一张 ≤120 字的卡，代替分散的四段"),
+    "listener_mode": ("听者", "str", None, None, None, "auto：先只记录，和你的标注一致率够了自动接管；on：直接管；shadow：只记录；off：不用"),
+    "listener_agree": ("听者接管要的一致率", "float", 0.5, 0.95, 0.05, ""),
+    "listener_min_each": ("接管前每类要几条标注", "int", 5, 100, 1, "“该接”“时机不对”各要这么多"),
+    "listener_panel": ("两个模型一起判", "bool", None, None, None, "配了 routes.listener2 才有用；意见不一就先等等"),
+    "appraise_enforce": ("她的自评直接拦", "bool", None, None, None, "默认只记录（模型给自己打分不可信）"),
+    "move_cooldown": ("接法别老一样", "bool", None, None, None, "半小时里同一种接法用过 2 次就提醒她换一种"),
+    "move_cooldown_minutes": ("接法冷却（分钟）", "int", 5, 120, 5, ""),
+    "length_match": ("长度靠拢群友", "bool", None, None, None, "告诉她群里一条一般几个字；主动说太长就换短的"),
+    "length_max_ratio": ("主动说最多是群友的几倍长", "float", 1.5, 6, 0.5, ""),
+    "talk_control": ("群里一句话调话量", "bool", None, None, None, "有人冲她说“少说点 / 多说点”就照做"),
+    "talk_control_hours": ("一句话管多久（小时）", "float", 0.5, 24, 0.5, "群主说的管到明早"),
+    "share_target": ("她最多占平均份额的多少", "float", 0, 2, 0.1, "3 个活跃的人时平均份额是 25%；0 = 不管"),
+    "mention_read_cap": ("被叫到最多拖几秒才看", "int", 0, 120, 5, "在忙的时候除外"),
+    "offline_note_minutes": ("隔多久才回要说一声", "int", 5, 240, 5, "带一句“刚掉线了 / 才看到”"),
+    "agent_mention_quick_cap": ("被叫到时快查最多几秒", "int", 5, 30, 1, ""),
+    "agent_mention_deep_cap": ("被叫到时深查最多几秒", "int", 10, 60, 1, ""),
+    "agent_stop_on_covered": ("证实了就停", "bool", None, None, None, "研究员写的“要证实”的都有资料了就交卷"),
+    "agent_verify_cites": ("核对引用", "bool", None, None, None, "简报里的来源必须是这次真搜到的"),
+    "agent_filler_gen": ("先回一句用她自己的话", "bool", None, None, None, "要查一会儿时先短回一句，用她的口气现写"),
+    "favors": ("记人情账", "bool", None, None, None, "每晚记谁帮过她、夸过她、求过她、她答应过谁；人卡里提一句，合适时自然地还"),
+    "anchor_volume": ("说多了加人格锚点", "int", 0, 100, 5, "她今天在这个群说了这么多句以后，每次在最后提一遍她是谁（聊久了人设会退回默认）"),
     "hard_rules": ("四条硬底线", "bool", None, None, None, "别碰的话题、编线下、说幕后、对方难受时损他：碰了就重写，没被叫到就不说"),
     "person_spec": ("给常聊的人写相处说明书", "bool", None, None, None, "每周一次：他说话的潜台词、能损什么、别碰什么"),
     "label_nb": ("用你的标注训练小判断器", "bool", None, None, None, "“该不该说”两类各 30 条以上才训练；有把握时不用再问大模型"),

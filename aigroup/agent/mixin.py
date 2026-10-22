@@ -7,6 +7,7 @@ self.memory / self.knowledge（她的记忆）、grow.py 里的提醒（remind_s
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import logging
@@ -196,6 +197,31 @@ def single_source_major(d: dict) -> list[str]:
         if MAJOR.search(c.get("text") or "") and len({(x.get("site") or "") for x in c.get("sources") or []}) < 2:
             out.append(c["text"])
     return out
+
+
+def verify_citations(d: dict, tool_text: str) -> int:
+    """21.1 引用核对：说法后面的来源，网站名或原文摘要得在这次真搜到 / 读到的结果里出现过；对不上的删掉，
+    一条说法的来源全删光了就降到“低”。返回删了几个。（深度研究评测：编造引用、计划漂移是最常见的失败）"""
+    if not tool_text:
+        return 0
+    low = tool_text.lower()
+    n = 0
+    for c in d.get("claims") or []:
+        keep = []
+        for x in c.get("sources") or []:
+            site = str(x.get("site") or "").strip().lower()
+            quote = re.sub(r"\s+", "", str(x.get("quote") or ""))
+            ok = (site and (site in low or site.replace("www.", "") in low)) or (len(quote) >= 6 and quote[:8] in re.sub(r"\s+", "", tool_text))
+            if ok or (not site and not quote):
+                keep.append(x)
+            else:
+                n += 1
+        if c.get("sources") and not keep:
+            c["confidence"] = "low"
+        c["sources"] = keep
+    if n and d.get("claims"):
+        d["points"] = [{"text": c["text"], "conf": c["confidence"], "n_src": len(c["sources"])} for c in d["claims"]]
+    return n
 
 
 def brief_block(goal: str, d: dict, fresh: bool = True) -> str:
@@ -389,8 +415,11 @@ class AgentMixin:
         self.db.set(day_key, int(self.db.get(day_key, 0) or 0) + 1)
         rounds, deadline, depth = research_budget(g, depth, qtype)       # 21.0 按问题类型配力度
         deep = depth == "deep"
-        if deep and mentioned and g.get("agent_filler", True):
-            await self._agent_filler(gid)
+        if mentioned:                                    # 21.1 被叫到：群里等不了太久，到点就交卷（没覆盖的写进“没查到”）
+            deadline = min(deadline, float(g.get("agent_mention_deep_cap" if deep else "agent_mention_quick_cap",
+                                                 25 if deep else 12)))
+        if mentioned and g.get("agent_filler", True) and deep:
+            await self._agent_filler(gid, goal)          # 21.1 先用她自己的口气短回一句，查完再补
         thinking = deep and bool(g.get("agent_deep_thinking", True))
         msgs = [{"role": "system", "content": P.RESEARCH_SYSTEM.format(
                     now=self._now_text(), name=self.brain.persona.name,
@@ -404,17 +433,21 @@ class AgentMixin:
             tb = self.toolbox()
             res = await tool_loop(self.brain.llm, msgs, tb.schemas(recall=True),
                                   lambda n, a: tb.run(n, a, recall=lambda q: self._agent_recall(gid, q)),
-                                  max_rounds=rounds, thinking=thinking, deadline_s=deadline, finish_prompt=P.FINISH)
+                                  max_rounds=rounds, thinking=thinking, deadline_s=deadline, finish_prompt=P.FINISH,
+                                  covered_prompt=P.FINISH_COVERED if g.get("agent_stop_on_covered", True) else "")
         except Exception as e:  # noqa: BLE001
             log.info("群 %s：查资料失败：%s", gid, e)
             return None
         d = parse_brief(res.text)
-        log.info("群 %s：查了「%s」（%s，%d 轮，%.0f 秒%s）", gid, goal, depth, res.rounds, res.seconds,
-                 "，到点交卷" if res.forced else "")
+        dropped = verify_citations(d, "\n".join(res.tool_text)) if g.get("agent_verify_cites", True) else 0
+        log.info("群 %s：查了「%s」（%s，%d 轮，%.0f 秒，%s%s）", gid, goal, depth, res.rounds, res.seconds,
+                 {"covered": "都证实了就停", "model": "自己交卷", "deadline": "到点交卷", "rounds": "轮数用完"}.get(res.stop, res.stop),
+                 f"，删了 {dropped} 个对不上的来源" if dropped else "")
         for s in res.steps:
             tlog.info("群 %s 查资料：%s", gid, s)
         self._agent_log({"ts": time.time(), "gid": gid, "goal": goal, "depth": depth, "thinking": thinking,
                          "rounds": res.rounds, "seconds": round(res.seconds, 1), "forced": res.forced,
+                         "stop": res.stop, "need": res.need[:4], "covered": res.covered[:4], "bad_cites": dropped,
                          "steps": res.steps[:20], "brief": d})
         d = stale_check(d, window)
         if not d.get("answer_points") and not d.get("premise"):
@@ -453,13 +486,31 @@ class AgentMixin:
             d["confidence"] = "low"
         return d
 
-    async def _agent_filler(self, gid: int):
-        """要查一会儿：先说一句“等我看看”（每个群 10 分钟最多一次）。"""
+    async def _agent_filler(self, gid: int, goal: str = ""):
+        """要查一会儿：先短回一句（每个群 10 分钟最多一次）。21.1：用她自己的口气现写一句，不是固定那几句；写不出来再用固定的。"""
         k = f"agent_filler_{gid}"
         if time.time() - float(self.db.get(k, 0) or 0) < 600:
             return
         self.db.set(k, time.time())
-        text = random.choice(P.FILLERS)
+        text = ""
+        if self.gk(gid).get("agent_filler_gen", True) and goal:
+            used = list(self.db.get("agent_fillers_used") or [])[-6:]
+            p = self.brain.persona
+            prompt = (f"你是群聊里的{p.name}（{(p.identity or '')[:40]}）。有人问你一件事，你要去手机上查一下：{goal[:60]}。\n"
+                      f"最近的聊天：\n{self.transcript(gid, 4)}\n\n"
+                      "先在群里回他一句很短的话（4~12 个字），用你平时的口气，表示你去查 / 去看看；不要说结论、不要问问题、不要引号。"
+                      + (f"别和这些一样：{'、'.join(used)}。" if used else "") + "只输出这一句。")
+            try:
+                out = await asyncio.wait_for(self.brain.llm.chat([{"role": "user", "content": prompt}], role="gate",
+                                                                 temperature=0.9, max_tokens=30), 6)
+                out = re.sub(r"^[“\"']|[”\"']$", "", (out or "").strip().splitlines()[0] if (out or "").strip() else "")
+                if 2 <= len(out) <= 20 and not re.search(r"[？?]|作为|AI|助手", out):
+                    text = out
+            except Exception as e:  # noqa: BLE001
+                log.info("先回一句没写出来：%s", e)
+            if text:
+                self.db.set("agent_fillers_used", (used + [text])[-6:])
+        text = text or random.choice(P.FILLERS)
         try:
             from aigroup.qq.onebot import text_seg
             mid = await self.ob.send_group(gid, [text_seg(text)])

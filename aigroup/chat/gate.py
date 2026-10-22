@@ -355,6 +355,7 @@ class GateLog:
             "drift": "TEXT NOT NULL DEFAULT ''",         # 20.1 这一轮是不是容易漂走的场景（加了锚点）
             "appraise": "TEXT NOT NULL DEFAULT ''",      # 21.0 她开口前的九问自评（JSON）：拿你的标注对每一问
             "human_why": "TEXT NOT NULL DEFAULT ''",     # 21.0 你判“不该插”时选的：时机不对 / 说的不对
+            "listener": "TEXT NOT NULL DEFAULT ''",      # 21.1 听者的判断（JSON：window / issues / enforced）
         })
         db.conn.commit()
 

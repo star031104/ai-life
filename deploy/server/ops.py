@@ -148,7 +148,40 @@ async def qq_online(key: str) -> tuple[bool | None, str]:
     return online, "" if online else "QQ 掉线了（多半要重新扫码）"
 
 
+def notify_webhook(text: str) -> bool:
+    """21.1 QQ 掉线时也能提醒到你：环境变量 AILIFE_NOTIFY_URL（推送服务的地址，比如 Bark 的 https://api.day.app/<key>、
+    PushPlus 的 http://www.pushplus.plus/send、Server 酱的 https://sctapi.ftqq.com/<key>.send），可选 AILIFE_NOTIFY_TOKEN。
+    地址里有 {text} 就 GET（替换成提醒内容），否则 POST JSON {title, content, text, desp, token}。"""
+    import urllib.parse
+    import urllib.request
+    url = os.environ.get("AILIFE_NOTIFY_URL", "").strip()
+    if not url:                                 # cron 里没有环境变量：也可以写在 $AILIFE_HOME/notify_url（第一行地址，第二行 token）
+        f = Path(os.environ.get("AILIFE_HOME", "")).expanduser() / "notify_url"
+        if f.is_file():
+            lines = [x.strip() for x in f.read_text(encoding="utf-8").splitlines() if x.strip()]
+            url = lines[0] if lines else ""
+            if len(lines) > 1:
+                os.environ.setdefault("AILIFE_NOTIFY_TOKEN", lines[1])
+    if not url:
+        return False
+    msg = "【小屋提醒】" + text
+    try:
+        if "{text}" in url:
+            req = urllib.request.Request(url.replace("{text}", urllib.parse.quote(msg)))
+        else:
+            body = {"title": "小屋提醒", "content": msg, "text": msg, "desp": msg}
+            if os.environ.get("AILIFE_NOTIFY_TOKEN"):
+                body["token"] = os.environ["AILIFE_NOTIFY_TOKEN"]
+            req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return 200 <= r.status < 300
+    except Exception:  # noqa: BLE001
+        return False
+
+
 async def notify(text: str) -> bool:
+    if notify_webhook(text):                    # 21.1 先走推送服务（不依赖 QQ 在线）
+        return True
     _, _, owner = qq_conf("yuki")
     if not owner:
         return False
@@ -256,6 +289,13 @@ async def check_bot(b: dict) -> dict:
         if not link:
             out["why"] = "微信没登录" if w.get("not_logged_in") else ("微信没在运行" if not w.get("running") else
                                                                     (w.get("error") or "微信没接上"))
+        else:                                   # 21.1 接上了但群窗口不见了 / 连着发不出去：她其实说不了话
+            bad = [g for g in (w.get("groups") or []) if g.get("problem") or g.get("window") is False]
+            fails = int((st.get("send_health") or {}).get("streak") or 0)
+            if bad or fails >= 2:
+                link = False
+                out["why"] = (f"「{bad[0].get('name')}」{bad[0].get('problem') or '的窗口不见了'}" if bad else
+                              f"连着 {fails} 次发不出消息")
     else:
         out["today"] = int((st.get("kpi") or {}).get("today") or 0)
         out["her_today"] = int((st.get("kpi") or {}).get("her_today") or 0)

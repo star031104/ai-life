@@ -15,6 +15,7 @@ import re
 from difflib import SequenceMatcher
 
 HARD = 10.0
+OFF: set[str] = set()          # 21.1 关掉的规则（小屋“规则”里点关的，rules_off）；speak 每次检查前同步
 
 # (名字, 正则, 罚分)
 RULES: list[tuple[str, re.Pattern, float]] = [
@@ -102,6 +103,8 @@ def check(text: str, recent: list[str] | None = None, sim: float = 0.75, avoid: 
             score += round(4 * (pa - 0.5), 2)
             hits.append(f"像 AI（{pa:.2f}）")
     for name, rx, pen in RULES:
+        if name in OFF:
+            continue
         if ai_open and name == "自称AI":                     # 大家知道她是 AI：可以承认，只是别助手腔、别说提示词
             rx = LEAK
         if rx.search(t):

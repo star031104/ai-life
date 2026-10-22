@@ -274,6 +274,8 @@ class EvalMixin:
                 for k, v in self.pitch_stats(gid).items():
                     agg[k] = agg.get(k, 0) + v
             out["pitch"] = agg
+        if hasattr(self, "listener_stats"):
+            out["listener"] = self.listener_stats()
         return out
 
     @staticmethod

@@ -139,6 +139,10 @@ class IngestMixin:
                 if self.g.get("remember_web", True):
                     self.learn_link(gid, desc)
         mentioned = f.mentioned or reply_to_her or called or bool(ev.get("_poke"))
+        if hasattr(self, "talk_control"):
+            tn = self.talk_control(gid, uid, text, bool(mentioned))
+            if tn:
+                st.talk_note = tn
         if hasattr(getattr(self, "links", None), "take_videos") and hasattr(self, "watch_video"):
             for v in self.links.take_videos():                       # 4.4 B 站视频：点开看（字幕、弹幕、热评）
                 self._spawn(self.watch_video(gid, v, mentioned, name))

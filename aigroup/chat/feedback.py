@@ -147,6 +147,12 @@ class FeedbackMixin:
                 await self.weekly_eval()                           # 4.3 每周一：拿真实聊天评一次分
             except Exception as e:  # noqa: BLE001
                 log.info("每周评测出错：%s", e)
+            try:                                                   # 21.1 一周一张表（每个问题分开看）
+                from aigroup.eval.vector import save_snapshot, weekly_vector
+                for gid in self.groups:
+                    save_snapshot(self.db, weekly_vector(self, gid))
+            except Exception as e:  # noqa: BLE001
+                log.info("每周表出错：%s", e)
         if hasattr(self, "update_fingerprints"):
             try:                                                   # 13.0 说话指纹、她自己的风格审计（只统计，不花钱）
                 nfp = self.update_fingerprints()
@@ -186,6 +192,11 @@ class FeedbackMixin:
                 log.info("给 %d 条消息补了向量", n)
         except Exception as e:  # noqa: BLE001
             log.info("补向量出错：%s", e)
+        if hasattr(self, "favors_nightly"):
+            try:                                                  # 21.1 人情账
+                await self.favors_nightly()
+            except Exception as e:  # noqa: BLE001
+                log.info("人情账出错：%s", e)
         try:                                                      # 16.0 关系网、相处经验、小判断器
             self.update_rel_graph()
             if self.g.get("rel_experience", True):

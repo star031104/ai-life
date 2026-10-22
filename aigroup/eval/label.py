@@ -36,10 +36,44 @@ def _pick_sql(kind: str) -> str:
     return base.replace("{cond}", cond)
 
 
+def votes_of(r) -> list[int]:
+    """21.1 这一刻几个判断各自的意见（1 说 / 0 不说）：门控、拿不准时问的、听者、她自己的自评。"""
+    out = [1 if r["passed"] else 0]
+    j = str(r["judge"] or "")
+    if j:
+        out.append(1 if j == "say" else 0)
+    for col, yes in (("listener", ("now", "ok")), ("appraise", ("say",))):
+        try:
+            v = json.loads(r[col] or "{}") if col in r.keys() else {}
+        except ValueError:
+            v = {}
+        w = v.get("window") if col == "listener" else v.get("verdict")
+        if w:
+            out.append(1 if w in yes else 0)
+    return out
+
+
+def disagree_rows(db, gid: int | None, since: float, k: int, seen: set) -> list:
+    """21.1 主动学习：几个判断意见不一的时刻最值得你判（同样多的标注学到更多）。越接近门槛越靠前。"""
+    q = ("SELECT g.*, e.score, e.text her_text FROM qq_gate_log g LEFT JOIN qq_reply_effect e ON e.gate_id=g.id "
+         "WHERE g.mentioned=0 AND g.human IS NULL AND g.ts>? " + ("AND g.group_id=? " if gid else "")
+         + "AND (g.judge!='' OR IFNULL(g.listener,'')!='' OR IFNULL(g.appraise,'')!='') ORDER BY g.id DESC LIMIT 300")
+    try:
+        rows = db.conn.execute(q, [since] + ([gid] if gid else [])).fetchall()
+    except Exception:  # noqa: BLE001        # 老库没有 listener / appraise 列
+        return []
+    mixed = [r for r in rows if r["id"] not in seen and len(set(votes_of(r))) > 1]
+    mixed.sort(key=lambda r: abs(float(r["p"]) - float(r["threshold"])))
+    return mixed[:k]
+
+
 def _rows(db, gid: int | None, n: int, days: int, exclude: set[int]) -> list:
     since = time.time() - days * 86400
-    want = [("spoke", max(1, round(n * 0.4))), ("near", max(1, round(n * 0.4))), ("any", n)]
+    want = [("spoke", max(1, round(n * 0.25))), ("near", max(1, round(n * 0.25))), ("any", n)]
     out, seen = [], set(exclude)
+    for r in disagree_rows(db, gid, since, max(1, round(n * 0.4)), seen):     # 21.1 先出意见不一的
+        seen.add(r["id"])
+        out.append(r)
     for kind, k in want:
         if len(out) >= n:
             break
@@ -198,8 +232,22 @@ def weak_labels(db, days: int = 14) -> int:
         "WHERE mentioned=0 AND spoke=1 AND human IS NULL AND weak IS NULL AND ts>? "
         "AND EXISTS (SELECT 1 FROM qq_reply_effect e WHERE e.gate_id=qq_gate_log.id AND e.done=1 AND (e.score<0.2 OR e.score>=0.8))",
         (since,))
+    n = cur.rowcount or 0
+    # 21.1 她主动说完 3 分钟内有人明显不爽（“没问你”“别插嘴”“？？”）：比“没人接”更可靠的不该插
+    rows = db.conn.execute("SELECT g.id, g.group_id, e.ts FROM qq_gate_log g JOIN qq_reply_effect e ON e.gate_id=g.id "
+                           "WHERE g.mentioned=0 AND g.spoke=1 AND g.human IS NULL AND g.ts>? AND IFNULL(g.weak,-1)!=0",
+                           (since,)).fetchall()
+    for r in rows:
+        after = db.conn.execute("SELECT content FROM qq_group_messages WHERE group_id=? AND role='user' AND ts>? AND ts<? "
+                                "ORDER BY id LIMIT 4", (r["group_id"], r["ts"], float(r["ts"]) + 180)).fetchall()
+        if any(ANNOYED.search(str(a["content"] or "")) for a in after):
+            db.conn.execute("UPDATE qq_gate_log SET weak=0 WHERE id=?", (r["id"],))
+            n += 1
     db.conn.commit()
-    return cur.rowcount or 0
+    return n
+
+
+ANNOYED = __import__("re").compile(r"^\s*[？?]{2,}\s*$|没(人)?问你|谁问你|别插嘴|插什么嘴|关你(什么|啥)事|你闭嘴|没叫你|不是(在)?跟你说")
 
 
 def stats(db) -> dict:

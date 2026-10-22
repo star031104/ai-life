@@ -22,6 +22,10 @@ class LoopResult:
     rounds: int = 0
     forced: bool = False                             # 是不是到点被叫停、强制交卷的
     seconds: float = 0.0
+    need: list[str] = field(default_factory=list)    # 21.1 研究员写的“要证实”的说法
+    covered: list[bool] = field(default_factory=list)
+    stop: str = ""
+    tool_text: list[str] = field(default_factory=list)   # 21.1 工具原始结果（压缩之前的），给引用核对用                                   # covered（都证实了）/ model（自己交卷）/ deadline / rounds
 
 
 def parse_args(raw: str) -> dict:
@@ -84,21 +88,50 @@ async def run_tools(calls: list[dict], execute, timeout: float = 20.0) -> list[t
     return list(await asyncio.gather(*(one(tc) for tc in calls)))
 
 
+NEED_RE = __import__("re").compile(r"要证实[:：]\s*(.+)")
+PROG_RE = __import__("re").compile(r"进度[:：]\s*([^\n]+)")
+
+
+def parse_need(text: str) -> list[str]:
+    """「要证实：1. A 2. B」→ [A, B]。"""
+    import re as _re
+    m = NEED_RE.search(text or "")
+    if not m:
+        return []
+    parts = [x.strip(" ；;，,。") for x in _re.split(r"\s*\d+[.、．)]\s*", m.group(1)) if x.strip(" ；;，,。")]
+    return parts[:4]
+
+
+def parse_progress(text: str) -> list[bool]:
+    """「进度：1✓ 2✗ 3✓」→ [True, False, True]；没写返回 []。"""
+    import re as _re
+    m = PROG_RE.search(text or "")
+    if not m:
+        return []
+    return [mk in ("✓", "√", "✔", "对") for mk in _re.findall(r"\d+\s*([✓√✔✗×xX对错])", m.group(1))]
+
+
 async def tool_loop(llm, messages: list[dict], tools: list[dict], execute, *, max_rounds: int = 4,
                     thinking: bool = False, deadline_s: float = 45.0, finish_prompt: str = "",
-                    role: str = "helper", max_tokens: int = 4000, compress: bool = True) -> LoopResult:
+                    role: str = "helper", max_tokens: int = 4000, compress: bool = True,
+                    covered_prompt: str = "") -> LoopResult:
     """跑一次完整的工具循环。messages 会被就地追加（方便调用方存档）。"""
     t0 = time.time()
     res = LoopResult()
     from aigroup.agent.tools import SEEN
     SEEN.set([])                                     # 20.1 这次研究搜过的词：重复的不再真去搜
+    covered = False
     for rnd in range(max_rounds + 1):
         if rnd >= 3 and compress:
             compress_old_tools(messages, keep_rounds=2)
-        last = rnd == max_rounds or (time.time() - t0) > deadline_s
-        if last and rnd > 0 and finish_prompt:
+        last = covered or rnd == max_rounds or (time.time() - t0) > deadline_s
+        if last and rnd > 0 and covered and covered_prompt:
+            messages.append({"role": "user", "content": covered_prompt})
+            res.stop = "covered"
+        elif last and rnd > 0 and finish_prompt:
             messages.append({"role": "user", "content": finish_prompt})
             res.forced = True
+            res.stop = "rounds" if rnd == max_rounds else "deadline"
         m = await llm.chat_tools(messages, tools, role=role, thinking=thinking, max_tokens=max_tokens,
                                  tool_choice="none" if (last and rnd > 0) else None)
         res.rounds = rnd + 1
@@ -113,11 +146,26 @@ async def tool_loop(llm, messages: list[dict], tools: list[dict], execute, *, ma
             calls = []
         if not calls or (last and rnd > 0):
             res.text = m.get("content") or ""
+            res.stop = res.stop or "model"
             break
+        body = str(m.get("content") or "") + "\n" + str(m.get("reasoning_content") or "")
+        if not res.need:
+            res.need = parse_need(body)
+        prog = parse_progress(body)
+        if prog:
+            res.covered = prog
+        if covered_prompt and rnd > 0 and prog and all(prog) and len(prog) >= max(1, len(res.need)):
+            # 21.1（HALT）：要证实的都有资料了还想再查——不执行，下一轮直接交卷
+            for tc in calls:
+                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": "（要证实的都有资料了，这次没去查）"})
+            res.steps.append("都证实了，停")
+            covered = True
+            continue
         done = await run_tools(calls, execute)
         for tc, args, out in done:
             res.steps.append(f"{tc['function']['name']} {json.dumps(args, ensure_ascii=False)[:100]}")
             messages.append({"role": "tool", "tool_call_id": tc["id"], "content": out})
+            res.tool_text.append(out)
         if rnd == 0:
             res.calls = [{"name": tc["function"]["name"], "args": args} for tc, args, _ in done]
     res.seconds = time.time() - t0

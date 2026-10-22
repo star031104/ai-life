@@ -31,6 +31,9 @@ location ~ ^/(status|report)\.json$ { root /var/www/ailife; add_header Cache-Con
 
 - **watch（每 5 分钟）**：三个程序在不在跑、小屋开不开得了、QQ 有没有掉线（直接问 NapCat 的 `get_status`）、微信有没有接上；
   连着两次（10 分钟）不正常就在 QQ 上提醒你（先用 QQ 群小满的号发，不行再用有希的号），一直没好 6 小时再提醒一次，好了也说一声。
+  21.1：也看“群窗口不见了 / 连着发不出去”。提醒先走推送服务（QQ 掉线时也能收到）：把推送地址写进 `$AILIFE_HOME/notify_url`
+  （第一行地址，第二行 token，可以没有），或者设环境变量 `AILIFE_NOTIFY_URL` / `AILIFE_NOTIFY_TOKEN`。地址里有 `{text}` 就用 GET
+  （比如 Bark：`https://api.day.app/<你的key>/{text}`），否则 POST JSON（PushPlus：`http://www.pushplus.plus/send` + token；Server 酱：`https://sctapi.ftqq.com/<key>.send`）。
   硬盘超过 90%、内存超过 92% 也会提醒。结果写进 `/var/www/ailife/status.json`，首页显示。
 - **NapCat 掉登录不用扫码（12.1，watch 里顺便做）**：QQ 把号踢下线后 NapCat 会停在“请扫描二维码”。
   `$AILIFE_HOME/napcat/<名字>/password.md5` 存了小号密码的 MD5 时（`read -rs p && printf %s "$p" | md5sum | cut -d" " -f1 > group/password.md5`），

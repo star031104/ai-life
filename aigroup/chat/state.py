@@ -31,6 +31,8 @@ class GroupState:
     speaking: bool = False         # 正在“说”（问大模型、打字、发）：这时候来的新消息不打断她
     to_her_ts: float = 0.0         # 最近一次有人直接找她的时间（说到一半有人找她，剩下的就不发了）
     wait: dict | None = None       # 她在等谁开口：{"uid", "until"}
+    last_wait: float = 0.0          # 21.1 这次回话前等了几秒（看到消息的延迟）
+    talk_note: str = ""             # 21.1 有人让她少说点 / 多说点：下一次回话时给她的一句提示
     pitch: dict | None = None      # 21.0 她想说、但觉得“再等等”的一句：{"say", "ts", "last_id", "think", "why"}
     attention: Attention = field(default_factory=Attention)
     energy: Energy = field(default_factory=Energy)

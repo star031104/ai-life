@@ -109,9 +109,31 @@ async def research(llm, P, web, links, goal: str, depth: str, now: datetime, nam
                 rounds=f"这次最多查 {rounds} 轮，一般 {rounds - 1} 轮就该交卷。")},
             {"role": "user", "content": P.RESEARCH_USER.format(goal=goal, context=ctx)}]
     res = await tool_loop(llm, msgs, tb.schemas(), ex, max_rounds=rounds, thinking=deep,
-                          deadline_s=40 if deep else 15, finish_prompt=P.FINISH)
-    return {"brief": parse_brief(res.text), "rounds": res.rounds, "seconds": round(res.seconds, 1), "forced": res.forced,
-            "steps": res.steps}
+                          deadline_s=40 if deep else 15, finish_prompt=P.FINISH, covered_prompt=P.FINISH_COVERED)
+    from aigroup.agent.mixin import verify_citations
+    brief = parse_brief(res.text)
+    bad = verify_citations(brief, "\n".join(res.tool_text))
+    return {"brief": brief, "rounds": res.rounds, "seconds": round(res.seconds, 1), "forced": res.forced,
+            "steps": res.steps, "stop": res.stop, "need": res.need, "bad_cites": bad}
+
+
+def log_cases(home: str, n: int) -> list[dict]:
+    """21.1 回归集：从她线上真查过的问题里取最近 n 个（不重复），直接研究、不走判断层。"""
+    import sqlite3
+    db = Path(home).expanduser() / "data" / "group.db"
+    c = sqlite3.connect(db)
+    row = c.execute("SELECT v FROM kv WHERE k='agent_log'").fetchone()
+    log_ = json.loads(row[0]) if row and row[0] else []
+    seen, out = set(), []
+    for x in reversed(log_):
+        g = str(x.get("goal") or "").strip()
+        if g and g not in seen:
+            seen.add(g)
+            out.append({"id": f"log-{len(out) + 1}", "expect": "research", "direct": True, "goal": g,
+                        "depth": x.get("depth") or "quick", "chat": [f"群友：{g}"]})
+        if len(out) >= n:
+            break
+    return out
 
 
 async def main():
@@ -121,6 +143,7 @@ async def main():
     ap.add_argument("--research", action="store_true", help="判断层选了 research 的题真去查，并打分")
     ap.add_argument("--only", default="", help="只跑这几题（id，用逗号隔开）")
     ap.add_argument("--out", default="", help="结果另存成 JSON")
+    ap.add_argument("--from-log", type=int, default=0, help="21.1 回归集：用她线上真查过的最近 N 个问题（直接研究、分五项打分）")
     ap.add_argument("--engine", default="", help="20.1 只用哪个搜索：deepseek / tavily（比较两个时各跑一次）")
     a = ap.parse_args()
     if a.home:
@@ -136,6 +159,11 @@ async def main():
         print("这个 config 里没有能做工具调用的模型（要 DeepSeek 官方接口，或 profile 里写 tools: true）")
         return 2
     cases = (yaml.safe_load(open(a.cases, encoding="utf-8")) or {}).get("cases") or []
+    if a.from_log:
+        if not a.home:
+            print("--from-log 要和 --home 一起用")
+            return 2
+        cases, a.research = log_cases(a.home, a.from_log), True
     if a.only:
         keep = set(a.only.split(","))
         cases = [c for c in cases if c["id"] in keep]
@@ -156,8 +184,12 @@ async def main():
     rows, quick_s = [], []
     for c in cases:
         try:
-            r = await route(llm, P, c, now, name)
-            ok, why = check_route(c, r, now)
+            if c.get("direct"):
+                r, ok, why = {"calls": [{"name": "research", "args": {"goal": c["goal"], "depth": c["depth"]}}],
+                              "seconds": 0}, True, ""
+            else:
+                r = await route(llm, P, c, now, name)
+                ok, why = check_route(c, r, now)
         except Exception as e:  # noqa: BLE001
             r, ok, why = {"calls": [], "seconds": 0}, False, f"出错：{e}"
         row = {"id": c["id"], "expect": c["expect"], "calls": r["calls"], "route_s": r["seconds"], "ok": ok, "why": why}
@@ -207,6 +239,14 @@ async def main():
     ab = [x for x in rows if x.get("research") and next((c for c in cases if c["id"] == x["id"]), {}).get("answerable") is False]
     if ab:
         print(f"该说查不到的 {len(ab)} 题里，简报老实写了 answerable=false 的 {sum(1 for x in ab if x.get('abstained'))} 题")
+    rs = [x["research"] for x in rows if x.get("research")]
+    if rs:
+        stops: dict = {}
+        for x in rs:
+            stops[x.get("stop") or "?"] = stops.get(x.get("stop") or "?", 0) + 1
+        print(f"研究怎么停的：{stops}（目标：自己停 = covered + model ≥ 70%）；对不上的来源一共 {sum(x.get('bad_cites', 0) for x in rs)} 个；"
+              + "五项平均：" + "，".join(f"{k} {statistics.mean([float((x.get('judge') or {}).get('scores', {}).get(k, 0) or 0) for x in rows if x.get('research')]):.2f}"
+                                        for k in ("事实", "日期", "来源", "停", "回答")))
     if web is not None:
         print(f"搜索引擎：{a.engine or '默认顺序'}；DeepSeek 用了 {web.ds_used() if web.ds_key else '（没开）'}，"
               f"Tavily 这个月 {web.tavily_used()} 次")
