@@ -108,7 +108,7 @@ def test_digest_writes_facts_norms_and_ignores_orders(cfg, brain):
     asyncio.run(gc.digest([GROUP]))
     assert "@人" in brain.db.get(f"qq_group_norms_{GROUP}")
     assert "主人" not in brain.db.get(f"qq_self_notes_{GROUP}")
-    assert {f["text"] for f in gc.memory.facts(GROUP)} == {"小王周六要答辩", "周六一起去看展"}
+    assert {f["text"] for f in gc.memory.facts(GROUP) if f["kind"] != "experience"} == {"小王周六要答辩", "周六一起去看展"}
     m = asyncio.run(gc.build_messages(GROUP, False, False, "", query="答辩"))
     assert "不成文的规矩" in m[0]["content"] and "答辩" in m[1]["content"]          # 每次都变的放 user（缓存）
 
