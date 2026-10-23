@@ -65,7 +65,7 @@ def test_batch_features():
                        owner_spoke=False, interest=False, busy=True, attention=0.4, energy=0.7, cold_minutes=15)
     assert f["at_other"] == 1 and f["self_share"] == 0.5 and f["busy"] == 1 and f["cold"] == 1 and f["batch"] == 2
     assert abs(f["tired"] - 0.3) < 1e-9 and f["emoji_only"] == 0
-    f2 = batch_features([(3, FRIEND, "[图片]", {})], now=now, last_reply_ts=0, prev_msg_ts=now, recent=[],
+    f2 = batch_features([(3, FRIEND, "[动画表情]", {})], now=now, last_reply_ts=0, prev_msg_ts=now, recent=[],
                         owner_spoke=True, interest=True, busy=False, attention=0, energy=1, cold_minutes=15)
     assert f2["emoji_only"] == 1 and f2["owner"] == 1 and f2["cold"] == 0
 
