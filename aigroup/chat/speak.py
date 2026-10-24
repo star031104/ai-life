@@ -765,6 +765,18 @@ class SpeakMixin:
                 except Exception as e:  # noqa: BLE001
                     log.info("22.0 检查出错：%s", e)
                     c22 = []
+                from aigroup.chat.checks import DROP as _DROP
+                c22_drop = [w[len(_DROP):] for w in c22 if w.startswith(_DROP)]
+                c22 = [w[len(_DROP):] if w.startswith(_DROP) else w for w in c22]
+                if c22_drop and not mentioned and not must:
+                    # 23.2 替别人答、视频还没看完就空说“去看”：重写也还是这个毛病，没被叫到就直接不说
+                    log.info("群 %s：发前检查要不说（%s）", gid, c22_drop[0][:40])
+                    try:
+                        from aigroup.chat.rules import note as _rnote
+                        _rnote(self.db, gid, c22_drop, "拦下", " / ".join(cands[i] if i >= 0 else cands[0]))
+                    except Exception:  # noqa: BLE001
+                        pass
+                    return skip("blocked", "检查：" + c22_drop[0][:40])
                 if c22:
                     fix_notes = list(dict.fromkeys([*fix_notes, *c22]))
             lv = await listener_verdict()
